@@ -1,5 +1,8 @@
 # Wallraven changelog
 
+## v1.0.1 — 16 Sep 2026
+- **Choose which apps pause your wallpaper from a list**: the old button tried to detect whatever was in front of you, which could only ever be WallRaven itself, because pressing a button in WallRaven brings WallRaven to the front. It now shows what you have open and you pick.
+
 ## v1.0.0 — 16 Sep 2026
 - **WallRaven is 1.0.** It now builds, tests and releases itself, instead of depending on the tool it was first written in.
 - **Pausing for your games actually works**: naming specific apps to pause for never matched anything, because the app was reading its own helper process instead of the game in front of you.
