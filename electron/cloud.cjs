@@ -11,15 +11,31 @@ const SUPABASE_URL = 'https://mcjoigrvejwyzrxllwqu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_j42MB5A5EIWHtuupe6dOIg_AS1zPw22';
 
 // ---------- tiny JSON https helper ----------
+// Timeouts matter here as much as anywhere: pollSignIn runs on a 2.5s interval
+// while pairing, so a request that hangs would stack up indefinitely, and a
+// hung token refresh would leave the account stuck in a half-signed-in state.
+const REQUEST_CONNECT_TIMEOUT = 15000;
+const REQUEST_TOTAL_TIMEOUT = 30000;
+
 function request(url, { method = 'GET', headers = {}, body = null } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const payload = body == null ? null : Buffer.from(JSON.stringify(body));
+    let settled = false;
+    let overall = null;
+    const done = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(overall);
+      fn(arg);
+    };
+
     const req = https.request(
       {
         method,
         hostname: u.hostname,
         path: u.pathname + u.search,
+        timeout: REQUEST_CONNECT_TIMEOUT,
         headers: {
           'content-type': 'application/json',
           'user-agent': 'Wallraven',
@@ -30,14 +46,20 @@ function request(url, { method = 'GET', headers = {}, body = null } = {}) {
       (res) => {
         let data = '';
         res.on('data', (c) => (data += c));
+        res.on('error', (e) => done(reject, e));
         res.on('end', () => {
           let parsed = null;
           try { parsed = data ? JSON.parse(data) : null; } catch { parsed = data; }
-          resolve({ status: res.statusCode, body: parsed });
+          done(resolve, { status: res.statusCode, body: parsed });
         });
       },
     );
-    req.on('error', reject);
+    overall = setTimeout(() => {
+      req.destroy();
+      done(reject, new Error('request timed out'));
+    }, REQUEST_TOTAL_TIMEOUT);
+    req.on('timeout', () => { req.destroy(); done(reject, new Error('connection timed out')); });
+    req.on('error', (e) => done(reject, e));
     if (payload) req.write(payload);
     req.end();
   });

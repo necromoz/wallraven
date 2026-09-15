@@ -372,27 +372,68 @@ function whGate(fn, { priority = true } = {}) {
   return run;
 }
 
+// Every Wallhaven call is serialised through WH_CHAIN, so a single socket that
+// connects and then goes quiet would block all wallpaper changes, collections
+// and thumbnails for the rest of the session. Connect, stall and overall
+// deadlines make that impossible. The same failure was already fixed for
+// downloadFile in 0.8.13; this is the JSON path.
+const JSON_CONNECT_TIMEOUT = 15000;
+const JSON_STALL_TIMEOUT = 15000;
+const JSON_TOTAL_TIMEOUT = 45000;
+const JSON_MAX_BYTES = 8 * 1024 * 1024;
+
 function rawGetJSON(url, depth = 0) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Wallraven/1.0', 'Accept': 'application/json' } }, (res) => {
-      const loc = res.headers && res.headers.location;
-      if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
-        res.resume();
-        return rawGetJSON(new URL(loc, url).toString(), depth + 1).then(resolve, reject);
-      }
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => {
-        if (res.statusCode === 429) {
-          WH_COOLDOWN_UNTIL = Date.now() + 45000;
-          const err = new Error('HTTP 429: rate limited by Wallhaven');
-          err.status = 429;
-          return reject(err);
+    let settled = false;
+    let overall = null, stall = null;
+    const done = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(overall); clearTimeout(stall);
+      fn(arg);
+    };
+    const fail = (e) => done(reject, e);
+
+    const req = https.get(
+      url,
+      { headers: { 'User-Agent': 'Wallraven/1.0', 'Accept': 'application/json' }, timeout: JSON_CONNECT_TIMEOUT },
+      (res) => {
+        const loc = res.headers && res.headers.location;
+        if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
+          res.resume();
+          return rawGetJSON(new URL(loc, url).toString(), depth + 1)
+            .then((v) => done(resolve, v), fail);
         }
-        if (res.statusCode >= 400) return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
-        try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
-      });
-    }).on('error', reject);
+        overall = setTimeout(() => { req.destroy(); fail(new Error('request timed out')); }, JSON_TOTAL_TIMEOUT);
+        const bump = () => {
+          clearTimeout(stall);
+          stall = setTimeout(() => { req.destroy(); fail(new Error('request stalled')); }, JSON_STALL_TIMEOUT);
+        };
+        bump();
+
+        let data = '';
+        res.on('data', (c) => {
+          bump();
+          data += c;
+          // A runaway body would otherwise grow until the process dies.
+          if (data.length > JSON_MAX_BYTES) { req.destroy(); fail(new Error('response too large')); }
+        });
+        res.on('error', fail);
+        res.on('end', () => {
+          if (settled) return;
+          if (res.statusCode === 429) {
+            WH_COOLDOWN_UNTIL = Date.now() + 45000;
+            const err = new Error('HTTP 429: rate limited by Wallhaven');
+            err.status = 429;
+            return fail(err);
+          }
+          if (res.statusCode >= 400) return fail(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
+          try { done(resolve, JSON.parse(data)); } catch (e) { fail(e); }
+        });
+      },
+    );
+    req.on('timeout', () => { req.destroy(); fail(new Error('connection timed out')); });
+    req.on('error', fail);
   });
 }
 
@@ -2197,22 +2238,49 @@ ipcMain.handle('wh:openFavorite', (_e, { url } = {}) => {
 // ---------- Popular tags scraper ----------
 function httpsGetText(url, depth = 0) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 WallhavenTray/1.0' } }, (res) => {
-      const loc = res.headers && res.headers.location;
-      if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
-        res.resume();
-        return httpsGetText(new URL(loc, url).toString(), depth + 1).then(resolve, reject);
-      }
-      let data = '';
-      res.on('data', (c) => {
-        data += c;
-        if (data.length > 1024 * 1024) res.destroy(new Error('Response too large'));
-      });
-      res.on('end', () => {
-        if (res.statusCode >= 400) return reject(new Error(`HTTP ${res.statusCode}`));
-        resolve(data);
-      });
-    }).on('error', reject);
+    let settled = false;
+    let overall = null, stall = null;
+    const done = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(overall); clearTimeout(stall);
+      fn(arg);
+    };
+    const fail = (e) => done(reject, e);
+
+    const req = https.get(
+      url,
+      { headers: { 'User-Agent': 'Mozilla/5.0 WallhavenTray/1.0' }, timeout: JSON_CONNECT_TIMEOUT },
+      (res) => {
+        const loc = res.headers && res.headers.location;
+        if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
+          res.resume();
+          return httpsGetText(new URL(loc, url).toString(), depth + 1)
+            .then((v) => done(resolve, v), fail);
+        }
+        overall = setTimeout(() => { req.destroy(); fail(new Error('request timed out')); }, JSON_TOTAL_TIMEOUT);
+        const bump = () => {
+          clearTimeout(stall);
+          stall = setTimeout(() => { req.destroy(); fail(new Error('request stalled')); }, JSON_STALL_TIMEOUT);
+        };
+        bump();
+
+        let data = '';
+        res.on('data', (c) => {
+          bump();
+          data += c;
+          if (data.length > 1024 * 1024) { req.destroy(); fail(new Error('Response too large')); }
+        });
+        res.on('error', fail);
+        res.on('end', () => {
+          if (settled) return;
+          if (res.statusCode >= 400) return fail(new Error(`HTTP ${res.statusCode}`));
+          done(resolve, data);
+        });
+      },
+    );
+    req.on('timeout', () => { req.destroy(); fail(new Error('connection timed out')); });
+    req.on('error', fail);
   });
 }
 const tagsCache = new Map();
