@@ -1,5 +1,16 @@
 # Wallraven changelog
 
+## v1.0.0 — 16 Sep 2026
+- **WallRaven is 1.0.** It now builds, tests and releases itself, instead of depending on the tool it was first written in.
+- **Pausing for your games actually works**: naming specific apps to pause for never matched anything, because the app was reading its own helper process instead of the game in front of you.
+- **Timetable rules no longer stop at midnight**: an evening rule used to lapse at 00:00 and leave you on your ordinary settings until the morning. A rule now stays in force until the next one starts.
+- **Your settings survive a crash**: likes, playlists, presets, hotkeys and the timetable are saved so that losing power mid-write can no longer wipe them back to defaults.
+- **Fewer surprise sign-outs**: two background jobs refreshing your login at the same moment could cancel each other out and unlink the device.
+- **No more wallpapers stuck forever**: a request that connected and then went quiet could block every wallpaper change until you restarted. Requests now give up instead of hanging.
+- **Broken downloads are thrown away**: a picture that arrived incomplete used to be set as your wallpaper and then kept in the cache as though it were fine.
+- **Searching presets with a comma works**: it used to return nothing at all.
+- **Upgrades keep their settings**: options added in an update no longer arrive empty for anyone coming from an older version.
+
 ## v0.8.13 — 15 Sep 2026
 - **New Raven Fyra 🔥 theme**: a warm red, orange and yellow pastel theme with Raven as a red-haired fire mage beside a fire-clad raven, backed by new 4K artwork.
 

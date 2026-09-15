@@ -1,5 +1,16 @@
 # Wallraven changelog
 
+## v1.0.0 — 16 Sep 2026
+- **WallRaven is 1.0.** It now builds, tests and releases itself, instead of depending on the tool it was first written in.
+- **Pausing for your games actually works**: naming specific apps to pause for never matched anything, because the app was reading its own helper process instead of the game in front of you.
+- **Timetable rules no longer stop at midnight**: an evening rule used to lapse at 00:00 and leave you on your ordinary settings until the morning. A rule now stays in force until the next one starts.
+- **Your settings survive a crash**: likes, playlists, presets, hotkeys and the timetable are saved so that losing power mid-write can no longer wipe them back to defaults.
+- **Fewer surprise sign-outs**: two background jobs refreshing your login at the same moment could cancel each other out and unlink the device.
+- **No more wallpapers stuck forever**: a request that connected and then went quiet could block every wallpaper change until you restarted. Requests now give up instead of hanging.
+- **Broken downloads are thrown away**: a picture that arrived incomplete used to be set as your wallpaper and then kept in the cache as though it were fine.
+- **Searching presets with a comma works**: it used to return nothing at all.
+- **Upgrades keep their settings**: options added in an update no longer arrive empty for anyone coming from an older version.
+
 ## v0.8.13 — 15 Sep 2026
 - **New Raven Fyra 🔥 theme**: a warm red, orange and yellow pastel theme with Raven as a red-haired fire mage beside a fire-clad raven, backed by new 4K artwork.
 
@@ -8,6 +19,15 @@
 - **Presets are just presets again**: the desktop list sorts by most popular or newest, with no liking.
 - **Cereal game is a 30-second score attack**: faster pieces, more bombs, and bombs set off other bombs for chain reactions.
 - **Hidden game statistics**: once you have played a round, games played and your top score appear on the Statistics page.
+
+## v0.8.11 — 13 Sep 2026
+- **Clear a like or dislike**: pressing the lit thumb now returns the wallpaper to neutral, in every list, instead of quietly re-applying the same reaction.
+- **Hover shows what will happen**: the thumbs light up in your theme colour, and a lit thumb dims to show the click will clear it.
+- **Presets work properly again**: applying a preset switches back to searching and fetches the next wallpaper straight away, and tells you if nothing matched.
+- **No more stuck wallpapers**: a download that stalls now times out instead of leaving the app unable to change picture until a restart.
+- **Cereal game pace**: the game now builds speed at a sensible rate, so a round lasts a couple of minutes.
+
+
 
 ## v0.8.10 — 13 Sep 2026
 - **Cereal game rebalanced**: the pace now builds more gradually, every mouse press registers immediately, and game over shows your final score before you choose to play again.
