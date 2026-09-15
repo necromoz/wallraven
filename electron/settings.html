@@ -1168,8 +1168,9 @@
   <div class="row"><label>Apps</label>
     <div style="flex:1;">
       <input id="pauseFullscreenApps" type="text" placeholder="cs2, vlc, mpc-hc64" style="width:100%;" />
-      <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
-        <button class="btn secondary" id="btn-detect-app" type="button">Detect an app (5s to switch to it)</button>
+      <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; align-items:center;">
+        <button class="btn secondary" id="btn-list-apps" type="button">Choose from running apps</button>
+        <select id="runningApps" style="display:none; flex:1; min-width:180px;"></select>
       </div>
       <div class="status" id="detectStatus" style="margin-top:6px;">&nbsp;</div>
     </div>
@@ -2032,38 +2033,52 @@ function wireAllCards() {
   });
   $('#pauseOnFullscreen')?.addEventListener('change', syncFullscreenRows);
   $('#pauseFullscreenMode')?.addEventListener('change', syncFullscreenRows);
-  // Pressing this button necessarily makes WallRaven the foreground window, so
-  // probing straight away could only ever detect WallRaven itself. Count down
-  // first and give the user time to click into the app they actually mean.
-  const DETECT_DELAY_SECONDS = 5;
-  $('#btn-detect-app') && ($('#btn-detect-app').onclick = async () => {
+  // Pick from what is actually running. The old button probed the foreground
+  // window, which could only ever be WallRaven, since pressing a button in
+  // WallRaven focuses WallRaven. Listing windowed processes and letting the
+  // user choose removes the race entirely.
+  function addPauseApp(name) {
+    const input = $('#pauseFullscreenApps');
+    if (!input || !name) return false;
+    const list = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+    const already = list.some((x) => x.toLowerCase().replace(/\.exe$/, '') === name.toLowerCase());
+    if (!already) list.push(name);
+    input.value = list.join(', ');
+    return !already;
+  }
+
+  $('#btn-list-apps') && ($('#btn-list-apps').onclick = async () => {
     const st = $('#detectStatus');
-    const btn = $('#btn-detect-app');
+    const sel = $('#runningApps');
+    const btn = $('#btn-list-apps');
+    if (st) { st.textContent = 'Looking at what is running\u2026'; st.className = 'status'; }
     if (btn) btn.disabled = true;
-    try {
-      for (let left = DETECT_DELAY_SECONDS; left > 0; left--) {
-        if (st) {
-          st.textContent = `Click the app you want, now. Detecting in ${left}…`;
-          st.className = 'status';
-        }
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-    if (st) { st.textContent = 'Looking at the foreground window…'; st.className = 'status'; }
-    const info = await api.fullscreenProbe();
-    if (!info || !info.process) { if (st) { st.textContent = 'Could not identify the foreground app.'; st.className = 'status err'; } return; }
-    if (/^wallraven$/i.test(info.process)) {
-      if (st) { st.textContent = 'That was WallRaven. Press the button, then click straight into the app you want to pause for.'; st.className = 'status err'; }
+    let res;
+    try { res = await api.appsRunning(); } catch { res = null; } finally { if (btn) btn.disabled = false; }
+
+    const apps = (res && res.apps ? res.apps : []).filter((a) => !/^wallraven$/i.test(a.name));
+    if (!apps.length) {
+      if (sel) sel.style.display = 'none';
+      if (st) { st.textContent = 'Could not find any running apps with a window.'; st.className = 'status err'; }
       return;
     }
-    const input = $('#pauseFullscreenApps');
-    const list = input.value.split(',').map(s => s.trim()).filter(Boolean);
-    const name = info.process;
-    if (!list.some(x => x.toLowerCase().replace(/\.exe$/, '') === name.toLowerCase())) list.push(name);
-    input.value = list.join(', ');
-    if (st) { st.textContent = `Added "${name}"${info.title ? ' — ' + info.title : ''}${info.fullscreen ? ' (fullscreen right now)' : ' (not fullscreen right now)'}. Save to apply.`; st.className = 'status ok'; }
+
+    sel.innerHTML = '<option value="">\u2014 pick an app \u2014</option>' +
+      apps.map((a) => `<option value="${escapeHtml(a.name)}">${escapeHtml(a.name)}${a.title ? ' \u2014 ' + escapeHtml(a.title) : ''}</option>`).join('');
+    sel.style.display = '';
+    if (st) { st.textContent = `${apps.length} running app${apps.length === 1 ? '' : 's'}. Pick one to add it.`; st.className = 'status'; }
+  });
+
+  $('#runningApps') && ($('#runningApps').onchange = (e) => {
+    const name = e.target.value;
+    if (!name) return;
+    const st = $('#detectStatus');
+    const added = addPauseApp(name);
+    e.target.selectedIndex = 0;
+    if (st) {
+      st.textContent = added ? `Added "${name}". Save to apply.` : `"${name}" is already in the list.`;
+      st.className = 'status ok';
+    }
   });
 
   $('#btn-cache-test') && ($('#btn-cache-test').onclick = async () => {

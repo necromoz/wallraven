@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
   onUpdateStatus: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),
   changelog: () => ipcRenderer.invoke('app:changelog'),
   fullscreenProbe: () => ipcRenderer.invoke('fullscreen:probe'),
+  appsRunning: () => ipcRenderer.invoke('apps:running'),
   cacheTest: (opts) => ipcRenderer.invoke('cache:test', opts || {}),
   // Pass 2 — portable, folders, export, tags, hotkeys
   portableInfo: () => ipcRenderer.invoke('app:portable'),

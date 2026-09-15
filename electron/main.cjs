@@ -2512,6 +2512,35 @@ ipcMain.handle('app:changelog', async () => {
 });
 
 // Foreground-window probe: powers "Add the app I'm running now" in Settings.
+// List the apps the user could plausibly want to pause for: processes that own
+// a window with a title. Picking from this beats the old "detect the foreground
+// app" button, which could only ever see WallRaven, since pressing it focuses
+// WallRaven.
+ipcMain.handle('apps:running', async () => {
+  if (process.platform !== 'win32') return { apps: [] };
+  const ps = `
+$list = Get-Process |
+  Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle.Trim() -ne '' } |
+  Sort-Object ProcessName -Unique |
+  ForEach-Object { [PSCustomObject]@{ name = $_.ProcessName; title = $_.MainWindowTitle } }
+ConvertTo-Json -Compress -InputObject @($list)
+`;
+  const { code, out } = await runPowerShell(ps, { timeout: 10000, label: 'applist' });
+  if (code !== 0) return { apps: [] };
+  try {
+    const parsed = JSON.parse((out || '').trim() || '[]');
+    const arr = Array.isArray(parsed) ? parsed : [parsed];
+    return {
+      apps: arr
+        .filter((a) => a && a.name)
+        .map((a) => ({ name: String(a.name), title: String(a.title || '').slice(0, 80) })),
+    };
+  } catch (e) {
+    console.warn('apps:running parse failed', e.message);
+    return { apps: [] };
+  }
+});
+
 ipcMain.handle('fullscreen:probe', async () => {
   const info = await probeForegroundWindow();
   return { ...info, wouldPause: !!(await shouldDeferForFullscreen()) };
