@@ -1,0 +1,98 @@
+import { createServerFn } from "@tanstack/react-start";
+import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
+
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
+
+const PRESET_COLUMNS =
+  "id, name, description, category, tags, author_name, data, like_count, copy_count, created_at";
+
+const listSchema = z.object({
+  category: z.string().max(40).optional(),
+  search: z.string().max(80).optional(),
+  sort: z.enum(["popular", "new"]).default("popular"),
+  limit: z.number().int().min(1).max(100).default(48),
+});
+
+function publicClient() {
+  const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
+  return createClient<Database>(process.env["SUPABASE_URL"]!, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (input, init) => {
+        const h = new Headers(init?.headers);
+        if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization");
+        h.set("apikey", key);
+        return fetch(input, { ...init, headers: h });
+      },
+    },
+  });
+}
+
+export const listCommunityPresets = createServerFn({ method: "GET" })
+  .inputValidator((input: unknown) => listSchema.parse(input ?? {}))
+  .handler(async ({ data }) => {
+    const supabase = publicClient();
+    let query = supabase
+      .from("community_presets")
+      .select(PRESET_COLUMNS)
+      .eq("hidden", false)
+      .limit(data.limit);
+
+    if (data.category) query = query.eq("category", data.category);
+    if (data.search) query = query.or(`name.ilike.*${data.search}*,description.ilike.*${data.search}*`);
+
+    query =
+      data.sort === "new"
+        ? query.order("created_at", { ascending: false })
+        : query.order("copy_count", { ascending: false });
+
+    const { data: rows, error } = await query;
+    if (error) return { items: [], error: "Could not load presets right now." };
+    return { items: rows ?? [], error: null as string | null };
+  });
+
+export const listMyPresets = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("community_presets")
+      .select(PRESET_COLUMNS)
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: false });
+    if (error) return { items: [] };
+    return { items: data ?? [] };
+  });
+
+export const listMyLikes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await context.supabase.from("preset_likes").select("preset_id");
+    return { ids: (data ?? []).map((r) => r.preset_id) };
+  });
+
+export const toggleLikePreset = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), liked: z.boolean() }).parse(input))
+  .handler(async ({ data, context }) => {
+    if (data.liked) {
+      await context.supabase.from("preset_likes").insert({ preset_id: data.id, user_id: context.userId });
+    } else {
+      await context.supabase.from("preset_likes").delete().eq("preset_id", data.id).eq("user_id", context.userId);
+    }
+    return { ok: true, liked: data.liked };
+  });
+
+export const deleteMyPreset = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("community_presets")
+      .delete()
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+    if (error) throw new Error("Could not delete that preset.");
+    return { ok: true };
+  });

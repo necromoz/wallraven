@@ -1,0 +1,1 @@
+CREATE POLICY "Feedback is not readable from the app" ON public.feedback FOR SELECT TO authenticated, anon USING (false);
