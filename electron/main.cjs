@@ -1370,14 +1370,46 @@ const UPDATE_MANIFEST_URLS = ['https://wallraven.app/updates/latest.json', 'http
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/wallraven-app/wallraven/releases/latest';
 const UPDATE_DIR = path.join(DATA_DIR, 'updates');
 
+// Semver-aware comparison. The numeric core is compared first, then the
+// prerelease suffix: a plain release always outranks a prerelease of the same
+// version, so 0.8.0 beats 0.8.0-beta.2 rather than losing to it.
 function compareVersions(a, b) {
-  const norm = (v) => String(v || '').replace(/^v/i, '').split(/[.-]/).map(x => /^\d+$/.test(x) ? Number(x) : x);
-  const A = norm(a), B = norm(b);
-  for (let i = 0; i < Math.max(A.length, B.length); i++) {
-    const x = A[i] ?? 0, y = B[i] ?? 0;
+  const parse = (v) => {
+    const s = String(v || '').trim().replace(/^v/i, '');
+    const plus = s.indexOf('+');                      // build metadata is not compared
+    const bare = plus === -1 ? s : s.slice(0, plus);
+    const dash = bare.indexOf('-');
+    const core = dash === -1 ? bare : bare.slice(0, dash);
+    return {
+      core: core.split('.').map((x) => (/^\d+$/.test(x) ? Number(x) : 0)),
+      pre: dash === -1 ? '' : bare.slice(dash + 1),
+    };
+  };
+  const A = parse(a), B = parse(b);
+
+  for (let i = 0; i < Math.max(A.core.length, B.core.length); i++) {
+    const x = A.core[i] ?? 0, y = B.core[i] ?? 0;
+    if (x !== y) return x - y;
+  }
+
+  // Equal cores: absence of a prerelease wins.
+  if (!A.pre && !B.pre) return 0;
+  if (!A.pre) return 1;
+  if (!B.pre) return -1;
+
+  // Both prereleases: dot-separated identifiers, numeric ones sorting below
+  // alphanumeric ones, and a shorter run of identifiers sorting below a longer.
+  const ai = A.pre.split('.'), bi = B.pre.split('.');
+  for (let i = 0; i < Math.max(ai.length, bi.length); i++) {
+    const x = ai[i], y = bi[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
     if (x === y) continue;
-    if (typeof x === 'number' && typeof y === 'number') return x - y;
-    return String(x).localeCompare(String(y));
+    const xn = /^\d+$/.test(x), yn = /^\d+$/.test(y);
+    if (xn && yn) return Number(x) - Number(y);
+    if (xn) return -1;
+    if (yn) return 1;
+    return x < y ? -1 : 1;
   }
   return 0;
 }
