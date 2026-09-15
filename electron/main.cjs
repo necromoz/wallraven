@@ -1775,7 +1775,7 @@ function updateTrayMenu() {
   const hasUpdate = updInfo.latestVersion && compareVersions(updInfo.latestVersion, app.getVersion()) > 0;
   const items = [];
   if (hasUpdate) {
-    items.push({ label: `⬇ Update available: v${updInfo.latestVersion}`, click: () => updInfo.url && shell.openExternal(updInfo.url) });
+    items.push({ label: `⬇ Update available: v${updInfo.latestVersion}`, click: () => updInfo.url && openExternalSafe(updInfo.url) });
     items.push({ type: 'separator' });
   }
   items.push(
@@ -1784,7 +1784,7 @@ function updateTrayMenu() {
     { type: 'separator' },
     { label: liked ? '★ Liked' : '♡ Like current', enabled: !!last && !liked, click: () => { likeCurrent(); updateTrayMenu(); notifyRenderer(); } },
     { label: disliked ? '✕ Disliked' : '👎 Dislike current (skip)', enabled: !!last && !disliked, click: () => { dislikeCurrent(); updateTrayMenu(); } },
-    { label: 'Open current on Wallhaven', enabled: !!last, click: () => last && shell.openExternal(last.url) },
+    { label: 'Open current on Wallhaven', enabled: !!last, click: () => last && openExternalSafe(last.url) },
     { label: 'Show in folder', enabled: !!last, click: () => last && revealItem(last.file) },
     { type: 'separator' },
     { label: paused ? '▶ Resume cycling' : '⏸ Pause cycling', click: () => { paused = !paused; updateTrayMenu(); } },
