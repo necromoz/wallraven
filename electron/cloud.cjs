@@ -113,12 +113,29 @@ function currentAuth() {
   return auth;
 }
 
+// Supabase rotates the refresh token on every use, so two refreshes racing
+// with the same token means the first wins and the second comes back
+// invalid_grant. That is treated as a hard failure and clears the session, so
+// the device silently unlinks and has to be paired again.
+//
+// It is easy to hit: the 15-minute cloudPull timer, a settings push and a
+// username lookup can all notice the expiry within milliseconds of each other.
+// Holding a single in-flight promise means concurrent callers await the same
+// request instead of starting their own.
+let refreshInFlight = null;
+
 async function accessToken() {
   const a = currentAuth();
   if (!a || !a.refresh_token) return null;
   const stillValid = a.access_token && a.expires_at && a.expires_at * 1000 - Date.now() > 60_000;
   if (stillValid) return a.access_token;
 
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = refreshAccessToken(a).finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function refreshAccessToken(a) {
   let res;
   try {
     res = await request(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
