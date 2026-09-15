@@ -175,11 +175,8 @@ const prefetched = [];                 // [{ item, file }] ready-to-apply candid
 let prefetchTimer = null;
 
 function loadConfig() {
-  try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) };
-    }
-  } catch (e) { console.error('config load', e); }
+  const saved = readJsonWithBackup(CONFIG_PATH);
+  if (saved && typeof saved === 'object') return { ...DEFAULT_CONFIG, ...saved };
   return { ...DEFAULT_CONFIG };
 }
 // Point CACHE_DIR at the user-chosen folder (config.cacheDir) when it is set
@@ -216,22 +213,76 @@ function saveConfig() {
 // so the UI thread isn't doing a blocking disk write per event; always flush
 // before quitting so nothing is lost.
 let CONFIG_WRITE_TIMER = null;
+// Write JSON without ever leaving the real file half-written.
+//
+// config.json holds likes, dislikes, playlists, presets, hotkeys and the
+// timetable, and it is rewritten roughly every 500ms while the app is busy
+// because each wallpaper shown bumps a stat counter. Writing straight over the
+// live file means a crash, a forced reboot or a power cut during any one of
+// those writes truncates it, loadConfig then throws, and everything silently
+// resets to defaults.
+//
+// Instead: write a temp file, flush it to disk, keep the previous good copy as
+// .bak, then rename into place. Rename is atomic on both NTFS and POSIX, so a
+// reader either sees the whole old file or the whole new one.
+function writeJsonAtomic(targetPath, value) {
+  const tmp = `${targetPath}.tmp`;
+  const bak = `${targetPath}.bak`;
+  const json = JSON.stringify(value, null, 2);
+
+  let fd;
+  try {
+    fd = fs.openSync(tmp, 'w');
+    fs.writeFileSync(fd, json);
+    fs.fsyncSync(fd);
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch {} }
+  }
+
+  try {
+    if (fs.existsSync(targetPath)) fs.copyFileSync(targetPath, bak);
+  } catch (e) {
+    console.warn('backup before write failed', targetPath, e.message);
+  }
+
+  fs.renameSync(tmp, targetPath);
+}
+
+// Read JSON, falling back to the .bak written by writeJsonAtomic when the main
+// file is missing or corrupt. Returns null when neither is usable.
+function readJsonWithBackup(targetPath) {
+  for (const candidate of [targetPath, `${targetPath}.bak`]) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      if (candidate !== targetPath) {
+        console.warn(`[wallraven] ${targetPath} was unreadable; recovered from .bak`);
+      }
+      return parsed;
+    } catch (e) {
+      console.error('read failed', candidate, e.message);
+    }
+  }
+  return null;
+}
+
 function writeConfigNow() {
   if (CONFIG_WRITE_TIMER) { clearTimeout(CONFIG_WRITE_TIMER); CONFIG_WRITE_TIMER = null; }
-  try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2)); } catch (e) { console.error('config save', e); }
+  try { writeJsonAtomic(CONFIG_PATH, config); } catch (e) { console.error('config save', e); }
 }
 function persistConfigQuiet() {
   if (CONFIG_WRITE_TIMER) return;
   CONFIG_WRITE_TIMER = setTimeout(() => { CONFIG_WRITE_TIMER = null; writeConfigNow(); }, 500);
 }
 function loadHistory() {
-  try {
-    if (fs.existsSync(HISTORY_PATH)) return JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf8'));
-  } catch {}
+  const saved = readJsonWithBackup(HISTORY_PATH);
+  if (saved && Array.isArray(saved.items)) return saved;
   return { items: [], currentId: null };
 }
 function saveHistory() {
-  fs.writeFileSync(HISTORY_PATH, JSON.stringify(history, null, 2));
+  // Was an unguarded writeFileSync: a failure here threw out of whichever
+  // rotation called it, aborting the wallpaper change.
+  try { writeJsonAtomic(HISTORY_PATH, history); } catch (e) { console.error('history save', e); }
 }
 
 // ---------- Wallhaven API ----------

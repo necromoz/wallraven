@@ -128,6 +128,68 @@ check("rejects malformed input", () => {
   assert.strictEqual(parseHHMM("8"), null);
 });
 
+// ---------------------------------------------------- atomic JSON read/write
+
+const os = require("os");
+
+const jsonIo = new Function(
+  "fs",
+  "console",
+  `${extract("writeJsonAtomic")}
+   ${extract("readJsonWithBackup")}
+   return { writeJsonAtomic, readJsonWithBackup };`,
+)(fs, { warn() {}, error() {} });
+
+const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), "wallraven-test-"));
+const target = path.join(tmpdir, "config.json");
+
+console.log("writeJsonAtomic / readJsonWithBackup");
+
+check("round-trips a value", () => {
+  jsonIo.writeJsonAtomic(target, { likes: ["a", "b"], cycleMinutes: 30 });
+  assert.deepStrictEqual(jsonIo.readJsonWithBackup(target), {
+    likes: ["a", "b"],
+    cycleMinutes: 30,
+  });
+});
+
+check("leaves no temp file behind", () => {
+  assert.ok(!fs.existsSync(`${target}.tmp`), "temp file was not renamed away");
+});
+
+check("keeps the previous good copy as .bak", () => {
+  jsonIo.writeJsonAtomic(target, { generation: 2 });
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(`${target}.bak`, "utf8")), {
+    likes: ["a", "b"],
+    cycleMinutes: 30,
+  });
+  assert.deepStrictEqual(jsonIo.readJsonWithBackup(target), { generation: 2 });
+});
+
+check("recovers from a truncated main file", () => {
+  // Simulate a crash mid-write: the old code wrote straight over the live file,
+  // so this is exactly the state a power cut used to leave behind.
+  fs.writeFileSync(target, '{"generation": 2, "likes": ["a"');
+  assert.deepStrictEqual(jsonIo.readJsonWithBackup(target), {
+    likes: ["a", "b"],
+    cycleMinutes: 30,
+  });
+});
+
+check("returns null when nothing is usable", () => {
+  const missing = path.join(tmpdir, "nope.json");
+  assert.strictEqual(jsonIo.readJsonWithBackup(missing), null);
+});
+
+check("returns null when both copies are corrupt", () => {
+  const both = path.join(tmpdir, "both-bad.json");
+  fs.writeFileSync(both, "{not json");
+  fs.writeFileSync(`${both}.bak`, "also not json");
+  assert.strictEqual(jsonIo.readJsonWithBackup(both), null);
+});
+
+fs.rmSync(tmpdir, { recursive: true, force: true });
+
 // ---------------------------------------------------------------- summary
 
 console.log();
