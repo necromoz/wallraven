@@ -791,11 +791,11 @@ $sb = New-Object System.Text.StringBuilder 256
 [void][FgW]::GetClassName($h, $sb, 256)
 $cls = $sb.ToString()
 if ($cls -eq 'Progman' -or $cls -eq 'WorkerW' -or $cls -eq 'Shell_TrayWnd') { 'no||'; exit }
-$pid = [uint32]0
-[void][FgW]::GetWindowThreadProcessId($h, [ref]$pid)
+$procId = [uint32]0
+[void][FgW]::GetWindowThreadProcessId($h, [ref]$procId)
 $pname = ''
 $ptitle = ''
-try { $p = Get-Process -Id $pid -ErrorAction Stop; $pname = $p.ProcessName; $ptitle = $p.MainWindowTitle } catch {}
+try { $p = Get-Process -Id $procId -ErrorAction Stop; $pname = $p.ProcessName; $ptitle = $p.MainWindowTitle } catch {}
 $r = New-Object FgW+RECT
 $full = 'no'
 if ([FgW]::GetWindowRect($h, [ref]$r)) {
