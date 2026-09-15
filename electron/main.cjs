@@ -1334,17 +1334,44 @@ function parseHHMM(s) {
   if (!m) return null;
   return Math.min(23, Math.max(0, Number(m[1]))) * 60 + Math.min(59, Math.max(0, Number(m[2])));
 }
+// Which rule is in force at `now`?
+//
+// A timetable entry stays in force until the next one starts, including across
+// midnight. The original only looked at rules earlier today, so a rule set for
+// 22:00 was active from 22:00 to 23:59 and then stopped: at 00:00 the
+// minutes-since-midnight counter resets and 1320 is no longer <= 0. An evening
+// rule silently lapsed overnight instead of running until the morning rule
+// took over.
+//
+// Kept separate from config so it can be tested without Electron.
+function findActiveRule(rules, now) {
+  const appliesOn = (r, dow) => !r.days || !r.days.length || r.days.includes(dow);
+  const byStart = (a, b) => a._mins - b._mins;
+  const valid = (Array.isArray(rules) ? rules : [])
+    .map((r) => ({ ...r, _mins: parseHHMM(r.startHHMM) }))
+    .filter((r) => r._mins != null);
+  if (!valid.length) return null;
+
+  const dow = now.getDay(); // 0=Sun..6=Sat
+  const mins = now.getHours() * 60 + now.getMinutes();
+
+  const startedToday = valid.filter((r) => appliesOn(r, dow) && r._mins <= mins).sort(byStart);
+  if (startedToday.length) return startedToday[startedToday.length - 1];
+
+  // Nothing has started yet today, so we are still inside the last rule from
+  // the most recent day that had one. Walk back a week at most.
+  for (let back = 1; back <= 7; back++) {
+    const earlierDay = (dow - back + 7) % 7;
+    const onThatDay = valid.filter((r) => appliesOn(r, earlierDay)).sort(byStart);
+    if (onThatDay.length) return onThatDay[onThatDay.length - 1];
+  }
+  return null;
+}
+
 function activeScheduleRule(now = new Date()) {
   const sch = config.schedule || {};
   if (!sch.enabled || !Array.isArray(sch.rules) || !sch.rules.length) return null;
-  const dow = now.getDay(); // 0=Sun..6=Sat
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const todays = sch.rules
-    .filter(r => !r.days || !r.days.length || r.days.includes(dow))
-    .map(r => ({ ...r, _mins: parseHHMM(r.startHHMM) }))
-    .filter(r => r._mins != null && r._mins <= mins)
-    .sort((a, b) => a._mins - b._mins);
-  return todays.length ? todays[todays.length - 1] : null;
+  return findActiveRule(sch.rules, now);
 }
 function applyScheduleRule(rule) {
   if (!rule) return;
@@ -1390,8 +1417,13 @@ function startScheduleTicker() {
         applyScheduleRule(rule);
         scheduleCycle();
         fetchAndSetWallpaper(false);
-        updateTrayMenu();
+      } else {
+        // Left the last rule with none taking over. Reschedule so the timer
+        // returns to config.cycleMinutes; without this it kept running at the
+        // departed rule's interval until something unrelated rescheduled it.
+        scheduleCycle();
       }
+      updateTrayMenu();
     }
   };
   scheduleTimer = setInterval(tick, 60 * 1000);

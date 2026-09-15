@@ -128,6 +128,78 @@ check("rejects malformed input", () => {
   assert.strictEqual(parseHHMM("8"), null);
 });
 
+// ------------------------------------------------------------- findActiveRule
+
+const findActiveRule = new Function(
+  `${extract("parseHHMM")}
+   ${extract("findActiveRule")}
+   return findActiveRule;`,
+)();
+
+// 2026-09-15 is a Tuesday. Day numbers are 0=Sun..6=Sat.
+const at = (day, hh, mm) => new Date(2026, 8, 13 + day, hh, mm); // 13 Sep 2026 is a Sunday
+const TUE = 2;
+
+console.log("findActiveRule");
+
+check("picks the latest rule that has already started today", () => {
+  const rules = [
+    { id: "morning", startHHMM: "08:00" },
+    { id: "evening", startHHMM: "20:00" },
+  ];
+  assert.strictEqual(findActiveRule(rules, at(TUE, 9, 0)).id, "morning");
+  assert.strictEqual(findActiveRule(rules, at(TUE, 19, 59)).id, "morning");
+  assert.strictEqual(findActiveRule(rules, at(TUE, 20, 0)).id, "evening");
+  assert.strictEqual(findActiveRule(rules, at(TUE, 23, 59)).id, "evening");
+});
+
+check("an evening rule survives midnight", () => {
+  // The bug: at 01:00 the old code found nothing, because 20:00 is not
+  // earlier than 01:00 once the minute counter resets.
+  const rules = [
+    { id: "morning", startHHMM: "08:00" },
+    { id: "evening", startHHMM: "20:00" },
+  ];
+  assert.strictEqual(findActiveRule(rules, at(TUE, 0, 30)).id, "evening");
+  assert.strictEqual(findActiveRule(rules, at(TUE, 7, 59)).id, "evening");
+});
+
+check("carries over from the correct earlier day", () => {
+  // A rule that only runs at weekends should still be in force early Monday.
+  const rules = [{ id: "weekend", startHHMM: "10:00", days: [0, 6] }];
+  const MON = 1;
+  assert.strictEqual(findActiveRule(rules, at(MON, 3, 0)).id, "weekend");
+});
+
+check("respects the days a rule applies to", () => {
+  const rules = [
+    { id: "weekday", startHHMM: "09:00", days: [1, 2, 3, 4, 5] },
+    { id: "weekend", startHHMM: "11:00", days: [0, 6] },
+  ];
+  const SAT = 6;
+  assert.strictEqual(findActiveRule(rules, at(TUE, 12, 0)).id, "weekday");
+  assert.strictEqual(findActiveRule(rules, at(SAT, 12, 0)).id, "weekend");
+});
+
+check("an empty days list means every day", () => {
+  const rules = [{ id: "always", startHHMM: "06:00", days: [] }];
+  assert.strictEqual(findActiveRule(rules, at(TUE, 7, 0)).id, "always");
+});
+
+check("returns null when there are no usable rules", () => {
+  assert.strictEqual(findActiveRule([], at(TUE, 12, 0)), null);
+  assert.strictEqual(findActiveRule(null, at(TUE, 12, 0)), null);
+  assert.strictEqual(findActiveRule([{ id: "bad", startHHMM: "nope" }], at(TUE, 12, 0)), null);
+});
+
+check("ignores malformed rules but keeps the good ones", () => {
+  const rules = [
+    { id: "bad", startHHMM: "" },
+    { id: "good", startHHMM: "07:00" },
+  ];
+  assert.strictEqual(findActiveRule(rules, at(TUE, 8, 0)).id, "good");
+});
+
 // ---------------------------------------------------------------- mergeConfig
 
 const mergeConfig = new Function(`${extract("mergeConfig")}; return mergeConfig;`)();
