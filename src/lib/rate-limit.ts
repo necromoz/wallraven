@@ -8,11 +8,16 @@ const buckets = new Map<string, Bucket>();
 const MAX_KEYS = 5000;
 
 export function clientKey(request: Request, scope: string) {
-  const fwd = request.headers.get("x-forwarded-for") ?? "";
+  // Order matters. cf-connecting-ip is set by Cloudflare on the way in and
+  // overwrites anything the caller sent, so it cannot be forged. x-forwarded-for
+  // is caller-supplied unless a trusted proxy rewrites it, so reading it first
+  // let anyone bypass every limit on every public endpoint simply by varying
+  // their own header. It stays only as a fallback for running behind something
+  // other than Cloudflare.
   const ip =
-    fwd.split(",")[0]?.trim() ||
     request.headers.get("cf-connecting-ip") ||
     request.headers.get("x-real-ip") ||
+    (request.headers.get("x-forwarded-for") ?? "").split(",")[0]?.trim() ||
     "unknown";
   return `${scope}:${ip}`;
 }
