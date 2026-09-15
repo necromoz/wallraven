@@ -481,7 +481,11 @@ async function browseCommunityPresets({ category = '', search = '', sort = 'top'
   params.set('hidden', 'eq.false');
   params.set('limit', String(Math.max(1, Math.min(200, limit))));
   if (category) params.set('category', `eq.${category}`);
-  if (search) params.set('or', `(name.ilike.*${search}*,description.ilike.*${search}*)`);
+  // PostgREST reads commas and parentheses as filter syntax, so a raw term
+  // escapes the intended condition. Practically it also meant that typing a
+  // comma in the preset search box returned a 400 and an empty gallery.
+  const safeSearch = String(search || '').replace(/[,()*"\\]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (safeSearch) params.set('or', `(name.ilike.*${safeSearch}*,description.ilike.*${safeSearch}*)`);
   params.set('order', sort === 'new' ? 'created_at.desc' : sort === 'copied' ? 'copy_count.desc' : 'like_count.desc');
 
   const token = await accessToken().catch(() => null);

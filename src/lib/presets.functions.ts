@@ -15,6 +15,17 @@ const listSchema = z.object({
   limit: z.number().int().min(1).max(100).default(48),
 });
 
+// PostgREST parses commas as clause separators and parentheses as grouping
+// inside an `or=` filter, so interpolating a raw search term let a caller
+// escape the intended condition and filter on any column. It also meant anyone
+// typing a comma in the search box got a 400 and an empty gallery.
+//
+// Strip the characters that carry meaning in the filter grammar. `*` goes too,
+// since the wildcards are supplied by the query itself.
+function sanitiseSearchTerm(term: string) {
+  return term.replace(/[,()*"\\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function publicClient() {
   const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
   return createClient<Database>(process.env["SUPABASE_URL"]!, key, {
@@ -41,7 +52,8 @@ export const listCommunityPresets = createServerFn({ method: "GET" })
       .limit(data.limit);
 
     if (data.category) query = query.eq("category", data.category);
-    if (data.search) query = query.or(`name.ilike.*${data.search}*,description.ilike.*${data.search}*`);
+    const search = data.search ? sanitiseSearchTerm(data.search) : "";
+    if (search) query = query.or(`name.ilike.*${search}*,description.ilike.*${search}*`);
 
     query =
       data.sort === "new"
