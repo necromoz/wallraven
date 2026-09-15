@@ -1169,7 +1169,7 @@
     <div style="flex:1;">
       <input id="pauseFullscreenApps" type="text" placeholder="cs2, vlc, mpc-hc64" style="width:100%;" />
       <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
-        <button class="btn secondary" id="btn-detect-app" type="button">Detect app I'm running now</button>
+        <button class="btn secondary" id="btn-detect-app" type="button">Detect an app (5s to switch to it)</button>
       </div>
       <div class="status" id="detectStatus" style="margin-top:6px;">&nbsp;</div>
     </div>
@@ -2032,10 +2032,32 @@ function wireAllCards() {
   });
   $('#pauseOnFullscreen')?.addEventListener('change', syncFullscreenRows);
   $('#pauseFullscreenMode')?.addEventListener('change', syncFullscreenRows);
+  // Pressing this button necessarily makes WallRaven the foreground window, so
+  // probing straight away could only ever detect WallRaven itself. Count down
+  // first and give the user time to click into the app they actually mean.
+  const DETECT_DELAY_SECONDS = 5;
   $('#btn-detect-app') && ($('#btn-detect-app').onclick = async () => {
-    const st = $('#detectStatus'); if (st) { st.textContent = 'Looking at the foreground window…'; st.className = 'status'; }
+    const st = $('#detectStatus');
+    const btn = $('#btn-detect-app');
+    if (btn) btn.disabled = true;
+    try {
+      for (let left = DETECT_DELAY_SECONDS; left > 0; left--) {
+        if (st) {
+          st.textContent = `Click the app you want, now. Detecting in ${left}…`;
+          st.className = 'status';
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+    if (st) { st.textContent = 'Looking at the foreground window…'; st.className = 'status'; }
     const info = await api.fullscreenProbe();
     if (!info || !info.process) { if (st) { st.textContent = 'Could not identify the foreground app.'; st.className = 'status err'; } return; }
+    if (/^wallraven$/i.test(info.process)) {
+      if (st) { st.textContent = 'That was WallRaven. Press the button, then click straight into the app you want to pause for.'; st.className = 'status err'; }
+      return;
+    }
     const input = $('#pauseFullscreenApps');
     const list = input.value.split(',').map(s => s.trim()).filter(Boolean);
     const name = info.process;
