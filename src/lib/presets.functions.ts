@@ -88,12 +88,19 @@ export const toggleLikePreset = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), liked: z.boolean() }).parse(input))
   .handler(async ({ data, context }) => {
-    if (data.liked) {
-      await context.supabase.from("preset_likes").insert({ preset_id: data.id, user_id: context.userId });
-    } else {
-      await context.supabase.from("preset_likes").delete().eq("preset_id", data.id).eq("user_id", context.userId);
-    }
-    return { ok: true, liked: data.liked };
+    // The result was discarded and ok:true returned regardless, so a like
+    // rejected by RLS or lost to a unique-constraint collision still rendered
+    // as though it had worked until the next refresh.
+    const { error } = data.liked
+      ? await context.supabase.from("preset_likes").insert({ preset_id: data.id, user_id: context.userId })
+      : await context.supabase
+          .from("preset_likes")
+          .delete()
+          .eq("preset_id", data.id)
+          .eq("user_id", context.userId);
+
+    if (error) return { ok: false as const, liked: !data.liked, error: "Could not save that." };
+    return { ok: true as const, liked: data.liked };
   });
 
 export const deleteMyPreset = createServerFn({ method: "POST" })
