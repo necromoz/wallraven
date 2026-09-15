@@ -100,6 +100,7 @@ const DEFAULT_CONFIG = {
   sectionsOpen: {},       // 'card:section' -> open/closed for sections inside a card
   uiPage: 'home',         // active destination in the app shell
   uiTabs: {},             // page id -> active sub-tab
+  presets: {},            // { [name]: saved search settings } — written by the settings UI and by cloud sync
   playlists: {},          // { [name]: { items: [{id,url,file,thumb,resolution,file_type}], createdAt } }
   activePlaylist: '',     // name of playlist used when sourceMode === 'playlist'
   playlistIndex: 0,       // sequential cursor into active playlist
@@ -174,9 +175,30 @@ let offlineNotified = false;          // only toast on online/offline *change*
 const prefetched = [];                 // [{ item, file }] ready-to-apply candidates
 let prefetchTimer = null;
 
+// Merge a saved config over the defaults, one level into object-valued keys.
+//
+// A plain spread replaces nested objects wholesale, so a config written by an
+// older version carries its whole `hotkeys` object forward and any key added
+// since simply does not exist. That is how `back` and `forward` ended up
+// undefined for anyone upgrading from before those hotkeys were introduced.
+// The same applies to categories, purity, schedule, stats and updateInfo.
+//
+// Arrays are user data and are never merged: a saved `likes` of [] means the
+// user cleared their likes, not that they want the defaults back.
+function mergeConfig(defaults, saved) {
+  const out = { ...defaults, ...saved };
+  for (const key of Object.keys(defaults)) {
+    const d = defaults[key];
+    const s = saved[key];
+    const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+    if (isPlainObject(d) && isPlainObject(s)) out[key] = { ...d, ...s };
+  }
+  return out;
+}
+
 function loadConfig() {
   const saved = readJsonWithBackup(CONFIG_PATH);
-  if (saved && typeof saved === 'object') return { ...DEFAULT_CONFIG, ...saved };
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) return mergeConfig(DEFAULT_CONFIG, saved);
   return { ...DEFAULT_CONFIG };
 }
 // Point CACHE_DIR at the user-chosen folder (config.cacheDir) when it is set

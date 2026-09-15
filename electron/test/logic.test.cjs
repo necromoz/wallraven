@@ -128,6 +128,60 @@ check("rejects malformed input", () => {
   assert.strictEqual(parseHHMM("8"), null);
 });
 
+// ---------------------------------------------------------------- mergeConfig
+
+const mergeConfig = new Function(`${extract("mergeConfig")}; return mergeConfig;`)();
+
+console.log("mergeConfig");
+
+check("fills in keys added to a nested object since the config was written", () => {
+  const defaults = {
+    hotkeys: { next: "A", like: "B", back: "C", forward: "D" },
+    cycleMinutes: 30,
+  };
+  const saved = { hotkeys: { next: "X", like: "B" }, cycleMinutes: 15 };
+  const out = mergeConfig(defaults, saved);
+  // The saved values win...
+  assert.strictEqual(out.hotkeys.next, "X");
+  assert.strictEqual(out.cycleMinutes, 15);
+  // ...but keys the old config never had are no longer undefined.
+  assert.strictEqual(out.hotkeys.back, "C");
+  assert.strictEqual(out.hotkeys.forward, "D");
+});
+
+check("merges categories, purity and schedule the same way", () => {
+  const defaults = {
+    categories: { general: true, anime: false, people: false },
+    purity: { sfw: true, sketchy: false, nsfw: false },
+    schedule: { enabled: false, rules: [] },
+  };
+  const saved = { categories: { anime: true }, schedule: { enabled: true } };
+  const out = mergeConfig(defaults, saved);
+  assert.strictEqual(out.categories.anime, true);
+  assert.strictEqual(out.categories.general, true);
+  assert.strictEqual(out.purity.sfw, true);
+  assert.strictEqual(out.schedule.enabled, true);
+  assert.deepStrictEqual(out.schedule.rules, []);
+});
+
+check("never merges arrays, so cleared user data stays cleared", () => {
+  const defaults = { likes: [], dislikes: [], colors: ["ff0000"] };
+  const saved = { likes: ["123"], colors: [] };
+  const out = mergeConfig(defaults, saved);
+  assert.deepStrictEqual(out.likes, ["123"]);
+  assert.deepStrictEqual(out.colors, [], "an emptied array must not be refilled from defaults");
+});
+
+check("keeps saved keys the defaults do not know about", () => {
+  const out = mergeConfig({ a: 1 }, { a: 2, somethingNew: true });
+  assert.strictEqual(out.somethingNew, true);
+});
+
+check("survives a null where an object was expected", () => {
+  const out = mergeConfig({ hotkeys: { next: "A" } }, { hotkeys: null });
+  assert.strictEqual(out.hotkeys, null);
+});
+
 // ---------------------------------------------------- atomic JSON read/write
 
 const os = require("os");
