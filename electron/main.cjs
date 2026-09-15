@@ -100,6 +100,7 @@ const DEFAULT_CONFIG = {
   sectionsOpen: {},       // 'card:section' -> open/closed for sections inside a card
   uiPage: 'home',         // active destination in the app shell
   uiTabs: {},             // page id -> active sub-tab
+  presets: {},            // { [name]: saved search settings } — written by the settings UI and by cloud sync
   playlists: {},          // { [name]: { items: [{id,url,file,thumb,resolution,file_type}], createdAt } }
   activePlaylist: '',     // name of playlist used when sourceMode === 'playlist'
   playlistIndex: 0,       // sequential cursor into active playlist
@@ -174,12 +175,30 @@ let offlineNotified = false;          // only toast on online/offline *change*
 const prefetched = [];                 // [{ item, file }] ready-to-apply candidates
 let prefetchTimer = null;
 
+// Merge a saved config over the defaults, one level into object-valued keys.
+//
+// A plain spread replaces nested objects wholesale, so a config written by an
+// older version carries its whole `hotkeys` object forward and any key added
+// since simply does not exist. That is how `back` and `forward` ended up
+// undefined for anyone upgrading from before those hotkeys were introduced.
+// The same applies to categories, purity, schedule, stats and updateInfo.
+//
+// Arrays are user data and are never merged: a saved `likes` of [] means the
+// user cleared their likes, not that they want the defaults back.
+function mergeConfig(defaults, saved) {
+  const out = { ...defaults, ...saved };
+  for (const key of Object.keys(defaults)) {
+    const d = defaults[key];
+    const s = saved[key];
+    const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+    if (isPlainObject(d) && isPlainObject(s)) out[key] = { ...d, ...s };
+  }
+  return out;
+}
+
 function loadConfig() {
-  try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) };
-    }
-  } catch (e) { console.error('config load', e); }
+  const saved = readJsonWithBackup(CONFIG_PATH);
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) return mergeConfig(DEFAULT_CONFIG, saved);
   return { ...DEFAULT_CONFIG };
 }
 // Point CACHE_DIR at the user-chosen folder (config.cacheDir) when it is set
@@ -216,22 +235,76 @@ function saveConfig() {
 // so the UI thread isn't doing a blocking disk write per event; always flush
 // before quitting so nothing is lost.
 let CONFIG_WRITE_TIMER = null;
+// Write JSON without ever leaving the real file half-written.
+//
+// config.json holds likes, dislikes, playlists, presets, hotkeys and the
+// timetable, and it is rewritten roughly every 500ms while the app is busy
+// because each wallpaper shown bumps a stat counter. Writing straight over the
+// live file means a crash, a forced reboot or a power cut during any one of
+// those writes truncates it, loadConfig then throws, and everything silently
+// resets to defaults.
+//
+// Instead: write a temp file, flush it to disk, keep the previous good copy as
+// .bak, then rename into place. Rename is atomic on both NTFS and POSIX, so a
+// reader either sees the whole old file or the whole new one.
+function writeJsonAtomic(targetPath, value) {
+  const tmp = `${targetPath}.tmp`;
+  const bak = `${targetPath}.bak`;
+  const json = JSON.stringify(value, null, 2);
+
+  let fd;
+  try {
+    fd = fs.openSync(tmp, 'w');
+    fs.writeFileSync(fd, json);
+    fs.fsyncSync(fd);
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch {} }
+  }
+
+  try {
+    if (fs.existsSync(targetPath)) fs.copyFileSync(targetPath, bak);
+  } catch (e) {
+    console.warn('backup before write failed', targetPath, e.message);
+  }
+
+  fs.renameSync(tmp, targetPath);
+}
+
+// Read JSON, falling back to the .bak written by writeJsonAtomic when the main
+// file is missing or corrupt. Returns null when neither is usable.
+function readJsonWithBackup(targetPath) {
+  for (const candidate of [targetPath, `${targetPath}.bak`]) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      if (candidate !== targetPath) {
+        console.warn(`[wallraven] ${targetPath} was unreadable; recovered from .bak`);
+      }
+      return parsed;
+    } catch (e) {
+      console.error('read failed', candidate, e.message);
+    }
+  }
+  return null;
+}
+
 function writeConfigNow() {
   if (CONFIG_WRITE_TIMER) { clearTimeout(CONFIG_WRITE_TIMER); CONFIG_WRITE_TIMER = null; }
-  try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2)); } catch (e) { console.error('config save', e); }
+  try { writeJsonAtomic(CONFIG_PATH, config); } catch (e) { console.error('config save', e); }
 }
 function persistConfigQuiet() {
   if (CONFIG_WRITE_TIMER) return;
   CONFIG_WRITE_TIMER = setTimeout(() => { CONFIG_WRITE_TIMER = null; writeConfigNow(); }, 500);
 }
 function loadHistory() {
-  try {
-    if (fs.existsSync(HISTORY_PATH)) return JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf8'));
-  } catch {}
+  const saved = readJsonWithBackup(HISTORY_PATH);
+  if (saved && Array.isArray(saved.items)) return saved;
   return { items: [], currentId: null };
 }
 function saveHistory() {
-  fs.writeFileSync(HISTORY_PATH, JSON.stringify(history, null, 2));
+  // Was an unguarded writeFileSync: a failure here threw out of whichever
+  // rotation called it, aborting the wallpaper change.
+  try { writeJsonAtomic(HISTORY_PATH, history); } catch (e) { console.error('history save', e); }
 }
 
 // ---------- Wallhaven API ----------
@@ -372,27 +445,68 @@ function whGate(fn, { priority = true } = {}) {
   return run;
 }
 
+// Every Wallhaven call is serialised through WH_CHAIN, so a single socket that
+// connects and then goes quiet would block all wallpaper changes, collections
+// and thumbnails for the rest of the session. Connect, stall and overall
+// deadlines make that impossible. The same failure was already fixed for
+// downloadFile in 0.8.13; this is the JSON path.
+const JSON_CONNECT_TIMEOUT = 15000;
+const JSON_STALL_TIMEOUT = 15000;
+const JSON_TOTAL_TIMEOUT = 45000;
+const JSON_MAX_BYTES = 8 * 1024 * 1024;
+
 function rawGetJSON(url, depth = 0) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Wallraven/1.0', 'Accept': 'application/json' } }, (res) => {
-      const loc = res.headers && res.headers.location;
-      if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
-        res.resume();
-        return rawGetJSON(new URL(loc, url).toString(), depth + 1).then(resolve, reject);
-      }
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => {
-        if (res.statusCode === 429) {
-          WH_COOLDOWN_UNTIL = Date.now() + 45000;
-          const err = new Error('HTTP 429: rate limited by Wallhaven');
-          err.status = 429;
-          return reject(err);
+    let settled = false;
+    let overall = null, stall = null;
+    const done = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(overall); clearTimeout(stall);
+      fn(arg);
+    };
+    const fail = (e) => done(reject, e);
+
+    const req = https.get(
+      url,
+      { headers: { 'User-Agent': 'Wallraven/1.0', 'Accept': 'application/json' }, timeout: JSON_CONNECT_TIMEOUT },
+      (res) => {
+        const loc = res.headers && res.headers.location;
+        if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
+          res.resume();
+          return rawGetJSON(new URL(loc, url).toString(), depth + 1)
+            .then((v) => done(resolve, v), fail);
         }
-        if (res.statusCode >= 400) return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
-        try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
-      });
-    }).on('error', reject);
+        overall = setTimeout(() => { req.destroy(); fail(new Error('request timed out')); }, JSON_TOTAL_TIMEOUT);
+        const bump = () => {
+          clearTimeout(stall);
+          stall = setTimeout(() => { req.destroy(); fail(new Error('request stalled')); }, JSON_STALL_TIMEOUT);
+        };
+        bump();
+
+        let data = '';
+        res.on('data', (c) => {
+          bump();
+          data += c;
+          // A runaway body would otherwise grow until the process dies.
+          if (data.length > JSON_MAX_BYTES) { req.destroy(); fail(new Error('response too large')); }
+        });
+        res.on('error', fail);
+        res.on('end', () => {
+          if (settled) return;
+          if (res.statusCode === 429) {
+            WH_COOLDOWN_UNTIL = Date.now() + 45000;
+            const err = new Error('HTTP 429: rate limited by Wallhaven');
+            err.status = 429;
+            return fail(err);
+          }
+          if (res.statusCode >= 400) return fail(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
+          try { done(resolve, JSON.parse(data)); } catch (e) { fail(e); }
+        });
+      },
+    );
+    req.on('timeout', () => { req.destroy(); fail(new Error('connection timed out')); });
+    req.on('error', fail);
   });
 }
 
@@ -446,7 +560,14 @@ function downloadFile(url, dest, depth = 0) {
       // Hard ceiling on the whole transfer, plus a stall guard between chunks.
       const overall = setTimeout(() => { req.destroy(); fail(new Error('download timed out')); }, 90000);
       let stall = setTimeout(() => { req.destroy(); fail(new Error('download stalled')); }, 20000);
-      res.on('data', () => {
+      // A response can end early without erroring. Without counting the bytes,
+      // a truncated image is written to the cache under the wallpaper id, set
+      // as the desktop background, and then treated as a cache hit forever
+      // after because the file exists.
+      const expected = Number(res.headers['content-length']) || 0;
+      let received = 0;
+      res.on('data', (chunk) => {
+        received += chunk.length;
         clearTimeout(stall);
         stall = setTimeout(() => { req.destroy(); fail(new Error('download stalled')); }, 20000);
       });
@@ -454,6 +575,9 @@ function downloadFile(url, dest, depth = 0) {
       res.pipe(file);
       file.on('finish', () => {
         clearTimeout(overall); clearTimeout(stall);
+        if (expected && received !== expected) {
+          return fail(new Error(`download truncated: got ${received} of ${expected} bytes`));
+        }
         file.close(() => { if (!settled) { settled = true; resolve(dest); } });
       });
       file.on('error', (e) => { clearTimeout(overall); clearTimeout(stall); fail(e); });
@@ -791,11 +915,11 @@ $sb = New-Object System.Text.StringBuilder 256
 [void][FgW]::GetClassName($h, $sb, 256)
 $cls = $sb.ToString()
 if ($cls -eq 'Progman' -or $cls -eq 'WorkerW' -or $cls -eq 'Shell_TrayWnd') { 'no||'; exit }
-$pid = [uint32]0
-[void][FgW]::GetWindowThreadProcessId($h, [ref]$pid)
+$procId = [uint32]0
+[void][FgW]::GetWindowThreadProcessId($h, [ref]$procId)
 $pname = ''
 $ptitle = ''
-try { $p = Get-Process -Id $pid -ErrorAction Stop; $pname = $p.ProcessName; $ptitle = $p.MainWindowTitle } catch {}
+try { $p = Get-Process -Id $procId -ErrorAction Stop; $pname = $p.ProcessName; $ptitle = $p.MainWindowTitle } catch {}
 $r = New-Object FgW+RECT
 $full = 'no'
 if ([FgW]::GetWindowRect($h, [ref]$r)) {
@@ -1220,17 +1344,44 @@ function parseHHMM(s) {
   if (!m) return null;
   return Math.min(23, Math.max(0, Number(m[1]))) * 60 + Math.min(59, Math.max(0, Number(m[2])));
 }
+// Which rule is in force at `now`?
+//
+// A timetable entry stays in force until the next one starts, including across
+// midnight. The original only looked at rules earlier today, so a rule set for
+// 22:00 was active from 22:00 to 23:59 and then stopped: at 00:00 the
+// minutes-since-midnight counter resets and 1320 is no longer <= 0. An evening
+// rule silently lapsed overnight instead of running until the morning rule
+// took over.
+//
+// Kept separate from config so it can be tested without Electron.
+function findActiveRule(rules, now) {
+  const appliesOn = (r, dow) => !r.days || !r.days.length || r.days.includes(dow);
+  const byStart = (a, b) => a._mins - b._mins;
+  const valid = (Array.isArray(rules) ? rules : [])
+    .map((r) => ({ ...r, _mins: parseHHMM(r.startHHMM) }))
+    .filter((r) => r._mins != null);
+  if (!valid.length) return null;
+
+  const dow = now.getDay(); // 0=Sun..6=Sat
+  const mins = now.getHours() * 60 + now.getMinutes();
+
+  const startedToday = valid.filter((r) => appliesOn(r, dow) && r._mins <= mins).sort(byStart);
+  if (startedToday.length) return startedToday[startedToday.length - 1];
+
+  // Nothing has started yet today, so we are still inside the last rule from
+  // the most recent day that had one. Walk back a week at most.
+  for (let back = 1; back <= 7; back++) {
+    const earlierDay = (dow - back + 7) % 7;
+    const onThatDay = valid.filter((r) => appliesOn(r, earlierDay)).sort(byStart);
+    if (onThatDay.length) return onThatDay[onThatDay.length - 1];
+  }
+  return null;
+}
+
 function activeScheduleRule(now = new Date()) {
   const sch = config.schedule || {};
   if (!sch.enabled || !Array.isArray(sch.rules) || !sch.rules.length) return null;
-  const dow = now.getDay(); // 0=Sun..6=Sat
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const todays = sch.rules
-    .filter(r => !r.days || !r.days.length || r.days.includes(dow))
-    .map(r => ({ ...r, _mins: parseHHMM(r.startHHMM) }))
-    .filter(r => r._mins != null && r._mins <= mins)
-    .sort((a, b) => a._mins - b._mins);
-  return todays.length ? todays[todays.length - 1] : null;
+  return findActiveRule(sch.rules, now);
 }
 function applyScheduleRule(rule) {
   if (!rule) return;
@@ -1276,8 +1427,13 @@ function startScheduleTicker() {
         applyScheduleRule(rule);
         scheduleCycle();
         fetchAndSetWallpaper(false);
-        updateTrayMenu();
+      } else {
+        // Left the last rule with none taking over. Reschedule so the timer
+        // returns to config.cycleMinutes; without this it kept running at the
+        // departed rule's interval until something unrelated rescheduled it.
+        scheduleCycle();
       }
+      updateTrayMenu();
     }
   };
   scheduleTimer = setInterval(tick, 60 * 1000);
@@ -1370,14 +1526,46 @@ const UPDATE_MANIFEST_URLS = ['https://wallraven.app/updates/latest.json', 'http
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/wallraven-app/wallraven/releases/latest';
 const UPDATE_DIR = path.join(DATA_DIR, 'updates');
 
+// Semver-aware comparison. The numeric core is compared first, then the
+// prerelease suffix: a plain release always outranks a prerelease of the same
+// version, so 0.8.0 beats 0.8.0-beta.2 rather than losing to it.
 function compareVersions(a, b) {
-  const norm = (v) => String(v || '').replace(/^v/i, '').split(/[.-]/).map(x => /^\d+$/.test(x) ? Number(x) : x);
-  const A = norm(a), B = norm(b);
-  for (let i = 0; i < Math.max(A.length, B.length); i++) {
-    const x = A[i] ?? 0, y = B[i] ?? 0;
+  const parse = (v) => {
+    const s = String(v || '').trim().replace(/^v/i, '');
+    const plus = s.indexOf('+');                      // build metadata is not compared
+    const bare = plus === -1 ? s : s.slice(0, plus);
+    const dash = bare.indexOf('-');
+    const core = dash === -1 ? bare : bare.slice(0, dash);
+    return {
+      core: core.split('.').map((x) => (/^\d+$/.test(x) ? Number(x) : 0)),
+      pre: dash === -1 ? '' : bare.slice(dash + 1),
+    };
+  };
+  const A = parse(a), B = parse(b);
+
+  for (let i = 0; i < Math.max(A.core.length, B.core.length); i++) {
+    const x = A.core[i] ?? 0, y = B.core[i] ?? 0;
+    if (x !== y) return x - y;
+  }
+
+  // Equal cores: absence of a prerelease wins.
+  if (!A.pre && !B.pre) return 0;
+  if (!A.pre) return 1;
+  if (!B.pre) return -1;
+
+  // Both prereleases: dot-separated identifiers, numeric ones sorting below
+  // alphanumeric ones, and a shorter run of identifiers sorting below a longer.
+  const ai = A.pre.split('.'), bi = B.pre.split('.');
+  for (let i = 0; i < Math.max(ai.length, bi.length); i++) {
+    const x = ai[i], y = bi[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
     if (x === y) continue;
-    if (typeof x === 'number' && typeof y === 'number') return x - y;
-    return String(x).localeCompare(String(y));
+    const xn = /^\d+$/.test(x), yn = /^\d+$/.test(y);
+    if (xn && yn) return Number(x) - Number(y);
+    if (xn) return -1;
+    if (yn) return 1;
+    return x < y ? -1 : 1;
   }
   return 0;
 }
@@ -1597,7 +1785,7 @@ function updateTrayMenu() {
   const hasUpdate = updInfo.latestVersion && compareVersions(updInfo.latestVersion, app.getVersion()) > 0;
   const items = [];
   if (hasUpdate) {
-    items.push({ label: `⬇ Update available: v${updInfo.latestVersion}`, click: () => updInfo.url && shell.openExternal(updInfo.url) });
+    items.push({ label: `⬇ Update available: v${updInfo.latestVersion}`, click: () => updInfo.url && openExternalSafe(updInfo.url) });
     items.push({ type: 'separator' });
   }
   items.push(
@@ -1606,7 +1794,7 @@ function updateTrayMenu() {
     { type: 'separator' },
     { label: liked ? '★ Liked' : '♡ Like current', enabled: !!last && !liked, click: () => { likeCurrent(); updateTrayMenu(); notifyRenderer(); } },
     { label: disliked ? '✕ Disliked' : '👎 Dislike current (skip)', enabled: !!last && !disliked, click: () => { dislikeCurrent(); updateTrayMenu(); } },
-    { label: 'Open current on Wallhaven', enabled: !!last, click: () => last && shell.openExternal(last.url) },
+    { label: 'Open current on Wallhaven', enabled: !!last, click: () => last && openExternalSafe(last.url) },
     { label: 'Show in folder', enabled: !!last, click: () => last && revealItem(last.file) },
     { type: 'separator' },
     { label: paused ? '▶ Resume cycling' : '⏸ Pause cycling', click: () => { paused = !paused; updateTrayMenu(); } },
@@ -2165,22 +2353,49 @@ ipcMain.handle('wh:openFavorite', (_e, { url } = {}) => {
 // ---------- Popular tags scraper ----------
 function httpsGetText(url, depth = 0) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 WallhavenTray/1.0' } }, (res) => {
-      const loc = res.headers && res.headers.location;
-      if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
-        res.resume();
-        return httpsGetText(new URL(loc, url).toString(), depth + 1).then(resolve, reject);
-      }
-      let data = '';
-      res.on('data', (c) => {
-        data += c;
-        if (data.length > 1024 * 1024) res.destroy(new Error('Response too large'));
-      });
-      res.on('end', () => {
-        if (res.statusCode >= 400) return reject(new Error(`HTTP ${res.statusCode}`));
-        resolve(data);
-      });
-    }).on('error', reject);
+    let settled = false;
+    let overall = null, stall = null;
+    const done = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(overall); clearTimeout(stall);
+      fn(arg);
+    };
+    const fail = (e) => done(reject, e);
+
+    const req = https.get(
+      url,
+      { headers: { 'User-Agent': 'Mozilla/5.0 WallhavenTray/1.0' }, timeout: JSON_CONNECT_TIMEOUT },
+      (res) => {
+        const loc = res.headers && res.headers.location;
+        if (res.statusCode >= 300 && res.statusCode < 400 && loc && depth < 5) {
+          res.resume();
+          return httpsGetText(new URL(loc, url).toString(), depth + 1)
+            .then((v) => done(resolve, v), fail);
+        }
+        overall = setTimeout(() => { req.destroy(); fail(new Error('request timed out')); }, JSON_TOTAL_TIMEOUT);
+        const bump = () => {
+          clearTimeout(stall);
+          stall = setTimeout(() => { req.destroy(); fail(new Error('request stalled')); }, JSON_STALL_TIMEOUT);
+        };
+        bump();
+
+        let data = '';
+        res.on('data', (c) => {
+          bump();
+          data += c;
+          if (data.length > 1024 * 1024) { req.destroy(); fail(new Error('Response too large')); }
+        });
+        res.on('error', fail);
+        res.on('end', () => {
+          if (settled) return;
+          if (res.statusCode >= 400) return fail(new Error(`HTTP ${res.statusCode}`));
+          done(resolve, data);
+        });
+      },
+    );
+    req.on('timeout', () => { req.destroy(); fail(new Error('connection timed out')); });
+    req.on('error', fail);
   });
 }
 const tagsCache = new Map();

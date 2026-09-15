@@ -1,0 +1,96 @@
+name: Desktop build
+
+# Builds the Windows installer on a Windows runner GitHub provides, so
+# releasing no longer depends on anyone's machine or on Lovable.
+#
+# Pushing to main or a fixes/* branch builds and keeps the installer as a
+# downloadable artifact for 14 days. Pushing a tag like v0.8.14 additionally
+# publishes it as a GitHub Release.
+#
+# Cost note: the free plan includes 2,000 Actions minutes a month on private
+# repos and Windows bills at a higher rate, but this build is a few minutes,
+# so normal use sits well inside the allowance.
+
+on:
+  push:
+    branches: [main, "fixes/**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Check for NSIS
+        shell: bash
+        run: |
+          if command -v makensis >/dev/null 2>&1; then
+            echo "makensis found on PATH"
+          elif [ -x "/c/Program Files (x86)/NSIS/makensis.exe" ]; then
+            echo "makensis found in Program Files (x86)"
+          elif [ -x "/c/Program Files/NSIS/makensis.exe" ]; then
+            echo "makensis found in Program Files"
+          else
+            echo "makensis not present, installing"
+            choco install nsis --no-progress -y
+          fi
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(tr -d '[:space:]' < electron/VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Build installer
+        run: node scripts/build-desktop.mjs --platform win32 --arch x64
+
+      - name: Checksum
+        shell: bash
+        run: |
+          cd dist
+          sha256sum *.exe | tee SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wallraven-Setup-v${{ steps.version.outputs.version }}
+          path: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error
+
+      # Only on a version tag. The checksum file is published alongside the
+      # installer so the updater can verify what it downloaded rather than
+      # trusting whatever the manifest points at.
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
+          generate_release_notes: true

@@ -11,15 +11,31 @@ const SUPABASE_URL = 'https://mcjoigrvejwyzrxllwqu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_j42MB5A5EIWHtuupe6dOIg_AS1zPw22';
 
 // ---------- tiny JSON https helper ----------
+// Timeouts matter here as much as anywhere: pollSignIn runs on a 2.5s interval
+// while pairing, so a request that hangs would stack up indefinitely, and a
+// hung token refresh would leave the account stuck in a half-signed-in state.
+const REQUEST_CONNECT_TIMEOUT = 15000;
+const REQUEST_TOTAL_TIMEOUT = 30000;
+
 function request(url, { method = 'GET', headers = {}, body = null } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const payload = body == null ? null : Buffer.from(JSON.stringify(body));
+    let settled = false;
+    let overall = null;
+    const done = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(overall);
+      fn(arg);
+    };
+
     const req = https.request(
       {
         method,
         hostname: u.hostname,
         path: u.pathname + u.search,
+        timeout: REQUEST_CONNECT_TIMEOUT,
         headers: {
           'content-type': 'application/json',
           'user-agent': 'Wallraven',
@@ -30,14 +46,20 @@ function request(url, { method = 'GET', headers = {}, body = null } = {}) {
       (res) => {
         let data = '';
         res.on('data', (c) => (data += c));
+        res.on('error', (e) => done(reject, e));
         res.on('end', () => {
           let parsed = null;
           try { parsed = data ? JSON.parse(data) : null; } catch { parsed = data; }
-          resolve({ status: res.statusCode, body: parsed });
+          done(resolve, { status: res.statusCode, body: parsed });
         });
       },
     );
-    req.on('error', reject);
+    overall = setTimeout(() => {
+      req.destroy();
+      done(reject, new Error('request timed out'));
+    }, REQUEST_TOTAL_TIMEOUT);
+    req.on('timeout', () => { req.destroy(); done(reject, new Error('connection timed out')); });
+    req.on('error', (e) => done(reject, e));
     if (payload) req.write(payload);
     req.end();
   });
@@ -91,12 +113,29 @@ function currentAuth() {
   return auth;
 }
 
+// Supabase rotates the refresh token on every use, so two refreshes racing
+// with the same token means the first wins and the second comes back
+// invalid_grant. That is treated as a hard failure and clears the session, so
+// the device silently unlinks and has to be paired again.
+//
+// It is easy to hit: the 15-minute cloudPull timer, a settings push and a
+// username lookup can all notice the expiry within milliseconds of each other.
+// Holding a single in-flight promise means concurrent callers await the same
+// request instead of starting their own.
+let refreshInFlight = null;
+
 async function accessToken() {
   const a = currentAuth();
   if (!a || !a.refresh_token) return null;
   const stillValid = a.access_token && a.expires_at && a.expires_at * 1000 - Date.now() > 60_000;
   if (stillValid) return a.access_token;
 
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = refreshAccessToken(a).finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function refreshAccessToken(a) {
   let res;
   try {
     res = await request(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
@@ -459,7 +498,11 @@ async function browseCommunityPresets({ category = '', search = '', sort = 'top'
   params.set('hidden', 'eq.false');
   params.set('limit', String(Math.max(1, Math.min(200, limit))));
   if (category) params.set('category', `eq.${category}`);
-  if (search) params.set('or', `(name.ilike.*${search}*,description.ilike.*${search}*)`);
+  // PostgREST reads commas and parentheses as filter syntax, so a raw term
+  // escapes the intended condition. Practically it also meant that typing a
+  // comma in the preset search box returned a 400 and an empty gallery.
+  const safeSearch = String(search || '').replace(/[,()*"\\]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (safeSearch) params.set('or', `(name.ilike.*${safeSearch}*,description.ilike.*${safeSearch}*)`);
   params.set('order', sort === 'new' ? 'created_at.desc' : sort === 'copied' ? 'copy_count.desc' : 'like_count.desc');
 
   const token = await accessToken().catch(() => null);

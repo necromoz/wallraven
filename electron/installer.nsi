@@ -4,7 +4,13 @@ CRCCheck force
 SetCompressor lzma
 
 !define APP_NAME       "WallRaven"
-!define APP_VERSION    "0.8.13"
+; Passed in by scripts/build-desktop.mjs as /DAPP_VERSION, read from
+; electron/VERSION. The fallback keeps a hand-run makensis working, but
+; the build is the source of truth so this file never needs editing for a
+; release.
+!ifndef APP_VERSION
+  !define APP_VERSION  "0.0.0-dev"
+!endif
 !define APP_PUBLISHER  "WallRaven"
 !define APP_EXE        "Wallraven.exe"
 !define APP_REG_KEY    "Software\Wallraven"

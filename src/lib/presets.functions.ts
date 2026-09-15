@@ -15,6 +15,17 @@ const listSchema = z.object({
   limit: z.number().int().min(1).max(100).default(48),
 });
 
+// PostgREST parses commas as clause separators and parentheses as grouping
+// inside an `or=` filter, so interpolating a raw search term let a caller
+// escape the intended condition and filter on any column. It also meant anyone
+// typing a comma in the search box got a 400 and an empty gallery.
+//
+// Strip the characters that carry meaning in the filter grammar. `*` goes too,
+// since the wildcards are supplied by the query itself.
+function sanitiseSearchTerm(term: string) {
+  return term.replace(/[,()*"\\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function publicClient() {
   const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
   return createClient<Database>(process.env["SUPABASE_URL"]!, key, {
@@ -41,7 +52,8 @@ export const listCommunityPresets = createServerFn({ method: "GET" })
       .limit(data.limit);
 
     if (data.category) query = query.eq("category", data.category);
-    if (data.search) query = query.or(`name.ilike.*${data.search}*,description.ilike.*${data.search}*`);
+    const search = data.search ? sanitiseSearchTerm(data.search) : "";
+    if (search) query = query.or(`name.ilike.*${search}*,description.ilike.*${search}*`);
 
     query =
       data.sort === "new"
@@ -76,12 +88,19 @@ export const toggleLikePreset = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), liked: z.boolean() }).parse(input))
   .handler(async ({ data, context }) => {
-    if (data.liked) {
-      await context.supabase.from("preset_likes").insert({ preset_id: data.id, user_id: context.userId });
-    } else {
-      await context.supabase.from("preset_likes").delete().eq("preset_id", data.id).eq("user_id", context.userId);
-    }
-    return { ok: true, liked: data.liked };
+    // The result was discarded and ok:true returned regardless, so a like
+    // rejected by RLS or lost to a unique-constraint collision still rendered
+    // as though it had worked until the next refresh.
+    const { error } = data.liked
+      ? await context.supabase.from("preset_likes").insert({ preset_id: data.id, user_id: context.userId })
+      : await context.supabase
+          .from("preset_likes")
+          .delete()
+          .eq("preset_id", data.id)
+          .eq("user_id", context.userId);
+
+    if (error) return { ok: false as const, liked: !data.liked, error: "Could not save that." };
+    return { ok: true as const, liked: data.liked };
   });
 
 export const deleteMyPreset = createServerFn({ method: "POST" })
