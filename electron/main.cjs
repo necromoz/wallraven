@@ -560,7 +560,14 @@ function downloadFile(url, dest, depth = 0) {
       // Hard ceiling on the whole transfer, plus a stall guard between chunks.
       const overall = setTimeout(() => { req.destroy(); fail(new Error('download timed out')); }, 90000);
       let stall = setTimeout(() => { req.destroy(); fail(new Error('download stalled')); }, 20000);
-      res.on('data', () => {
+      // A response can end early without erroring. Without counting the bytes,
+      // a truncated image is written to the cache under the wallpaper id, set
+      // as the desktop background, and then treated as a cache hit forever
+      // after because the file exists.
+      const expected = Number(res.headers['content-length']) || 0;
+      let received = 0;
+      res.on('data', (chunk) => {
+        received += chunk.length;
         clearTimeout(stall);
         stall = setTimeout(() => { req.destroy(); fail(new Error('download stalled')); }, 20000);
       });
@@ -568,6 +575,9 @@ function downloadFile(url, dest, depth = 0) {
       res.pipe(file);
       file.on('finish', () => {
         clearTimeout(overall); clearTimeout(stall);
+        if (expected && received !== expected) {
+          return fail(new Error(`download truncated: got ${received} of ${expected} bytes`));
+        }
         file.close(() => { if (!settled) { settled = true; resolve(dest); } });
       });
       file.on('error', (e) => { clearTimeout(overall); clearTimeout(stall); fail(e); });
