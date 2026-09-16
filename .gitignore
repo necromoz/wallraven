@@ -57,3 +57,7 @@ electron/dist/
 .env.*
 !.env.example
 
+
+# Database export from Lovable. Contains a real Wallhaven API key and
+# account data. Never commit it: this repo is public.
+/From Lovable/
