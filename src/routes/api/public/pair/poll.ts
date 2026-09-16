@@ -1,70 +1,80 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+
 import { allow, clientKey, tooManyRequests } from "@/lib/rate-limit";
 
+// The desktop app collects its session here once the person has approved the
+// request on the website.
+//
+// The app presents only the device code it was issued at /start. It no longer
+// sends the user code: that one is for a human to read and type, and having the
+// app send it too would have meant a stolen user code was enough to collect the
+// session.
+//
+// As at /start, there are no CORS headers. The caller is an Electron main
+// process, not a browser.
 
 const bodySchema = z.object({
-  code: z.string().min(6).max(64),
-  verifier: z.string().min(16).max(200),
+  device_code: z.string().min(16).max(200),
 });
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 export const Route = createFileRoute("/api/public/pair/poll")({
   server: {
     handlers: {
-      OPTIONS: async () => new Response(null, { status: 204, headers: cors }),
       POST: async ({ request }) => {
-        // Legit devices poll every couple of seconds while pairing; this only
-        // stops scripted guessing of codes/verifiers.
-        if (!allow(clientKey(request, "pair-poll"), 120, 60 * 1000)) {
-          return tooManyRequests(cors, 60);
+        // A device pairing legitimately polls every few seconds for up to ten
+        // minutes, so this has to be generous. It is not the thing standing
+        // between an attacker and a session: the device code's own size is.
+        if (!allow(clientKey(request, "pair-poll"), 240, 60 * 1000)) {
+          return tooManyRequests({}, 60);
         }
-        let parsed;
 
+        let parsed;
         try {
           parsed = bodySchema.parse(await request.json());
         } catch {
-          return Response.json({ error: "invalid_request" }, { status: 400, headers: cors });
+          return Response.json({ error: "invalid_request" }, { status: 400 });
         }
 
-        const verifierHash = createHash("sha256").update(parsed.verifier).digest("hex");
+        const deviceCodeHash = createHash("sha256").update(parsed.device_code).digest("hex");
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+        // Look the row up by the hash rather than by the user code. The device
+        // code is the only thing the app proves it holds, so it is the only
+        // thing that should select a row.
         const { data: row } = await supabaseAdmin
           .from("device_pairings")
           .select("id, verifier_hash, session, claimed, expires_at")
-          .eq("code", parsed.code)
+          .eq("verifier_hash", deviceCodeHash)
           .maybeSingle();
 
-        const hashMatches = (a: string | null | undefined, b: string) => {
-          if (!a || a.length !== b.length) return false;
-          return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+        // Constant-time even though the lookup above already matched: the
+        // column is indexed on equality, and this keeps the comparison honest
+        // if that ever changes.
+        const hashMatches = (stored: string | null | undefined, given: string) => {
+          if (!stored || stored.length !== given.length) return false;
+          return timingSafeEqual(Buffer.from(stored), Buffer.from(given));
         };
 
-        if (!row || !hashMatches(row.verifier_hash, verifierHash)) {
-          return Response.json({ status: "not_found" }, { status: 404, headers: cors });
+        if (!row || !hashMatches(row.verifier_hash, deviceCodeHash)) {
+          return Response.json({ status: "not_found" }, { status: 404 });
         }
-
 
         if (new Date(row.expires_at).getTime() < Date.now()) {
           await supabaseAdmin.from("device_pairings").delete().eq("id", row.id);
-          return Response.json({ status: "expired" }, { status: 410, headers: cors });
+          return Response.json({ status: "expired" }, { status: 410 });
         }
 
         if (!row.session || row.claimed) {
-          return Response.json({ status: "pending" }, { headers: cors });
+          return Response.json({ status: "pending" });
         }
 
-        // Single use: burn the row immediately.
+        // Single use. Burn the row before handing the session over, so a
+        // retried or duplicated request cannot collect the same tokens twice.
         await supabaseAdmin.from("device_pairings").delete().eq("id", row.id);
 
-        return Response.json({ status: "ok", session: row.session }, { headers: cors });
+        return Response.json({ status: "ok", session: row.session });
       },
     },
   },

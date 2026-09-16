@@ -174,27 +174,45 @@ async function refreshAccessToken(a) {
 
 
 // ---------- pairing ----------
-let pairing = null; // { code, verifier, timer, deadline }
-
-function randomCode() {
-  return crypto.randomBytes(9).toString('base64url').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12).padEnd(12, 'X');
-}
+//
+// The app asks the website to start a pairing, and gets back two things: a code
+// to show you, and a secret it keeps to itself.
+//
+// It used to work the other way round. The app invented a code, and the website
+// accepted it and put it in the link it opened in your browser. That meant
+// anyone could invent a code of their own, send you a link carrying it, and
+// collect your account the moment you pressed the button on that page, because
+// nothing on it told you the request was not yours. Now the code comes from the
+// server and never travels in a link: you read it off this app and type it into
+// the website yourself, which is only possible if you are sitting at the machine
+// that asked.
+let pairing = null; // { deviceCode, userCode, deadline }
 
 async function startSignIn(deviceName) {
   cancelSignIn();
-  const code = randomCode();
-  const verifier = crypto.randomBytes(32).toString('base64url');
-  const verifierHash = crypto.createHash('sha256').update(verifier).digest('hex');
 
   const res = await request(`${SITE_URL}/api/public/pair/start`, {
     method: 'POST',
-    body: { code, verifier_hash: verifierHash, device_name: deviceName || 'Wallraven desktop' },
+    body: { device_name: deviceName || 'Wallraven desktop' },
   });
-  if (res.status !== 200) throw new Error('Could not start sign-in. Check your internet connection.');
+  if (res.status !== 200 || !res.body?.device_code || !res.body?.user_code) {
+    throw new Error('Could not start sign-in. Check your internet connection.');
+  }
 
-  pairing = { code, verifier, deadline: Date.now() + 5 * 60 * 1000 };
-  await shell.openExternal(`${SITE_URL}/auth?pair=${encodeURIComponent(code)}`);
-  return { code, url: `${SITE_URL}/auth?pair=${encodeURIComponent(code)}` };
+  const ttlMs = Math.max(60, Number(res.body.expires_in) || 600) * 1000;
+  // The device code is the secret half and must never be shown or logged.
+  pairing = {
+    deviceCode: res.body.device_code,
+    userCode: String(res.body.user_code),
+    deadline: Date.now() + ttlMs,
+  };
+
+  // No code in the URL, by design. The page asks for it.
+  const url = typeof res.body.verification_uri === 'string' && res.body.verification_uri.startsWith(`${SITE_URL}/`)
+    ? res.body.verification_uri
+    : `${SITE_URL}/link`;
+  await shell.openExternal(`${url}?link=1`);
+  return { code: pairing.userCode, url };
 }
 
 function cancelSignIn() {
@@ -210,7 +228,7 @@ async function pollSignIn() {
   }
   const res = await request(`${SITE_URL}/api/public/pair/poll`, {
     method: 'POST',
-    body: { code: pairing.code, verifier: pairing.verifier },
+    body: { device_code: pairing.deviceCode },
   });
   if (res.status === 410) { pairing = null; return { status: 'expired' }; }
   if (res.status !== 200 || res.body?.status !== 'ok') return { status: 'pending' };

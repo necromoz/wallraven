@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
 
-const PAIR_KEY = "wallraven.pairCode";
+// Whether this sign-in was started in order to link a desktop app. Only a flag:
+// the pairing code itself is never carried through the website, because a code
+// that travels in a link is a code an attacker can choose and send to someone.
+// See src/routes/link.tsx.
+const LINKING_KEY = "wallraven.linking";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -31,30 +35,35 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    // The Google redirect drops our query string, so remember the code locally.
-    const pair = params.get("pair") ?? sessionStorage.getItem(PAIR_KEY);
-    if (pair) {
-      setPairCode(pair);
-      sessionStorage.setItem(PAIR_KEY, pair);
+    // The Google redirect drops our query string, so remember the intent
+    // locally. `pair` is honoured only as a sign that an older app sent the
+    // person here; its value is deliberately ignored and never forwarded.
+    const wantsLink =
+      params.get("link") === "1" ||
+      params.has("pair") ||
+      sessionStorage.getItem(LINKING_KEY) === "1";
+    if (wantsLink) {
+      setLinking(true);
+      sessionStorage.setItem(LINKING_KEY, "1");
     }
 
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) return;
-      if (pair) {
-        sessionStorage.removeItem(PAIR_KEY);
-        navigate({ to: "/link", search: { pair } });
+      if (wantsLink) {
+        sessionStorage.removeItem(LINKING_KEY);
+        navigate({ to: "/link" });
       } else navigate({ to: "/account" });
     });
   }, [navigate]);
 
   const afterAuth = () => {
-    if (pairCode) {
-      sessionStorage.removeItem(PAIR_KEY);
-      navigate({ to: "/link", search: { pair: pairCode } });
+    if (linking) {
+      sessionStorage.removeItem(LINKING_KEY);
+      navigate({ to: "/link" });
     } else navigate({ to: "/account" });
   };
 
@@ -62,7 +71,7 @@ function AuthPage() {
     setBusy(true);
     setError(null);
     setMessage(null);
-    if (pairCode) sessionStorage.setItem(PAIR_KEY, pairCode);
+    if (linking) sessionStorage.setItem(LINKING_KEY, "1");
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin + "/auth",
     });
@@ -88,7 +97,7 @@ function AuthPage() {
         afterAuth();
       } else if (mode === "signup") {
         const redirect = new URL("/auth", window.location.origin);
-        if (pairCode) redirect.searchParams.set("pair", pairCode);
+        if (linking) redirect.searchParams.set("link", "1");
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -116,7 +125,7 @@ function AuthPage() {
       <main className="w-full max-w-sm">
         <h1 className="text-center text-2xl font-semibold tracking-tight">WallRaven</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">
-          {pairCode
+          {linking
             ? "Sign in to link the Wallraven desktop app."
             : "Sync your settings, presets and playlists."}
         </p>
