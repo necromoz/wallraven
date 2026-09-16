@@ -7,8 +7,8 @@ const https = require('https');
 const { shell, app, safeStorage } = require('electron');
 
 const SITE_URL = 'https://wallraven.lovable.app';
-const SUPABASE_URL = 'https://mcjoigrvejwyzrxllwqu.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_j42MB5A5EIWHtuupe6dOIg_AS1zPw22';
+const SUPABASE_URL = 'https://bwvbilkfcmjnvopjpaer.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_g0yinRk5yCpzNvpOhF8tVg_gW4ansSo';
 
 // ---------- tiny JSON https helper ----------
 // Timeouts matter here as much as anywhere: pollSignIn runs on a 2.5s interval
