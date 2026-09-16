@@ -20,7 +20,19 @@ const Module = require("module");
 const SRC_PATH = path.join(__dirname, "..", "..", "src", "lib", "pairing-codes.ts");
 
 function loadTsModule(file) {
-  const ts = require("typescript");
+  let ts;
+  try {
+    ts = require("typescript");
+  } catch {
+    // Better than a MODULE_NOT_FOUND stack trace for someone who just cloned
+    // the repo and ran the tests. CI installs dependencies first, so this only
+    // ever fires locally.
+    console.error(
+      "These tests compile a TypeScript file and need the repo's dependencies.\n" +
+        "Run `npm install` first, then `npm test` again.",
+    );
+    process.exit(1);
+  }
   const source = fs.readFileSync(file, "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },

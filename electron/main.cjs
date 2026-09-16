@@ -51,6 +51,7 @@ if (IS_PORTABLE) {
   } catch (e) { console.warn('data dir pin failed', e); }
 }
 
+const { SITE_ORIGIN, siteUrls } = require('./site.cjs');
 const DATA_DIR = path.join(app.getPath('userData'));
 const DEFAULT_CACHE_DIR = path.join(DATA_DIR, 'cache');
 // Mutable: the user can relocate the cache from Settings (config.cacheDir).
@@ -1628,7 +1629,7 @@ function dislikeCurrent() {
 // ---------- Auto-update ----------
 // Primary source: a small JSON manifest published with the web app.
 // Fallback: the GitHub "latest release" API (used once releases exist there).
-const UPDATE_MANIFEST_URLS = ['https://wallraven.app/updates/latest.json', 'https://wallraven.lovable.app/updates/latest.json'];
+const UPDATE_MANIFEST_URLS = siteUrls('/updates/latest.json');
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/wallraven-app/wallraven/releases/latest';
 
 // Only these hosts may serve an installer. Without this the updater would
@@ -2241,7 +2242,7 @@ ipcMain.handle('feedback:send', async (_e, payload) => {
     appVersion: app.getVersion(),
     platform: `${process.platform} ${process.arch}`,
   });
-  const endpoints = ['https://wallraven.app/api/public/feedback', 'https://wallraven.lovable.app/api/public/feedback'];
+  const endpoints = siteUrls('/api/public/feedback');
   let lastErr = 'Could not reach the feedback service';
   for (const url of endpoints) {
     try {
@@ -2786,10 +2787,7 @@ ipcMain.handle('app:changelog', async () => {
       if (changelog) return changelog;
     } catch {}
   }
-  const urls = [
-    'https://wallraven.app/updates/changelog.md',
-    'https://wallraven.lovable.app/updates/changelog.md',
-  ];
+  const urls = siteUrls('/updates/changelog.md');
   for (const url of urls) {
     try {
       const changelog = (await httpsGetText(`${url}?t=${Date.now()}`)).trim();
@@ -3119,7 +3117,8 @@ ipcMain.handle('account:signOut', async () => {
 
 ipcMain.handle('account:openWeb', async (_e, p) => {
   const safe = typeof p === 'string' && p.startsWith('/') ? p : '/account';
-  await shell.openExternal('https://wallraven.lovable.app' + safe);
+  // Was pointing at the Lovable host while everything else used wallraven.app.
+  await shell.openExternal(SITE_ORIGIN + safe);
   return true;
 });
 

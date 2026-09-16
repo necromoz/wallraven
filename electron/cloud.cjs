@@ -6,7 +6,13 @@ const crypto = require('crypto');
 const https = require('https');
 const { shell, app, safeStorage } = require('electron');
 
-const SITE_URL = 'https://wallraven.lovable.app';
+const { SITE_ORIGIN, isSiteUrl } = require('./site.cjs');
+
+// Pointing at wallraven.lovable.app was quietly breaking sign-in: that host
+// now answers every request with a 307 to wallraven.app, and the helper below
+// did not follow redirects, so startSignIn saw a non-200 and reported "check
+// your internet connection" to someone whose internet was fine.
+const SITE_URL = SITE_ORIGIN;
 const SUPABASE_URL = 'https://bwvbilkfcmjnvopjpaer.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_g0yinRk5yCpzNvpOhF8tVg_gW4ansSo';
 
@@ -17,7 +23,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_g0yinRk5yCpzNvpOhF8tVg_gW4ansSo';
 const REQUEST_CONNECT_TIMEOUT = 15000;
 const REQUEST_TOTAL_TIMEOUT = 30000;
 
-function request(url, { method = 'GET', headers = {}, body = null } = {}) {
+function request(url, { method = 'GET', headers = {}, body = null, redirectsLeft = 3 } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const payload = body == null ? null : Buffer.from(JSON.stringify(body));
@@ -44,6 +50,24 @@ function request(url, { method = 'GET', headers = {}, body = null } = {}) {
         },
       },
       (res) => {
+        // Follow a redirect rather than reporting it as a failure, but only to
+        // a host we already trust and only a couple of hops. Not following one
+        // is what broke sign-in; following one blindly would hand an access
+        // token to whoever controls the Location header.
+        const location = res.headers && res.headers.location;
+        if (res.statusCode >= 300 && res.statusCode < 400 && location && redirectsLeft > 0) {
+          const target = new URL(location, url).toString();
+          res.resume(); // drain, or the socket stays open
+          if (isSiteUrl(target)) {
+            clearTimeout(overall);
+            settled = true; // this attempt is done; the retry settles the promise
+            request(target, { method, headers, body, redirectsLeft: redirectsLeft - 1 })
+              .then(resolve, reject);
+            return;
+          }
+          done(resolve, { status: res.statusCode, body: null });
+          return;
+        }
         let data = '';
         res.on('data', (c) => (data += c));
         res.on('error', (e) => done(reject, e));
