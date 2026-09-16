@@ -31,6 +31,14 @@ function extract(name) {
   throw new Error(`unbalanced braces reading ${name}`);
 }
 
+/** Pull a top-level `const NAME = ...;` initialiser out of the source. */
+function extractConst(name) {
+  const re = new RegExp("const " + name + " = ([\\s\\S]*?);\\n", "m");
+  const m = re.exec(SRC);
+  assert.ok(m, `could not find const ${name} in main.cjs`);
+  return `const ${name} = ${m[1]};`;
+}
+
 let passed = 0;
 let failed = 0;
 
@@ -315,6 +323,79 @@ check("returns null when both copies are corrupt", () => {
 });
 
 fs.rmSync(tmpdir, { recursive: true, force: true });
+
+// ------------------------------------------------- update download guards
+
+const guards = new Function(
+  `${extractConst("UPDATE_DOWNLOAD_HOSTS")}
+   ${extractConst("SAFE_VERSION_RE")}
+   ${extract("isAllowedUpdateUrl")}
+   ${extract("safeVersion")}
+   ${extract("parseSha256Sums")}
+   return { isAllowedUpdateUrl, safeVersion, parseSha256Sums };`,
+)();
+
+console.log("update download guards");
+
+check("allows the hosts that actually serve releases", () => {
+  assert.ok(guards.isAllowedUpdateUrl("https://wallraven.app/updates/x.exe"));
+  assert.ok(guards.isAllowedUpdateUrl("https://github.com/necromoz/wallraven/releases/download/v1/x.exe"));
+  // GitHub redirects release downloads here, so the hop has to be allowed too.
+  assert.ok(guards.isAllowedUpdateUrl("https://release-assets.githubusercontent.com/whatever"));
+  assert.ok(guards.isAllowedUpdateUrl("https://objects.githubusercontent.com/whatever"));
+});
+
+check("refuses anywhere else", () => {
+  assert.ok(!guards.isAllowedUpdateUrl("https://evil.example/x.exe"));
+  // A lookalike host must not pass.
+  assert.ok(!guards.isAllowedUpdateUrl("https://wallraven.app.evil.example/x.exe"));
+  assert.ok(!guards.isAllowedUpdateUrl("https://notgithub.com/x.exe"));
+});
+
+check("refuses plain http even on an allowed host", () => {
+  assert.ok(!guards.isAllowedUpdateUrl("http://wallraven.app/updates/x.exe"));
+});
+
+check("refuses junk instead of throwing", () => {
+  assert.ok(!guards.isAllowedUpdateUrl(""));
+  assert.ok(!guards.isAllowedUpdateUrl(null));
+  assert.ok(!guards.isAllowedUpdateUrl("not a url"));
+  assert.ok(!guards.isAllowedUpdateUrl("file:///C:/Windows/System32/calc.exe"));
+});
+
+check("accepts sensible versions and strips a leading v", () => {
+  assert.strictEqual(guards.safeVersion("1.0.1"), "1.0.1");
+  assert.strictEqual(guards.safeVersion("v1.0.1"), "1.0.1");
+  assert.strictEqual(guards.safeVersion("1.0.0-beta.2"), "1.0.0-beta.2");
+});
+
+check("rejects a version that could escape the filename", () => {
+  // This is the path traversal: latestVersion is interpolated straight into
+  // Wallraven-Setup-v<version>.exe.
+  assert.strictEqual(guards.safeVersion("../../../Windows/System32/evil"), "");
+  assert.strictEqual(guards.safeVersion("1.0/../../x"), "");
+  assert.strictEqual(guards.safeVersion("1.0\\..\\x"), "");
+  assert.strictEqual(guards.safeVersion(""), "");
+  assert.strictEqual(guards.safeVersion("a".repeat(64)), "");
+});
+
+check("reads a checksum out of sha256sum output", () => {
+  const sums = [
+    "1becc7e7e05a3a2020d52e566110b459ac1ac047216e9b4abeb9785d05303f11 *Wallraven-Setup-v1.0.1.exe",
+    "0000000000000000000000000000000000000000000000000000000000000000  something-else.exe",
+  ].join("\n");
+  assert.strictEqual(
+    guards.parseSha256Sums(sums, "Wallraven-Setup-v1.0.1.exe"),
+    "1becc7e7e05a3a2020d52e566110b459ac1ac047216e9b4abeb9785d05303f11",
+  );
+});
+
+check("returns nothing when the wanted file is absent", () => {
+  const sums = "0000000000000000000000000000000000000000000000000000000000000000  other.exe";
+  assert.strictEqual(guards.parseSha256Sums(sums, "Wallraven-Setup-v1.0.1.exe"), "");
+  assert.strictEqual(guards.parseSha256Sums("", "x.exe"), "");
+  assert.strictEqual(guards.parseSha256Sums("garbage", "x.exe"), "");
+});
 
 // ---------------------------------------------------------------- summary
 

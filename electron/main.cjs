@@ -1524,6 +1524,70 @@ function dislikeCurrent() {
 // Fallback: the GitHub "latest release" API (used once releases exist there).
 const UPDATE_MANIFEST_URLS = ['https://wallraven.app/updates/latest.json', 'https://wallraven.lovable.app/updates/latest.json'];
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/wallraven-app/wallraven/releases/latest';
+
+// Only these hosts may serve an installer. Without this the updater would
+// download and run whatever the manifest pointed at, which made the whole
+// security of every install rest on nobody ever controlling that JSON file.
+// Checked on every redirect hop, not just the first URL.
+const UPDATE_DOWNLOAD_HOSTS = new Set([
+  'wallraven.app',
+  'wallraven.lovable.app',
+  'github.com',
+  'objects.githubusercontent.com',
+  'release-assets.githubusercontent.com',
+]);
+
+function isAllowedUpdateUrl(value) {
+  try {
+    const u = new URL(String(value));
+    return u.protocol === 'https:' && UPDATE_DOWNLOAD_HOSTS.has(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+// A version string reaches the installer filename, so it must not be able to
+// carry path separators or traversal.
+const SAFE_VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,31}$/;
+function safeVersion(value) {
+  const v = String(value || '').trim().replace(/^v/i, '');
+  return SAFE_VERSION_RE.test(v) ? v : '';
+}
+
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const hash = require('crypto').createHash('sha256');
+    const stream = fs.createReadStream(file);
+    stream.on('error', reject);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+// Every Windows executable starts "MZ". Cheap proof we were handed a program
+// and not an error page that happened to be large enough.
+function looksLikeExecutable(file) {
+  try {
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(2);
+    fs.readSync(fd, buf, 0, 2, 0);
+    fs.closeSync(fd);
+    return buf[0] === 0x4d && buf[1] === 0x5a;
+  } catch {
+    return false;
+  }
+}
+
+// The release workflow publishes SHA256SUMS.txt alongside each installer.
+// Format is one "<hex>  <filename>" per line, as produced by sha256sum.
+function parseSha256Sums(text, wantedName) {
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = /^([0-9a-f]{64})\s+\*?(.+?)\s*$/i.exec(line.trim());
+    if (!m) continue;
+    if (!wantedName || m[2] === wantedName) return m[1].toLowerCase();
+  }
+  return '';
+}
 const UPDATE_DIR = path.join(DATA_DIR, 'updates');
 
 // Semver-aware comparison. The numeric core is compared first, then the
@@ -1584,24 +1648,52 @@ async function fetchUpdateManifest() {
     if (m && m.version) break;
   }
   if (m && m.version) {
+    const latestVersion = safeVersion(m.version);
+    if (!latestVersion) {
+      console.warn('[update] manifest version rejected:', m.version);
+      return null;
+    }
     return {
-      latestVersion: String(m.version).replace(/^v/i, ''),
+      latestVersion,
       url: m.url || m.downloadUrl || '',
       pageUrl: m.pageUrl || '',
       notes: m.notes || '',
       sizeBytes: Number(m.sizeBytes) || 0,
+      // Optional today. Without it the update is announced but never installed
+      // automatically, because there would be nothing to check the download
+      // against.
+      sha256: /^[0-9a-f]{64}$/i.test(String(m.sha256 || '')) ? String(m.sha256).toLowerCase() : '',
       source: 'manifest',
     };
   }
+
   const gh = await httpsGetJSON(GITHUB_RELEASES_URL).catch(() => null);
   if (gh && gh.tag_name) {
-    const asset = (gh.assets || []).find(a => /\.exe$/i.test(a.name || ''));
+    const latestVersion = safeVersion(gh.tag_name);
+    if (!latestVersion) {
+      console.warn('[update] release tag rejected:', gh.tag_name);
+      return null;
+    }
+    const assets = gh.assets || [];
+    const installer = assets.find((a) => /\.exe$/i.test(a.name || ''));
+    const sums = assets.find((a) => /^SHA256SUMS\.txt$/i.test(a.name || ''));
+
+    // The checksum lives next to the installer in the same release, published
+    // by the same build. It defends against the asset being tampered with
+    // after publication, not against a compromised release itself.
+    let sha256 = '';
+    if (installer && sums && isAllowedUpdateUrl(sums.browser_download_url)) {
+      const text = await httpsGetText(sums.browser_download_url).catch(() => '');
+      sha256 = parseSha256Sums(text, installer.name);
+    }
+
     return {
-      latestVersion: String(gh.tag_name).replace(/^v/i, ''),
-      url: asset?.browser_download_url || '',
+      latestVersion,
+      url: installer?.browser_download_url || '',
       pageUrl: gh.html_url || '',
       notes: gh.body || '',
-      sizeBytes: Number(asset?.size) || 0,
+      sizeBytes: Number(installer?.size) || 0,
+      sha256,
       source: 'github',
     };
   }
@@ -1628,6 +1720,7 @@ async function checkForUpdates(force = false) {
       pageUrl: info.pageUrl || '',
       notes: info.notes || '',
       sizeBytes: info.sizeBytes || 0,
+      sha256: info.sha256 || '',
       checkedAt: Date.now(),
       dismissed: prev.dismissed || '',
       // Keep any already-downloaded installer only if it matches the version.
@@ -1639,7 +1732,10 @@ async function checkForUpdates(force = false) {
     updateTrayMenu();
     sendUpdateStatus({ phase: isNewer ? 'available' : 'uptodate', info: config.updateInfo });
     if (isNewer && info.latestVersion !== config.updateInfo.dismissed) {
-      if (config.autoInstallUpdates && config.updateInfo.downloadUrl) {
+      // Unattended install needs three things: the setting on, somewhere to
+      // download from, and a published checksum to check it against. Without
+      // the checksum the user is told and left to decide.
+      if (config.autoInstallUpdates && config.updateInfo.downloadUrl && config.updateInfo.sha256) {
         // Teams-style: fetch and install it ourselves, then restart.
         autoUpdateFlow().catch(() => {});
       } else {
@@ -1662,6 +1758,11 @@ async function downloadUpdate() {
   const info = config.updateInfo || {};
   const url = info.downloadUrl || '';
   if (!url) throw new Error('No installer URL for this release');
+  if (!isAllowedUpdateUrl(url)) {
+    throw new Error('Refusing to download an update from an unexpected address');
+  }
+  const version = safeVersion(info.latestVersion);
+  if (!version) throw new Error('Refusing to download an update with an unusable version');
   if (updateDownloading) return { ok: false, reason: 'Already downloading' };
   if (info.downloadedFile && fs.existsSync(info.downloadedFile) && info.downloadedVersion === info.latestVersion) {
     sendUpdateStatus({ phase: 'downloaded', file: info.downloadedFile, info });
@@ -1669,13 +1770,17 @@ async function downloadUpdate() {
   }
   updateDownloading = true;
   try { fs.mkdirSync(UPDATE_DIR, { recursive: true }); } catch {}
-  const dest = path.join(UPDATE_DIR, `Wallraven-Setup-v${info.latestVersion}.exe`);
+  const dest = path.join(UPDATE_DIR, `Wallraven-Setup-v${version}.exe`);
   const tmp = dest + '.part';
   sendUpdateStatus({ phase: 'downloading', percent: 0 });
   try {
     await new Promise((resolve, reject) => {
       const get = (u, redirects = 0) => {
-        https.get(u, { headers: { 'User-Agent': 'Wallraven-Updater' } }, (res) => {
+        // Re-check at every hop: an allowed host is free to redirect anywhere.
+        if (!isAllowedUpdateUrl(u)) {
+          return reject(new Error('Update download redirected to an unexpected address'));
+        }
+        const req = https.get(u, { headers: { 'User-Agent': 'Wallraven-Updater' }, timeout: 20000 }, (res) => {
           if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
             if (redirects > 5) return reject(new Error('Too many redirects'));
             res.resume();
@@ -1690,22 +1795,49 @@ async function downloadUpdate() {
             const pct = total ? Math.floor((got / total) * 100) : 0;
             if (pct !== lastPct) { lastPct = pct; sendUpdateStatus({ phase: 'downloading', percent: pct, gotBytes: got, totalBytes: total }); }
           });
+          res.on('error', reject);
           res.pipe(file);
-          file.on('finish', () => file.close(() => resolve()));
+          file.on('finish', () => file.close(() => {
+            if (total && got !== total) return reject(new Error(`download truncated: got ${got} of ${total} bytes`));
+            resolve();
+          }));
           file.on('error', reject);
-        }).on('error', reject);
+        });
+        req.on('timeout', () => { req.destroy(); reject(new Error('download timed out')); });
+        req.on('error', reject);
       };
       get(url);
     });
-    // Sanity check: an NSIS installer is never this small.
+
+    // An NSIS installer for an Electron app is around 100 MB.
     const size = fs.statSync(tmp).size;
     if (size < 1024 * 1024) throw new Error('Downloaded file looks invalid (too small)');
+    if (!looksLikeExecutable(tmp)) throw new Error('Downloaded file is not a Windows program');
+
+    const actual = await sha256File(tmp);
+    if (info.sha256) {
+      if (actual !== info.sha256) {
+        throw new Error('Downloaded installer does not match its published checksum');
+      }
+    } else {
+      // Nothing to compare against. The file is kept so the user can install it
+      // deliberately, but autoUpdateFlow will not run it unattended.
+      console.warn('[update] no published checksum for this release; install will not be automatic');
+    }
+
     try { fs.rmSync(dest, { force: true }); } catch {}
     fs.renameSync(tmp, dest);
-    config.updateInfo = { ...config.updateInfo, downloadedFile: dest, downloadedVersion: info.latestVersion, error: '' };
+    config.updateInfo = {
+      ...config.updateInfo,
+      downloadedFile: dest,
+      downloadedVersion: info.latestVersion,
+      downloadedSha256: actual,
+      verified: Boolean(info.sha256) && actual === info.sha256,
+      error: '',
+    };
     saveConfig();
     sendUpdateStatus({ phase: 'downloaded', file: dest, info: config.updateInfo });
-    return { ok: true, file: dest };
+    return { ok: true, file: dest, verified: config.updateInfo.verified };
   } catch (e) {
     try { fs.rmSync(tmp, { force: true }); } catch {}
     config.updateInfo = { ...config.updateInfo, error: e.message };
@@ -1720,8 +1852,35 @@ async function downloadUpdate() {
 // Launch the downloaded installer and quit so it can replace the files.
 // silent = true runs the NSIS installer with /S (no UI); it relaunches Wallraven itself.
 async function installUpdate(silent = false) {
-  const file = config.updateInfo?.downloadedFile;
+  const info = config.updateInfo || {};
+  const file = info.downloadedFile;
   if (!file || !fs.existsSync(file)) return { ok: false, reason: 'Installer not downloaded yet' };
+
+  // Re-check the bytes right before executing them. The file has been sitting
+  // on disk since the download, possibly across a restart, and this is the last
+  // point at which anything can be done about it.
+  if (info.downloadedSha256) {
+    let actual = '';
+    try { actual = await sha256File(file); } catch (e) {
+      sendUpdateStatus({ phase: 'error', message: 'Could not read the downloaded installer' });
+      return { ok: false, reason: e.message };
+    }
+    if (actual !== info.downloadedSha256) {
+      try { fs.rmSync(file, { force: true }); } catch {}
+      config.updateInfo = { ...config.updateInfo, downloadedFile: '', downloadedSha256: '', verified: false, error: 'Installer changed on disk' };
+      saveConfig();
+      sendUpdateStatus({ phase: 'error', message: 'The downloaded installer changed on disk and was discarded' });
+      return { ok: false, reason: 'checksum mismatch at install time' };
+    }
+  }
+
+  // Unattended installs require a checksum that was actually published and
+  // matched. A user pressing Install themselves is making their own decision.
+  if (silent && !info.verified) {
+    sendUpdateStatus({ phase: 'error', message: 'This update was not verified, so it will not install on its own' });
+    return { ok: false, reason: 'unverified' };
+  }
+
   sendUpdateStatus({ phase: 'installing' });
   try {
     const child = spawn(file, silent ? ['/S'] : [], { detached: true, stdio: 'ignore', windowsHide: !!silent });
