@@ -52,23 +52,44 @@ These are fine while it's two machines. None of them can ship to the public:
    checksum and no signature check, then gets spawned with `/S`. Needs a pinned
    host, a published SHA-256, and a signed installer. Unsigned installers also get
    hammered by SmartScreen, so signing is a usability fix as much as a security one.
-2. **Device pairing is a one-click account takeover.** `/api/public/pair/start` has
-   wildcard CORS and accepts a caller-chosen code; `/link?pair=X` hands over access
-   and refresh tokens on one button press. Needs server-generated codes and a code
-   the user visually matches.
+2. ~~**Device pairing is a one-click account takeover.**~~ Closed in `643a089`.
+   The server generates both codes, the user code is typed in by hand rather than
+   carried in a link, and the CORS headers are gone. Written and deployed to the
+   Cloudflare copy, but **not yet verified against a real pairing**: the endpoints
+   need `SUPABASE_SERVICE_ROLE_KEY` set on the Worker and it is not, so
+   `/api/public/pair/start` currently 500s there.
 3. **No crash reporting and no beta channel in use.** Two people testing by hand
    does not survive contact with strangers.
 
+## Releasing the pairing change
+
+The desktop half of the pairing rewrite is committed but **must not ship before
+the site does**, and this is easy to get wrong in either direction:
+
+- A new app against the old server fails. `wallraven.app` is still Lovable's
+  build, which expects the app to supply a code. The new app does not send one,
+  so pairing would break for anyone who updates before the cutover.
+- An old app against the new server also fails, by design: the old flow is the
+  vulnerability. `/link` detects the old `?pair=` style and tells the person to
+  update rather than failing silently.
+
+So the order is: move DNS, confirm the site serves from Cloudflare, then release
+the app. At that point update every installed copy, including Steve's own, or it
+cannot pair.
+
 ## Known traps
 
-- `package-lock.json` declares version `0.2.0` against a `0.8.13` package and about
-  half its entries resolve to Lovable's private npm mirror, so `npm ci` fails.
-  Regenerate against `registry.npmjs.org` before setting up any CI.
+- ~~`package-lock.json` resolves to Lovable's private npm mirror.~~ Regenerated
+  against `registry.npmjs.org`; all 588 entries are public and `npm ci` works.
+- `settings.html` is ~210 KB and drifts easily. It has been edited on Steve's PC
+  in ways a container copy will not have. Hash-check before overwriting it, or
+  patch it in place.
 - `src/routes/__root.tsx:108` fails `tsc` on a fresh install: a newer
   `@tanstack/react-router` tightened `ErrorComponentProps.error` to `unknown`.
-- `settings.html` at the repo root is a **dead duplicate** of
-  `electron/settings.html`. Only the one in `electron/` is loaded. Edit the wrong
-  one and nothing happens.
+- There is no scratch checkout in the cloud container, deliberately. One existed,
+  could not reach GitHub, silently fell behind and nearly had old code copied out
+  of it over new. Work on the copy on Steve's PC via the device shell; it is the
+  only one that can push.
 - The site URL is hardcoded in five places across `cloud.cjs` and `main.cjs`, split
   between `wallraven.lovable.app` and `wallraven.app`.
 - All Wallhaven API calls are serialised through one promise chain (`WH_CHAIN`) and
