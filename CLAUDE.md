@@ -21,9 +21,12 @@ does not write code. So:
 - When something can't be verified from here, say so and say what would verify it,
   rather than asserting it works.
 
-It is currently used by Steve and one friend who helps with UAT. A public release
-is the goal, possibly with donations. That distinction matters: several problems
-in this codebase are tolerable today and unacceptable the day strangers install it.
+Steve is currently the only user. A friend helped with UAT early on and has since
+uninstalled it. A public release is the goal, possibly with donations. That
+distinction matters: several problems in this codebase are tolerable today and
+unacceptable the day strangers install it. It also means there is no second pair
+of eyes, so anything that only shows up on someone else's machine will not be
+caught before release.
 
 ## Ground rules
 
