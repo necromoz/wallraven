@@ -1458,14 +1458,35 @@ async function applyWallpaper(primaryPath, currentPlaylistItem) {
       result = await setWindowsWallpaper(primaryPath);
     } else {
       const pl = config.activePlaylist && config.playlists?.[config.activePlaylist];
-      let files = [primaryPath];
-      if (pl && pl.items && pl.items.length >= 2) {
-        const list = pl.items.filter(it => it && it.file && fs.existsSync(it.file));
-        if (list.length >= 2) {
-          const startIdx = ((Number(config.playlistIndex) || 0) - 1 + list.length) % list.length;
-          files = [];
-          for (let i = 0; i < monitorCount; i++) files.push(list[(startIdx + i) % list.length].file);
-        }
+      const list = ((pl && pl.items) || []).filter(it => it && it.file && fs.existsSync(it.file));
+
+      // The wallpaper that was just fetched must end up on a screen.
+      //
+      // This used to throw primaryPath away whenever an active playlist had two
+      // usable images, whatever the wallpaper source was. With "different per
+      // monitor" set and a playlist still selected from some earlier session,
+      // every cycle downloaded a new wallpaper, added it to history, bumped the
+      // statistics and announced "Wallpaper updated" while the desktop kept
+      // showing the same fixed pair of playlist images. Worse, the starting
+      // index came from config.playlistIndex, which only advances in playlist
+      // mode, so the pair never even changed.
+      let files;
+      if (currentPlaylistItem && list.length >= 2) {
+        // The wallpaper came from this playlist: show it, then the items that
+        // follow it. Anchored on the item itself rather than a counter that
+        // may not have moved.
+        const at = list.findIndex(it => it.file === primaryPath);
+        const start = at >= 0 ? at : 0;
+        files = [];
+        for (let i = 0; i < monitorCount; i++) files.push(list[(start + i) % list.length].file);
+      } else if (list.length) {
+        // It came from somewhere else. It goes on the first monitor and the
+        // playlist fills the rest.
+        files = [primaryPath];
+        for (let i = 0; i < monitorCount - 1; i++) files.push(list[i % list.length].file);
+      } else {
+        // No playlist to draw on: the same image on every monitor.
+        files = [primaryPath];
       }
       result = await setWindowsWallpaperPerMonitor(files);
     }
@@ -2593,7 +2614,10 @@ ipcMain.handle('wp:setFromRemote', async (_e, w) => {
     try { await downloadFile(w.path, dest); }
     catch { await new Promise(r => setTimeout(r, 1500)); await downloadFile(w.path, dest); }
   }
-  await setWindowsWallpaper(dest);
+  // applyWallpaper, not setWindowsWallpaper: picking an image by hand should
+  // honour "match lock screen" and the per-monitor mode exactly as an
+  // automatic rotation does.
+  await applyWallpaper(dest, null);
   history.items.push({ id: w.id, url: w.url, file: dest, ts: Date.now(), resolution: w.resolution });
   history.currentId = w.id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
@@ -2677,7 +2701,7 @@ ipcMain.handle('playlist:setActive', (_e, { name }) => {
 ipcMain.handle('history:get', () => history.items.slice().reverse());
 ipcMain.handle('history:setFromFile', async (_e, { file, id, url, resolution }) => {
   if (!file || !fs.existsSync(file)) throw new Error('File missing from cache');
-  await setWindowsWallpaper(file);
+  await applyWallpaper(file, null);
   history.items.push({ id, url, file, ts: Date.now(), resolution });
   history.currentId = id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
@@ -2690,6 +2714,12 @@ ipcMain.handle('history:remove', (_e, { id }) => {
   const idx = history.items.findIndex((i) => i.id === id);
   if (idx >= 0) {
     const [item] = history.items.splice(idx, 1);
+    // Keep the Back/Forward cursor pointing at the same wallpaper it was on.
+    // Without this, removing an entry shifted everything after it down by one
+    // and the cursor silently moved to a different image.
+    if (idx < navPos) navPos--;
+    else if (idx === navPos) navPos = Math.min(navPos, history.items.length - 1);
+    if (navPos < 0 && history.items.length) navPos = history.items.length - 1;
     // Only delete file if no other history entry references it and it's not current
     const stillReferenced = history.items.some((i) => i.file === item.file);
     if (!stillReferenced && history.currentId !== item.id) {
@@ -3126,6 +3156,9 @@ function queueCloudPush() {
       const res = await cloud.push(config);
       if (res.ok) {
         config.lastSyncedAt = res.at;
+        // Match the local stamps to what was just uploaded, so this machine
+        // stops treating its own upload as someone else's newer change.
+        if (res.stamps) config._syncStamps = { ...(config._syncStamps || {}), ...res.stamps };
         persistConfigQuiet();
         notifySettings('sync-status', { ok: true, at: res.at });
       } else if (res.reason !== 'signed_out') {

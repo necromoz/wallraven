@@ -518,18 +518,27 @@ async function push(config, { force = false } = {}) {
   const next = { ...remote };
   const now = Date.now();
 
+  // Report back what was written, so the caller can move the local stamps
+  // forward. Without that a machine's own upload always looked newer than its
+  // local state, and the next download pulled its own data straight back down
+  // -- pointless at best, and the thing that kept re-triggering the playlist
+  // path loss at worst.
+  const written = {};
+
   for (const name of Object.keys(SECTIONS)) {
     const local = sectionFromConfig(config, name);
     if (name === 'playlists' && local.playlists) local.playlists = stripPlaylists(local.playlists);
     const localStamp = config._syncStamps?.[name] || 0;
     const remoteStamp = remote?.[name]?.updatedAt || 0;
     if (force || localStamp >= remoteStamp) {
-      next[name] = { updatedAt: force ? now : localStamp || now, data: local };
+      const stamp = force ? now : localStamp || now;
+      next[name] = { updatedAt: stamp, data: local };
+      written[name] = stamp;
     }
   }
 
   const ok = await writeRemote(next);
-  return ok ? { ok: true, at: now } : { ok: false, reason: 'write_failed' };
+  return ok ? { ok: true, at: now, stamps: written } : { ok: false, reason: 'write_failed' };
 }
 
 // Pull cloud -> local. Returns the config patch to apply (or null).
