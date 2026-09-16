@@ -77,8 +77,29 @@ These are fine while it's two machines. None of them can ship to the public:
 
 ## Hosting
 
-Lovable still hosts the site and the domain is registered through them (Name.com is
-the sponsoring registrar). Nothing about working in this repo requires changing
-that. This repo is not connected to Lovable, so pushes here do not redeploy the
-site; Lovable keeps serving what it last built. Revisit only when a site change
-actually needs shipping.
+`wallraven.app` is still served by Lovable and the domain is registered through
+them (Name.com is the sponsoring registrar). This repo is not connected to
+Lovable, so pushes here do not redeploy it; Lovable keeps serving what it last
+built.
+
+The site now also runs on Steve's own Cloudflare account, on the Workers free
+plan, at `necromoz-wallraven.necromoz.workers.dev`. It is deployed by hand with
+`npx wrangler deploy` from a checkout, after `npm run build`. Two secrets are set
+on the Worker (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`); both are publishable
+values, and nothing secret is involved. Landing page, preset gallery, changelog,
+sign-in page and the update manifest were all verified working there.
+
+DNS has not moved. Cutting `wallraven.app` over is a separate, deliberate step.
+
+Two things to know before relying on this:
+
+- The Workers free plan allows 10ms of CPU per server-rendered request against
+  5 minutes on paid. Pages render fine under light use, but this has never been
+  under load. If pages start returning Cloudflare error 1102, that limit is why,
+  and the fix is to pre-render the pages that do not need a server rather than
+  to start paying.
+- Google sign-in does not go to Supabase. `@lovable.dev/cloud-auth-js` brokers it
+  through `oauth.lovable.app`, so that one flow depends on Lovable wherever the
+  site is hosted. Email and password sign-in, registration and password resets
+  all talk to Supabase directly. Replacing it means a Google OAuth client
+  configured in Supabase.
