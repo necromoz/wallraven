@@ -178,10 +178,23 @@ async function refreshAccessToken(a) {
     // token. Anything else (5xx, rate limit, gateway error) is transient and
     // must NOT unlink the device — that was forcing a re-pair after updates.
     const code = res.body?.error || res.body?.error_code || '';
-    const hardFail = res.status === 400 && /invalid_grant|refresh_token_not_found|invalid_request/i.test(String(code) + JSON.stringify(res.body || ''));
-    if (hardFail || res.status === 401 || res.status === 403) {
+    const rejected = /invalid_grant|refresh_token_not_found|invalid_request|bad_jwt|token/i
+      .test(String(code) + JSON.stringify(res.body || ''));
+    // 401 means the token was rejected. A bare 403 usually did not come from
+    // Supabase at all: a corporate proxy or WAF blocking the request answers
+    // with 403 and an HTML body, and treating that as a rejected token
+    // unlinked the device for a network problem. Require a recognisable error
+    // in the body before believing a 403.
+    const hardFail =
+      (res.status === 400 && rejected) ||
+      res.status === 401 ||
+      (res.status === 403 && rejected);
+    if (hardFail) {
       clearAuth();
       auth = null;
+      // Tell the app, or sync simply stops and the user is never told why.
+      try { if (onSignedOut) onSignedOut('Your account was signed out. Sign in again to resume syncing.'); }
+      catch {}
     }
     return null;
   }
@@ -196,6 +209,13 @@ async function refreshAccessToken(a) {
   return auth.access_token;
 }
 
+
+// Called when a session is dropped because the server rejected it. Without
+// this the unlink happened entirely inside this file: pushes started returning
+// 'signed_out', main.cjs deliberately suppresses the toast for that reason,
+// and syncing stopped dead with nothing on screen to say so.
+let onSignedOut = null;
+function setSignedOutHandler(fn) { onSignedOut = typeof fn === 'function' ? fn : null; }
 
 // ---------- pairing ----------
 //
@@ -393,6 +413,45 @@ function sectionFromConfig(config, name) {
   return out;
 }
 
+// Put the local cache paths back onto playlist items arriving from the cloud.
+//
+// stripPlaylists deliberately removes `file` before uploading, because a path
+// on one machine means nothing on another. The download then replaced the
+// local playlists wholesale, so every item lost its `file` — and `file` is what
+// getPinnedFiles() in main.cjs uses to decide which images the cache cleaner
+// must not delete. With the paths gone nothing was pinned, and the next prune
+// deleted the user's liked and saved wallpapers off disk. Unrecoverably, and
+// with no error anywhere.
+//
+// Items are matched by id across every local playlist, not just the one they
+// arrived in, so an image that has been moved or copied between playlists keeps
+// its file. An item that is genuinely new to this machine has no local path and
+// correctly gets none.
+function restorePlaylistFiles(localPlaylists, incomingPlaylists) {
+  const byId = new Map();
+  for (const pl of Object.values(localPlaylists || {})) {
+    for (const it of (pl && pl.items) || []) {
+      if (it && it.id != null && it.file && !byId.has(String(it.id))) {
+        byId.set(String(it.id), it.file);
+      }
+    }
+  }
+  if (!byId.size) return incomingPlaylists;
+
+  const out = {};
+  for (const [name, pl] of Object.entries(incomingPlaylists || {})) {
+    out[name] = {
+      ...pl,
+      items: ((pl && pl.items) || []).map((it) => {
+        if (!it || it.id == null || it.file) return it;
+        const file = byId.get(String(it.id));
+        return file ? { ...it, file } : it;
+      }),
+    };
+  }
+  return out;
+}
+
 function stripPlaylists(playlists) {
   // Only metadata syncs — never local cache file paths.
   const out = {};
@@ -445,7 +504,17 @@ async function push(config, { force = false } = {}) {
   if (!a?.refresh_token) return { ok: false, reason: 'signed_out' };
   if (!a.user_id) await accessToken();
 
-  const remote = (await fetchRemote())?.config || {};
+  // A failed read must not look like an empty cloud.
+  //
+  // fetchRemote returns null on any non-200. Treating that as {} made every
+  // remote timestamp 0, so every local section won the comparison and the
+  // whole blob was overwritten from this machine -- which is exactly what
+  // "force" is meant to be the deliberate opt-in for. A transient 5xx while
+  // the write succeeded was enough to push one machine's settings over
+  // another's.
+  const fetched = await fetchRemote();
+  if (!fetched) return { ok: false, reason: 'read_failed' };
+  const remote = fetched.config || {};
   const next = { ...remote };
   const now = Date.now();
 
@@ -482,6 +551,11 @@ async function pull(config, { force = false } = {}) {
     const localStamp = stamps[name] || 0;
     if (force || remoteStamp > localStamp) {
       Object.assign(patch, section.data);
+      // The playlists section arrives without local cache paths. Restoring them
+      // here is what stops the cache cleaner deleting the user's saved images.
+      if (name === 'playlists' && patch.playlists) {
+        patch.playlists = restorePlaylistFiles(config.playlists, patch.playlists);
+      }
       stamps[name] = remoteStamp || Date.now();
       changed = true;
     }
@@ -655,6 +729,7 @@ async function markCommunityPresetCopied(id) {
 }
 
 module.exports = {
+  setSignedOutHandler,
   SECTIONS,
   SHARE_FIELDS,
   sanitizeShared,

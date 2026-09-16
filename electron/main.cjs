@@ -528,25 +528,66 @@ let WH_HIGH_PENDING = 0;     // number of queued/among-flight priority requests
 
 function whCoolingDown() { return Date.now() < WH_COOLDOWN_UNTIL; }
 
+// Every Wallhaven request goes through one queue, so they stay inside the
+// API's rate limit and never overlap.
+//
+// Low-priority work (preset gallery thumbnails) yields to anything that
+// actually changes the wallpaper. It waits for that work to clear BEFORE
+// joining the queue, which looks like a detail and is not.
+//
+// It used to wait from inside the queue: `while (WH_HIGH_PENDING > 0)`, having
+// already taken its place. WH_HIGH_PENDING is incremented the moment a
+// wallpaper request is *made*, but only decremented after it *runs* — and it
+// could only run once the thumbnail ahead of it finished. So a thumbnail
+// waiting for a wallpaper request that was stuck behind it waited forever, and
+// every wallpaper change after that queued behind the pair. The app sat on
+// "Fetching…" and never changed picture again until it was restarted, with no
+// error, no notification and nothing in the log. Opening the preset gallery
+// while a rotation was due was enough to trigger it.
 function whGate(fn, { priority = true } = {}) {
-  if (priority) WH_HIGH_PENDING++;
+  if (!priority) return whGateLow(fn);
+
+  WH_HIGH_PENDING++;
   const run = WH_CHAIN.then(async () => {
     try {
-      if (!priority) {
-        // let any real wallpaper work through first, and sit out cooldowns
-        while (WH_HIGH_PENDING > 0) await new Promise(r => setTimeout(r, 400));
-        if (whCoolingDown()) throw new Error('rate_limited');
-      } else if (whCoolingDown()) {
+      if (whCoolingDown()) {
         await new Promise(r => setTimeout(r, Math.min(15000, WH_COOLDOWN_UNTIL - Date.now())));
       }
-      const gap = priority ? WH_MIN_GAP_MS : WH_MIN_GAP_MS * 2;
-      const wait = Math.max(0, gap - (Date.now() - WH_LAST));
+      const wait = Math.max(0, WH_MIN_GAP_MS - (Date.now() - WH_LAST));
       if (wait) await new Promise(r => setTimeout(r, wait));
       WH_LAST = Date.now();
       return await fn();
     } finally {
-      if (priority) WH_HIGH_PENDING--;
+      WH_HIGH_PENDING--;
     }
+  });
+  WH_CHAIN = run.then(() => {}, () => {});
+  return run;
+}
+
+// How long a thumbnail will keep standing aside before giving up. Its only
+// caller treats a failure as "no thumbnail", so giving up is harmless; waiting
+// forever is not.
+const WH_LOW_MAX_WAIT_MS = 60000;
+
+function whGateLow(fn, deadline) {
+  const until = deadline || Date.now() + WH_LOW_MAX_WAIT_MS;
+
+  // Stand aside without occupying the queue. This is the whole fix.
+  if (WH_HIGH_PENDING > 0 || whCoolingDown()) {
+    if (Date.now() >= until) return Promise.reject(new Error('busy'));
+    return new Promise((resolve, reject) => {
+      setTimeout(() => whGateLow(fn, until).then(resolve, reject), 400);
+    });
+  }
+
+  const run = WH_CHAIN.then(async () => {
+    // A wider gap than wallpaper work gets: thumbnails are never urgent and
+    // this keeps them from eating the rate limit.
+    const wait = Math.max(0, WH_MIN_GAP_MS * 2 - (Date.now() - WH_LAST));
+    if (wait) await new Promise(r => setTimeout(r, wait));
+    WH_LAST = Date.now();
+    return await fn();
   });
   WH_CHAIN = run.then(() => {}, () => {});
   return run;
@@ -646,10 +687,35 @@ function httpsGetJSON(url, opts = {}) {
 function downloadFile(url, dest, depth = 0) {
   return new Promise((resolve, reject) => {
     let settled = false;
+    let file = null;
+    let cleaned = false;
+
+    // Close the write stream before removing the partial file.
+    //
+    // This used to just unlink and reject. The stream was created inside the
+    // response handler and nothing outside could reach it, so every failure
+    // path -- stall, timeout, socket error -- aborted the response and left an
+    // open file descriptor for the life of the process. Worse, unlinking a
+    // file Windows still has a handle on does not remove it, so the truncated
+    // image stayed in the cache under the wallpaper's id and was treated as a
+    // cache hit from then on: a black or broken desktop, counted as a
+    // successful rotation.
     const fail = (e) => {
       if (settled) return; settled = true;
-      try { fs.unlinkSync(dest); } catch {}
-      reject(e);
+      const finish = () => {
+        if (cleaned) return; cleaned = true;
+        try { fs.unlinkSync(dest); } catch {}
+        reject(e);
+      };
+      if (file && !file.destroyed) {
+        file.once('close', finish);
+        file.destroy();
+        // Do not hang waiting for a 'close' that may never arrive.
+        const t = setTimeout(finish, 250);
+        if (typeof t.unref === 'function') t.unref();
+      } else {
+        finish();
+      }
     };
     const req = https.get(url, {
       headers: { 'User-Agent': 'Wallraven/1.0', 'Referer': 'https://wallhaven.cc/' },
@@ -678,7 +744,7 @@ function downloadFile(url, dest, depth = 0) {
         clearTimeout(stall);
         stall = setTimeout(() => { req.destroy(); fail(new Error('download stalled')); }, 20000);
       });
-      const file = fs.createWriteStream(dest);
+      file = fs.createWriteStream(dest);
       res.pipe(file);
       file.on('finish', () => {
         clearTimeout(overall); clearTimeout(stall);
@@ -1432,9 +1498,20 @@ function currentInfo() {
   };
 }
 
-function scheduleCycle() {
-  if (cycleTimer) clearInterval(cycleTimer);
+// Restart the rotation timer only when the interval has actually changed.
+//
+// This used to clear and recreate the interval unconditionally, and config:set
+// calls it on every save. The settings window saves on every page click,
+// because it stores which page you are on in the config. So glancing at
+// Settings 25 minutes into a 30-minute cycle threw away those 25 minutes and
+// started again, and with a long cycle you could push the next wallpaper out
+// indefinitely just by browsing the app. Nothing showed why.
+let cycleTimerMs = 0;
+function scheduleCycle({ restart = false } = {}) {
   const ms = Math.max(1, effectiveCycleMinutes()) * 60 * 1000;
+  if (!restart && cycleTimer && ms === cycleTimerMs) return;
+  if (cycleTimer) clearInterval(cycleTimer);
+  cycleTimerMs = ms;
   cycleTimer = setInterval(() => fetchAndSetWallpaper(false), ms);
 }
 
@@ -1523,7 +1600,9 @@ function effectiveCycleMinutes() {
   return Number(config.cycleMinutes) || 30;
 }
 function startScheduleTicker() {
-  if (scheduleTimer) clearInterval(scheduleTimer);
+  // Fixed one-minute poll, so there is nothing to reconfigure. Leaving a
+  // running ticker alone also stops it being reset on every settings save.
+  if (scheduleTimer) return;
   const tick = () => {
     if (paused) return;
     const rule = activeScheduleRule();
@@ -1532,13 +1611,13 @@ function startScheduleTicker() {
       lastAppliedRuleId = id;
       if (rule) {
         applyScheduleRule(rule);
-        scheduleCycle();
+        scheduleCycle({ restart: true });
         fetchAndSetWallpaper(false);
       } else {
         // Left the last rule with none taking over. Reschedule so the timer
         // returns to config.cycleMinutes; without this it kept running at the
         // departed rule's interval until something unrelated rescheduled it.
-        scheduleCycle();
+        scheduleCycle({ restart: true });
       }
       updateTrayMenu();
     }
@@ -1587,8 +1666,21 @@ function setWallpaperReaction(item, nextState) {
   notifyRenderer();
   return { ok: true, id, state: nextState };
 }
+// The wallpaper currently on the desktop.
+//
+// Not the newest history entry: after pressing Back, the newest entry is one
+// the user has navigated away from. currentInfo() has always understood this,
+// but Like, Dislike and the tray menu each reached for the newest item
+// instead, so after going back they acted on a different picture from the one
+// on screen. Dislike was the worst of it, permanently blacklisting a wallpaper
+// the user had not looked at and then rotating away from the one they had.
+function currentItem() {
+  if (navPos >= 0 && navPos < history.items.length) return history.items[navPos];
+  return history.items[history.items.length - 1];
+}
+
 function likeCurrent() {
-  const last = history.items[history.items.length - 1];
+  const last = currentItem();
   if (!last) return { ok: false, reason: 'No current wallpaper' };
   const active = (config.likes || []).some((id) => String(id) === String(last.id));
   return setWallpaperReaction(last, active ? 'neutral' : 'liked');
@@ -1618,7 +1710,7 @@ function toggleLikeItem(item) {
   return { ok: true, id, liked: !isLiked };
 }
 function dislikeCurrent() {
-  const last = history.items[history.items.length - 1];
+  const last = currentItem();
   if (!last) return { ok: false, reason: 'No current wallpaper' };
   const active = (config.dislikes || []).some((id) => String(id) === String(last.id));
   const result = setWallpaperReaction(last, active ? 'neutral' : 'disliked');
@@ -2042,7 +2134,7 @@ function buildTrayImage() {
 
 function updateTrayMenu() {
   if (!tray) return;
-  const last = history.items[history.items.length - 1];
+  const last = currentItem();
   const liked = last && (config.likes || []).includes(last.id);
   const disliked = last && (config.dislikes || []).includes(last.id);
   const activeRule = activeScheduleRule();
@@ -2063,7 +2155,10 @@ function updateTrayMenu() {
     { label: 'Open current on Wallhaven', enabled: !!last, click: () => last && openExternalSafe(last.url) },
     { label: 'Show in folder', enabled: !!last, click: () => last && revealItem(last.file) },
     { type: 'separator' },
-    { label: paused ? '▶ Resume cycling' : '⏸ Pause cycling', click: () => { paused = !paused; updateTrayMenu(); } },
+    // notifyRenderer matters: without it the settings window still reads
+    // "Playing" after pausing from the tray, and its button then toggles
+    // cycling back on. The hotkey and the IPC handler both do this already.
+    { label: paused ? '▶ Resume cycling' : '⏸ Pause cycling', click: () => { paused = !paused; updateTrayMenu(); notifyRenderer(); } },
     { label: `Schedule: ${schedEnabled ? (activeRule ? `active — ${activeRule.startHHMM} ${activeRule.sourceType}${activeRule.sourceRef ? ':' + activeRule.sourceRef : ''}` : 'on, no rule yet') : 'off'}`, enabled: false },
     { label: schedEnabled ? 'Disable schedule' : 'Enable schedule', enabled: !!(config.schedule?.rules?.length), click: () => {
         config.schedule = { ...(config.schedule || { rules: [] }), enabled: !schedEnabled };
@@ -2502,6 +2597,9 @@ ipcMain.handle('wp:setFromRemote', async (_e, w) => {
   history.items.push({ id: w.id, url: w.url, file: dest, ts: Date.now(), resolution: w.resolution });
   history.currentId = w.id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
+  // Move the cursor with it, or the settings card keeps showing the previous
+  // wallpaper and Forward lights up pointing at the one already on screen.
+  navPos = history.items.length - 1;
   saveHistory();
   paused = true; // static pick pauses cycling
   pruneCache();
@@ -2937,6 +3035,7 @@ async function pickRandomFavorite() {
     history.items.push({ id: pick.id, url: pick.url, file: pick.file, ts: Date.now(), resolution: pick.resolution });
     history.currentId = pick.id;
     if (history.items.length > 200) history.items = history.items.slice(-200);
+    navPos = history.items.length - 1;
     saveHistory();
     notifyRenderer();
     updateTrayMenu();
@@ -3040,7 +3139,15 @@ function queueCloudPush() {
 
 async function cloudPull({ force = false } = {}) {
   const res = await cloud.pull(config, { force });
-  if (!res.ok) return res;
+  if (!res.ok) {
+    // Downloads used to fail in complete silence while "Last synced" kept
+    // being refreshed by uploads, so a machine could stop receiving changes
+    // for weeks and still look healthy.
+    if (res.reason !== 'signed_out') {
+      notifySettings('sync-status', { ok: false, error: 'Could not download your settings from the cloud.' });
+    }
+    return res;
+  }
   if (res.changed && res.patch) {
     config = { ...config, ...res.patch };
     lastSavedConfig = JSON.parse(JSON.stringify(config));
@@ -3243,6 +3350,17 @@ else {
   });
   installCrashHandlers();
 
+  // If the server rejects our session, say so. Otherwise syncing just stops
+  // and the user finds out by noticing the Account page says "Not signed in".
+  cloud.setSignedOutHandler((message) => {
+    notifySettings('sync-status', { ok: false, error: message });
+    notifySettings('account-changed', {
+      ...cloud.status(),
+      cloudSyncEnabled: !!config.cloudSyncEnabled,
+      lastSyncedAt: config.lastSyncedAt || 0,
+    });
+  });
+
   app.whenReady().then(async () => {
     try { app.setName('WallRaven'); } catch {}
     tray = new Tray(buildTrayImage());
@@ -3263,8 +3381,15 @@ else {
     // Initial fetch if no wallpaper yet
     if (!history.items.length) fetchAndSetWallpaper(false);
     // Pull cloud profile on start (and every 15 min) when signed in.
+    //
+    // The interval is created unconditionally and tests signed-in state when it
+    // fires. It used to be created only if the user was already signed in at
+    // launch, so anyone who paired during a session had settings pushed up but
+    // nothing pulled down until they next restarted the app.
     if (config.cloudSyncEnabled && cloud.status().signedIn) {
       setTimeout(() => cloudPull({ force: false }).catch(() => {}), 2000);
+    }
+    {
       setInterval(() => {
         if (config.cloudSyncEnabled && cloud.status().signedIn) cloudPull({ force: false }).catch(() => {});
       }, 15 * 60 * 1000);

@@ -3657,7 +3657,14 @@ function renderFavourites() {
   dislikedGrid.innerHTML = disliked.length ? disliked.map((item) => reactionCard(item, 'disliked')).join('') : '<span class="help">No disliked wallpapers yet.</span>';
 }
 
+// Bound once. wireFavourites is reached from renderCards(), which runs again
+// on every card reorder or collapse, but the listener goes on `document`,
+// which is never replaced -- so each re-render used to leave another copy
+// behind, and a single click eventually fired the handler five times over.
+let favouritesWired = false;
 function wireFavourites() {
+  if (favouritesWired) return;
+  favouritesWired = true;
   document.addEventListener('click', async (e) => {
     const card = e.target.closest?.('#likedGrid .fcard, #dislikedGrid .fcard');
     if (card) {
@@ -3989,16 +3996,16 @@ function renderAccount(s) {
   if (!status) return;
   if (st.signedIn) {
     status.textContent = 'Signed in' + (st.email ? ' as ' + st.email : '');
-  } else if (st.pending) {
+  } else if (st.pairing) {
     status.textContent = 'Waiting for you to approve the sign-in in your browser…';
   } else {
     status.textContent = 'Not signed in — settings stay on this machine only.';
   }
   const show = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
-  show('#btn-acct-signin', !st.signedIn && !st.pending);
-  show('#btn-acct-cancel', !!st.pending);
+  show('#btn-acct-signin', !st.signedIn && !st.pairing);
+  show('#btn-acct-cancel', !!st.pairing);
   // The code is only meaningful while a pairing is actually outstanding.
-  if (!st.pending) showPairCode(null);
+  if (!st.pairing) showPairCode(null);
   show('#btn-acct-signout', !!st.signedIn);
   show('#btn-acct-web', !!st.signedIn);
   const cb = $('#cloudSyncEnabled');
@@ -4145,7 +4152,18 @@ api.onChanged(() => {
   changedTimer = setTimeout(async () => { await loadHistory(); refreshInfo(); }, 150);
 });
 
-api.onConfigChanged?.(async (cfg) => { config = cfg; refreshUpdateBanner(); updateScheduleStatus(); });
+// Put the new values on screen, not just in the variable.
+//
+// Without hydrateInputs the form kept whatever was typed before a cloud pull
+// arrived, and the next Save read the stale values straight back out of the
+// DOM and uploaded them -- silently undoing whatever the other machine had
+// just changed. The user had not edited those fields; they pressed Save.
+api.onConfigChanged?.(async (cfg) => {
+  config = cfg;
+  try { hydrateInputs(config); } catch {}
+  refreshUpdateBanner();
+  updateScheduleStatus();
+});
 
 (async () => {
   config = await api.getConfig();
