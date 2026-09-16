@@ -1,8 +1,9 @@
 {
-  "version": "0.8.13",
-  "releasedAt": "2026-09-15",
-  "url": "https://wallraven.app/__l5e/assets-v1/0f35ffb2-d4f9-4478-83c3-55bd09170b19/Wallraven-Setup-v0.8.13.exe",
-  "pageUrl": "https://wallraven.app/",
-  "sizeBytes": 111951780,
-  "notes": "Adds Raven Fyra 🔥, a warm red, orange and yellow pastel theme with new 4K fire-mage Raven artwork."
+  "version": "1.0.2",
+  "releasedAt": "2026-09-16",
+  "url": "https://github.com/necromoz/wallraven/releases/download/v1.0.2/Wallraven-Setup-v1.0.2.exe",
+  "sha256": "a70e2c7dd115ff6a8fecbe57c140ed207c891fa4a456778cb7b6896cc03aff00",
+  "pageUrl": "https://github.com/necromoz/wallraven/releases/tag/v1.0.2",
+  "sizeBytes": 112326624,
+  "notes": "Updates are now checked before they are installed: WallRaven only accepts an installer from its own release sites and verifies it against a published fingerprint before running it."
 }
