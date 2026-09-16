@@ -56,7 +56,8 @@ export function LinkPage() {
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
-        navigate({ to: "/auth", search: { next: "/link" } as never });
+        // link=1 so that signing in comes back here rather than to the account page.
+        navigate({ to: "/auth", search: { link: "1" } as never });
         return;
       }
       // A code in the URL means an app old enough to use the flow that is being
