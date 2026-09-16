@@ -12,7 +12,11 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8");
+// Normalised to LF: Windows checks the repo out with CRLF, and the
+// extractors below match on line ends.
+const SRC = fs
+  .readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8")
+  .replace(/\r\n/g, "\n");
 
 /** Pull a top-level `function name(...) { ... }` out of the source by brace matching. */
 function extract(name) {
