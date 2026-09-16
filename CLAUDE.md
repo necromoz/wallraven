@@ -45,21 +45,24 @@ caught before release.
 
 ## Release gates
 
-These are fine while it's two machines. None of them can ship to the public:
+All three are now closed in code. None are verified end to end, and the
+distinction matters:
 
-1. **The auto-updater runs unverified executables.** `autoInstallUpdates` defaults
-   true, `downloadUrl` comes from a remote manifest with no host allowlist, no
-   checksum and no signature check, then gets spawned with `/S`. Needs a pinned
-   host, a published SHA-256, and a signed installer. Unsigned installers also get
-   hammered by SmartScreen, so signing is a usability fix as much as a security one.
-2. ~~**Device pairing is a one-click account takeover.**~~ Closed in `643a089`.
-   The server generates both codes, the user code is typed in by hand rather than
-   carried in a link, and the CORS headers are gone. Written and deployed to the
-   Cloudflare copy, but **not yet verified against a real pairing**: the endpoints
-   need `SUPABASE_SERVICE_ROLE_KEY` set on the Worker and it is not, so
-   `/api/public/pair/start` currently 500s there.
-3. **No crash reporting and no beta channel in use.** Two people testing by hand
-   does not survive contact with strangers.
+1. ~~**The auto-updater runs unverified executables.**~~ Closed. Pinned host
+   allowlist, published SHA-256 checked before the installer is run, redirects
+   re-checked at every hop. The remaining gap is real: the checksum arrives in
+   the same manifest as the download URL, so this protects against a swapped
+   file on a trusted server, not against that server being taken over. Only a
+   signed installer fixes that, and signing also stops SmartScreen frightening
+   people. Not done: it costs money, or a Microsoft Store listing.
+2. ~~**Device pairing is a one-click account takeover.**~~ Closed. Server
+   generates both codes, the user types the short one off the screen of the
+   machine being paired, no CORS. **Never tested against a real pairing**: the
+   endpoints need `SUPABASE_SERVICE_ROLE_KEY` on the Worker and it is not set.
+3. ~~**No crash reporting.**~~ Closed. Crashes are recorded locally, redacted
+   (home directory, username, Wallhaven key), shown in Settings, and sent only
+   when the person chooses to, through the feedback endpoint into Steve's own
+   database. No third party. Still no beta channel, and still one tester.
 
 ## Releasing the pairing change
 
@@ -96,31 +99,39 @@ cannot pair.
   the JSON helpers have no timeouts, so one stalled request wedges every wallpaper
   change. 0.8.13 papers over this with a 30-second lock takeover.
 
-## Hosting
+## Hosting and the database
 
-`wallraven.app` is still served by Lovable and the domain is registered through
-them (Name.com is the sponsoring registrar). This repo is not connected to
-Lovable, so pushes here do not redeploy it; Lovable keeps serving what it last
-built.
+Both moved, or are ready to. Neither is live.
 
-The site now also runs on Steve's own Cloudflare account, on the Workers free
-plan, at `necromoz-wallraven.necromoz.workers.dev`. It is deployed by hand with
-`npx wrangler deploy` from a checkout, after `npm run build`. Two secrets are set
-on the Worker (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`); both are publishable
-values, and nothing secret is involved. Landing page, preset gallery, changelog,
-sign-in page and the update manifest were all verified working there.
+The **database** is done and is the one thing fully migrated. It used to be a
+Supabase project owned by Lovable ("Lovable Cloud"), invisible from Steve's own
+dashboard, with no service role key and no automated transfer. Lovable exported
+it; the schema and its one account's worth of data are restored into a project
+Steve owns (`bwvbilkfcmjnvopjpaer`, organisation NecroMoz, London, free tier).
+Accounts could not be copied, so the single account was re-registered against
+the same address.
 
-DNS has not moved. Cutting `wallraven.app` over is a separate, deliberate step.
+The **site** builds and deploys to Steve's Cloudflare account on the Workers
+free plan, at `necromoz-wallraven.necromoz.workers.dev`. Deploy by hand:
+`npm run build` then `npx wrangler deploy` from a checkout. Three secrets belong
+on the Worker; two are set (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`) and
+`SUPABASE_SERVICE_ROLE_KEY` is not, which is why pairing 500s there.
 
-Two things to know before relying on this:
+**DNS has not moved.** `wallraven.app` still uses Name.com's nameservers and
+still points at Lovable's server, so the live site is Lovable's build, talking
+to the database we migrated off. Cloudflare will only attach a custom domain to
+a Worker if it runs the zone, so this needs the nameservers changed at the
+registrar, which needs access Lovable holds. That is the single blocker for
+everything public-facing. The domain carries no mail, TXT or CAA records, so the
+move can only affect the website.
 
-- The Workers free plan allows 10ms of CPU per server-rendered request against
-  5 minutes on paid. Pages render fine under light use, but this has never been
-  under load. If pages start returning Cloudflare error 1102, that limit is why,
-  and the fix is to pre-render the pages that do not need a server rather than
-  to start paying.
-- Google sign-in does not go to Supabase. `@lovable.dev/cloud-auth-js` brokers it
-  through `oauth.lovable.app`, so that one flow depends on Lovable wherever the
-  site is hosted. Email and password sign-in, registration and password resets
-  all talk to Supabase directly. Replacing it means a Google OAuth client
-  configured in Supabase.
+Free plan limits worth knowing: 10ms CPU per server-rendered request (5 minutes
+on paid). Pages render fine under light use but this has never been under load.
+If pages start returning Cloudflare error 1102, pre-render the pages that do not
+need a server rather than paying.
+
+Google sign-in still goes through `oauth.lovable.app` and will break when the
+database moves for real, because those tokens are only valid for Lovable's
+project. Email and password sign-in is unaffected. Fixing it needs a Google
+OAuth client configured against the new Supabase project.
+
