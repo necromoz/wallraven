@@ -1,5 +1,8 @@
 # Wallraven changelog
 
+## v1.0.2 — 16 Sep 2026
+- **Updates are checked before they are installed**: WallRaven now only accepts an update from its own release sites, over a secure connection, and checks the downloaded installer against a published fingerprint before running it. If anything does not match, the update is discarded rather than installed. A silent background update will not run at all unless that check passed.
+
 ## v1.0.1 — 16 Sep 2026
 - **Choose which apps pause your wallpaper from a list**: the old button tried to detect whatever was in front of you, which could only ever be WallRaven itself, because pressing a button in WallRaven brings WallRaven to the front. It now shows what you have open and you pick.
 
