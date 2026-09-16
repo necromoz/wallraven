@@ -401,6 +401,81 @@ check("returns nothing when the wanted file is absent", () => {
   assert.strictEqual(guards.parseSha256Sums("garbage", "x.exe"), "");
 });
 
+// ---------------------------------------------------------------- crashes
+
+console.log("crash redaction");
+
+// CRASH_TEXT_MAX is a module constant in main.cjs, so it has to be supplied
+// to the extracted function's scope. Keep it in step with the source.
+const CRASH_TEXT_MAX_EXPECTED = 4000;
+const crashRedact = new Function(
+  `const CRASH_TEXT_MAX = ${CRASH_TEXT_MAX_EXPECTED}; ${extract("redactCrashText")}; return redactCrashText;`,
+)();
+
+check("the cap under test still matches the one in main.cjs", () => {
+  const m = /const CRASH_TEXT_MAX = (\d+)/.exec(SRC);
+  assert.ok(m, "CRASH_TEXT_MAX is no longer declared in main.cjs");
+  assert.strictEqual(
+    Number(m[1]),
+    CRASH_TEXT_MAX_EXPECTED,
+    "main.cjs changed CRASH_TEXT_MAX; update the tests to match",
+  );
+});
+
+const WIN_CTX = { home: "C:\\Users\\steve", user: "steve", apiKey: "abcd1234efgh5678" };
+
+check("replaces the home directory with ~", () => {
+  const out = crashRedact(
+    "Error: nope\n    at f (C:\\Users\\steve\\AppData\\Roaming\\WallRaven\\main.cjs:12:3)",
+    WIN_CTX,
+  );
+  assert.ok(!out.includes("C:\\Users\\steve"), "home directory survived redaction");
+  assert.ok(out.includes("~"), "expected the home directory to be replaced with ~");
+});
+
+check("handles paths written with forward slashes too", () => {
+  const out = crashRedact("at f (C:/Users/steve/AppData/x.js:1:1)", WIN_CTX);
+  assert.ok(!out.includes("Users/steve"), `username survived: ${out}`);
+});
+
+check("removes the username where it appears on its own", () => {
+  const out = crashRedact("ENOENT: no such file, open 'steve.json'", WIN_CTX);
+  assert.ok(!/\bsteve\b/i.test(out), `username survived: ${out}`);
+});
+
+check("removes the Wallhaven API key", () => {
+  const out = crashRedact("request failed: ?apikey=abcd1234efgh5678&q=x", WIN_CTX);
+  assert.ok(!out.includes("abcd1234efgh5678"), "API key survived redaction");
+  assert.ok(out.includes("<api key>"), "expected the key to be marked as removed");
+});
+
+check("does not mangle text when there is nothing to redact", () => {
+  const out = crashRedact("TypeError: x is not a function", { home: "", user: "", apiKey: "" });
+  assert.strictEqual(out, "TypeError: x is not a function");
+});
+
+check("ignores a suspiciously short username rather than shredding the text", () => {
+  // A two-character username would match inside ordinary words.
+  const out = crashRedact("at read (a/b/c.js)", { home: "", user: "at", apiKey: "" });
+  assert.strictEqual(out, "at read (a/b/c.js)");
+});
+
+check("ignores a short api key for the same reason", () => {
+  const out = crashRedact("error code 42 raised", { home: "", user: "", apiKey: "42" });
+  assert.strictEqual(out, "error code 42 raised");
+});
+
+check("caps the length so one crash cannot fill a report", () => {
+  const out = crashRedact("x".repeat(9000), { home: "", user: "", apiKey: "" });
+  assert.ok(out.length <= 4000, `got ${out.length} characters`);
+});
+
+check("survives being handed something that is not a string", () => {
+  for (const input of [null, undefined, 42, {}]) {
+    assert.doesNotThrow(() => crashRedact(input, WIN_CTX), `threw on ${String(input)}`);
+  }
+});
+
 // ---------------------------------------------------------------- summary
 
 console.log();

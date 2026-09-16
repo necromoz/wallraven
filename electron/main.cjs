@@ -288,6 +288,112 @@ function readJsonWithBackup(targetPath) {
   return null;
 }
 
+// ---------- crash recording ----------
+//
+// Until now a failure in the main process went to a console nobody sees, so
+// the only signal that WallRaven had broken on someone else's machine was them
+// quietly uninstalling it. That is exactly what happened once already.
+//
+// Crashes are written to disk here and shown in Settings. They are NOT sent
+// anywhere on their own: a stack trace names files, and files name people. The
+// person reads what would be sent and decides. That matters more, not less,
+// once strangers are running this.
+const CRASH_PATH = path.join(DATA_DIR, 'crashes.json');
+const CRASH_KEEP = 20;          // most recent only; this is a signal, not an archive
+const CRASH_TEXT_MAX = 4000;    // one report has to fit the feedback endpoint's limit
+
+let crashes = null;
+
+// Strip the things in a stack trace that identify the machine rather than the
+// bug. Home directory first, because every other path sits inside it.
+// No default parameter value here on purpose: the test harness extracts this
+// function by brace-matching from the first `{`, and an `opts = {}` default
+// would close the match before the body starts.
+function redactCrashText(text, opts) {
+  const o = opts || {};
+  const home = o.home || '';
+  const user = o.user || '';
+  const apiKey = o.apiKey || '';
+  let out = String(text == null ? '' : text);
+
+  // Longest first, so replacing the username does not wreck the home path.
+  if (apiKey && apiKey.length >= 8) out = out.split(apiKey).join('<api key>');
+  if (home) {
+    // Windows paths appear with both separators depending on who built them.
+    for (const variant of [home, home.replace(/\\/g, '/'), home.replace(/\//g, '\\')]) {
+      if (variant) out = out.split(variant).join('~');
+    }
+  }
+  if (user && user.length >= 3) {
+    out = out.replace(new RegExp(`\\b${user.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), '<user>');
+  }
+  return out.slice(0, CRASH_TEXT_MAX);
+}
+
+function redactionContext() {
+  let home = '';
+  let user = '';
+  try { home = app.getPath('home'); } catch {}
+  try { user = require('os').userInfo().username; } catch {}
+  return { home, user, apiKey: (config && config.apiKey) || '' };
+}
+
+function loadCrashes() {
+  if (crashes) return crashes;
+  const saved = readJsonWithBackup(CRASH_PATH);
+  crashes = Array.isArray(saved && saved.items) ? saved.items : [];
+  return crashes;
+}
+
+function recordCrash(source, err, extra) {
+  try {
+    const ctx = redactionContext();
+    const raw = err && err.stack ? err.stack : String(err);
+    const entry = {
+      at: Date.now(),
+      source: String(source || 'unknown').slice(0, 40),
+      version: (() => { try { return app.getVersion(); } catch { return ''; } })(),
+      platform: `${process.platform} ${process.arch}`,
+      message: redactCrashText(err && err.message ? err.message : String(err), ctx).slice(0, 300),
+      stack: redactCrashText(raw, ctx),
+      extra: extra ? redactCrashText(JSON.stringify(extra), ctx).slice(0, 300) : '',
+    };
+    const list = loadCrashes();
+    list.push(entry);
+    // Bounded: a crash loop must not fill the disk with reports about itself.
+    if (list.length > CRASH_KEEP) crashes = list.slice(-CRASH_KEEP);
+    writeJsonAtomic(CRASH_PATH, { items: crashes || list });
+    console.error(`[crash:${entry.source}]`, entry.message);
+  } catch (e) {
+    // Never let the crash recorder become the crash.
+    try { console.error('crash recorder failed', e && e.message); } catch {}
+  }
+}
+
+function installCrashHandlers() {
+  process.on('uncaughtException', (err) => {
+    recordCrash('main', err);
+    // Deliberately not quitting. This is a tray app whose uncaught errors are
+    // overwhelmingly from background wallpaper work rather than corrupted core
+    // state, and dying silently in the tray is worse for the person than
+    // carrying on degraded. The recorded crash is how it stops being silent.
+  });
+  process.on('unhandledRejection', (reason) => {
+    recordCrash('promise', reason instanceof Error ? reason : new Error(String(reason)));
+  });
+  app.on('render-process-gone', (_e, _wc, details) => {
+    // The settings window died. Worth knowing: it is the entire UI.
+    if (details && details.reason && details.reason !== 'clean-exit') {
+      recordCrash('window', new Error(`settings window gone: ${details.reason}`), details);
+    }
+  });
+  app.on('child-process-gone', (_e, details) => {
+    if (details && details.reason && details.reason !== 'clean-exit') {
+      recordCrash('child', new Error(`${details.type || 'child'} gone: ${details.reason}`), details);
+    }
+  });
+}
+
 function writeConfigNow() {
   if (CONFIG_WRITE_TIMER) { clearTimeout(CONFIG_WRITE_TIMER); CONFIG_WRITE_TIMER = null; }
   try { writeJsonAtomic(CONFIG_PATH, config); } catch (e) { console.error('config save', e); }
@@ -2099,9 +2205,34 @@ ipcMain.handle('stats:reset', () => {
 
 // Validate a Wallhaven API key. The key to test is whatever is typed in the
 // settings field (falling back to the saved one), so you don't have to Save first.
+// Crash reports recorded on this machine. Reading them is local and free;
+// sending one is a separate, deliberate act by the person.
+ipcMain.handle('crash:list', () => {
+  const items = loadCrashes().slice().reverse();
+  return { items, count: items.length };
+});
+
+ipcMain.handle('crash:clear', () => {
+  crashes = [];
+  try { writeJsonAtomic(CRASH_PATH, { items: [] }); } catch {}
+  return { ok: true };
+});
+
+// Builds the exact text that would be sent, so the UI can show it before
+// asking. Nothing here contacts the network.
+ipcMain.handle('crash:preview', () => {
+  const items = loadCrashes().slice(-5).reverse();
+  if (!items.length) return { text: '' };
+  const lines = items.map((c) => {
+    const when = new Date(c.at).toISOString().replace('T', ' ').slice(0, 19);
+    return `[${when}] ${c.source} (v${c.version}, ${c.platform})\n${c.stack}`;
+  });
+  return { text: lines.join('\n\n---\n\n').slice(0, 4000) };
+});
+
 // Send feedback / bug reports / feature requests to the Wallraven site.
 ipcMain.handle('feedback:send', async (_e, payload) => {
-  const kind = ['bug', 'feature', 'feedback'].includes(payload && payload.kind) ? payload.kind : 'feedback';
+  const kind = ['bug', 'feature', 'feedback', 'crash'].includes(payload && payload.kind) ? payload.kind : 'feedback';
   const message = String((payload && payload.message) || '').trim().slice(0, 4000);
   const email = String((payload && payload.email) || '').trim().slice(0, 255);
   if (message.length < 5) return { ok: false, reason: 'Message too short' };
@@ -3111,6 +3242,8 @@ else {
   app.on('second-instance', (_e, argv) => {
     openSettings();
   });
+  installCrashHandlers();
+
   app.whenReady().then(async () => {
     try { app.setName('WallRaven'); } catch {}
     tray = new Tray(buildTrayImage());

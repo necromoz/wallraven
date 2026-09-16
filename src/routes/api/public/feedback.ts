@@ -4,7 +4,7 @@ import { allow, clientKey, tooManyRequests } from "@/lib/rate-limit";
 
 
 const bodySchema = z.object({
-  kind: z.enum(["bug", "feature", "feedback"]).default("feedback"),
+  kind: z.enum(["bug", "feature", "feedback", "crash"]).default("feedback"),
   message: z.string().trim().min(5).max(4000),
   email: z.string().trim().email().max(255).optional().or(z.literal("")),
   appVersion: z.string().trim().max(40).optional(),

@@ -1277,7 +1277,21 @@
       <option value="bug">Bug report</option>
       <option value="feature">Feature request</option>
       <option value="feedback" selected>General feedback</option>
+      <option value="crash">Crash report</option>
     </select>
+  </div>
+  <div id="crashBox" style="display:none; margin:0 0 10px 0; padding:12px 14px; border:1px solid var(--line, #2a2d3a); border-radius:8px; background:rgba(255,255,255,0.03);">
+    <div id="crashSummary" style="font-weight:600;"></div>
+    <div class="help" style="margin:6px 0 0 0;">
+      Nothing is sent automatically. Read what would go, then decide. It is attached to the
+      message below when you send it.
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+      <button class="btn secondary" id="btn-crash-view" type="button">Show details</button>
+      <button class="btn secondary" id="btn-crash-attach" type="button">Attach to report</button>
+      <button class="btn secondary" id="btn-crash-clear" type="button">Discard</button>
+    </div>
+    <pre id="crashDetail" style="display:none; margin-top:10px; max-height:220px; overflow:auto; white-space:pre-wrap; word-break:break-word; font-size:11px; opacity:0.85;"></pre>
   </div>
   <div class="row"><label for="feedbackEmail">Your email</label>
     <input id="feedbackEmail" type="email" placeholder="optional - only if you want a reply" style="flex:1;" />
@@ -2009,6 +2023,53 @@ function wireAllCards() {
     const c = $('#changelogCaret'); if (c) c.textContent = open ? '▾' : '▸';
     if (open) loadChangelog();
   });
+  // Crashes recorded on this machine. Shown, never sent on their own: a stack
+  // trace names files and files name people, so the person reads it first.
+  async function refreshCrashes() {
+    const box = $('#crashBox');
+    if (!box || !api.crashList) return;
+    let r = null;
+    try { r = await api.crashList(); } catch { return; }
+    const n = (r && r.count) || 0;
+    if (!n) { box.style.display = 'none'; return; }
+    const last = r.items[0];
+    const when = last ? new Date(last.at).toLocaleString() : '';
+    $('#crashSummary').textContent =
+      n === 1 ? `WallRaven recorded a problem (${when}).`
+              : `WallRaven recorded ${n} problems. Most recent ${when}.`;
+    box.style.display = '';
+  }
+
+  $('#btn-crash-view') && ($('#btn-crash-view').onclick = async () => {
+    const pre = $('#crashDetail');
+    if (!pre) return;
+    if (pre.style.display !== 'none') { pre.style.display = 'none'; return; }
+    const r = await api.crashPreview();
+    pre.textContent = (r && r.text) || 'Nothing recorded.';
+    pre.style.display = 'block';
+  });
+
+  $('#btn-crash-attach') && ($('#btn-crash-attach').onclick = async () => {
+    const r = await api.crashPreview();
+    const box = $('#feedbackMessage');
+    if (!box || !r || !r.text) return;
+    const existing = (box.value || '').trim();
+    box.value = (existing ? existing + '\n\n' : '') + 'Crash details:\n' + r.text;
+    const kind = $('#feedbackKind');
+    if (kind) kind.value = 'crash';
+    box.focus();
+    flash('Crash details added to the message. Send when ready.', 'ok');
+  });
+
+  $('#btn-crash-clear') && ($('#btn-crash-clear').onclick = async () => {
+    await api.crashClear();
+    const pre = $('#crashDetail'); if (pre) { pre.style.display = 'none'; pre.textContent = ''; }
+    await refreshCrashes();
+    flash('Crash reports discarded', 'ok');
+  });
+
+  refreshCrashes();
+
   $('#btn-feedback-send') && ($('#btn-feedback-send').onclick = async () => {
     const st = $('#feedbackStatus');
     const message = (($('#feedbackMessage') || {}).value || '').trim();

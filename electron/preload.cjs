@@ -85,6 +85,9 @@ contextBridge.exposeInMainWorld('api', {
   gameRecord: (score) => ipcRenderer.invoke('game:record', score),
   apiKeyValidate: (key) => ipcRenderer.invoke('apikey:validate', key),
   sendFeedback: (payload) => ipcRenderer.invoke('feedback:send', payload),
+  crashList: () => ipcRenderer.invoke('crash:list'),
+  crashPreview: () => ipcRenderer.invoke('crash:preview'),
+  crashClear: () => ipcRenderer.invoke('crash:clear'),
   onAppToast: (cb) => ipcRenderer.on('app-toast', (_e, s) => cb(s)),
   // v0.6.0 — preset library + community presets
   presetBuiltins: () => ipcRenderer.invoke('presets:builtins'),
