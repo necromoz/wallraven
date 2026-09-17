@@ -103,7 +103,10 @@ jobs:
       # Only on a version tag. The checksum file is published alongside the
       # installer so the updater can verify what it downloaded rather than
       # trusting whatever the manifest points at.
-      - name: Publish release
+      #
+      # This one goes to the private repo: a record alongside the source, not
+      # something users reach.
+      - name: Publish release (private, for the record)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
@@ -111,3 +114,54 @@ jobs:
             dist/*.exe
             dist/SHA256SUMS.txt
           generate_release_notes: true
+
+      # And this one is the copy users actually download.
+      #
+      # This repository is private, so a release published here returns 404 to
+      # anyone without a token -- including the app's own updater. That went
+      # unnoticed through two releases because every test was made with a token
+      # in hand. The public copy is the one the update manifest points at, and
+      # publishing both from the same job is what stops them drifting apart
+      # again.
+      - name: Publish release (public downloads)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: wallraven-app/wallraven
+          token: ${{ secrets.PUBLIC_RELEASE_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: WallRaven ${{ steps.version.outputs.version }}
+          files: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
+          body: |
+            Windows installer for WallRaven ${{ steps.version.outputs.version }}.
+
+            **Verify before running:**
+
+            ```
+            certutil -hashfile Wallraven-Setup-v${{ steps.version.outputs.version }}.exe SHA256
+            ```
+
+            It should match the value in `SHA256SUMS.txt`.
+
+            The installer is not code-signed yet, so Windows SmartScreen will
+            warn you. Choose **More info**, then **Run anyway**.
+
+      # Fail loudly rather than leaving a release nobody can download. The
+      # updater reads this file, so if it is unreachable the app silently stops
+      # being able to update itself.
+      - name: Check the public download actually works
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          url="https://github.com/wallraven-app/wallraven/releases/download/${{ github.ref_name }}/Wallraven-Setup-v${{ steps.version.outputs.version }}.exe"
+          echo "checking $url with no credentials"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -L -o /dev/null -w '%{http_code}' --max-time 300 "$url" || true)
+            echo "attempt $attempt: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "::error::the published installer is not reachable without a token; the updater will not work"
+          exit 1
