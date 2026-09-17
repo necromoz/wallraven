@@ -43,6 +43,30 @@ caught before release.
 - Commit in small, self-contained steps with a message saying *why*. The history is
   Steve's undo button and he cannot debug his way out of a bad state.
 
+## Running it locally
+
+Steve tests by hand, so the loop has to be short. Electron is a devDependency,
+which means the app runs straight from the repo with no packaging step:
+
+- `npm run app` uses the real profile, so it sees the settings, cache, history
+  and playlists of the installed copy. **Quit the installed WallRaven from the
+  tray first**: the single-instance lock is keyed on the profile, so otherwise
+  the dev run just focuses the running one and exits.
+- `npm run app:clean` uses `.devprofile/` instead and can run alongside the
+  installed copy. A fresh profile, so it starts signed out with no cache.
+
+Two things a dev run deliberately does not do, both in `applyAutoStart`:
+
+- It never registers start-up. `process.execPath` is `electron.exe` inside
+  `node_modules`, and writing that to the Run key would overwrite the installed
+  copy's entry with a path that disappears on the next `npm install`.
+- The tray tooltip says `WallRaven (dev)` so two running copies can be told
+  apart.
+
+Edits to `electron/` take effect on restart; there is no build step for the app
+itself. `npm test` after every change -- it is a few seconds and covers the
+logic that is awkward to reach by hand.
+
 ## Release gates
 
 All four are closed. What is verified and what is merely written differs from

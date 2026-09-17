@@ -56,6 +56,9 @@ const { isStoreBuild, STORE_UPDATE_MESSAGE } = require('./packaging.cjs');
 // Answered once at startup: nothing about how the app was installed changes
 // while it is running.
 const STORE_BUILD = isStoreBuild();
+// True when the app is being run straight from the repo (npm run app) rather
+// than from an install. Electron sets isPackaged, so this needs no flag.
+const DEV_RUN = !app.isPackaged;
 const DATA_DIR = path.join(app.getPath('userData'));
 const DEFAULT_CACHE_DIR = path.join(DATA_DIR, 'cache');
 // Mutable: the user can relocate the cache from Settings (config.cacheDir).
@@ -2212,7 +2215,8 @@ function updateTrayMenu() {
     { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } },
   );
   const menu = Menu.buildFromTemplate(items);
-  tray.setToolTip('WallRaven' + (last ? ` - ${last.id}` : ''));
+  // Two copies can be running at once during development. Say which is which.
+  tray.setToolTip('WallRaven' + (DEV_RUN ? ' (dev)' : '') + (last ? ` - ${last.id}` : ''));
   tray.setContextMenu(menu);
 }
 
@@ -3122,6 +3126,11 @@ function applyAutoStart() {
   // WindowsApps that the shell refuses to launch, so the honest thing is to
   // leave it alone and let the Settings window say where the switch lives.
   if (STORE_BUILD) return;
+  // Running from source, process.execPath is electron.exe inside node_modules.
+  // Registering that would overwrite the installed copy's Run key with a path
+  // that disappears on the next npm install, so the installed WallRaven would
+  // quietly stop starting at login and nothing would say why.
+  if (DEV_RUN) return;
   if (process.platform !== 'win32' && process.platform !== 'darwin') return;
   try {
     // Portable/zip installs move around, so re-register with the current exe

@@ -56,6 +56,10 @@ electron/dist/
 *.msixbundle
 *.appx
 
+# Scratch profile used by `npm run app:clean` so a dev run can sit alongside
+# the installed copy without sharing its settings, cache or history.
+.devprofile/
+
 # Environment files. Only .env.example is committed; keep real values local.
 .env
 .env.*

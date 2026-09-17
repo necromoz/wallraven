@@ -143,6 +143,15 @@ check("applyAutoStart does nothing in a Store build", () => {
   assert.ok(/if \(STORE_BUILD\) return;/.test(b), "applyAutoStart still tries to register start-up");
 });
 
+check("running from source never touches the Run key", () => {
+  // npm run app uses electron.exe from node_modules. Registering that as the
+  // login item would overwrite the installed copy's entry with a path that
+  // vanishes on the next npm install.
+  const b = body("applyAutoStart");
+  assert.ok(/if \(DEV_RUN\) return;/.test(b), "a dev run can still overwrite the installed app's start-up entry");
+  assert.ok(/const DEV_RUN = !app\.isPackaged;/.test(main));
+});
+
 check("a Store build honours start-minimized without a --hidden argument", () => {
   // A startup task cannot pass arguments, so the setting is all there is.
   assert.ok(
