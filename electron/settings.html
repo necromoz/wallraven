@@ -708,6 +708,18 @@
   .day-chip { font-size:11px; padding:3px 9px; border-radius:99px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; }
   .day-chip.on { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 22%, transparent); color:var(--fg); }
 
+  /* Welcome on a fresh install, what's new after an update. One panel, because
+     they are the same thing at different times: here is what this does for
+     you, now go and use it. */
+  #intro-panel { border-bottom: 1px solid var(--border); background: var(--panel-2); }
+  #intro-panel .intro-inner { display: flex; gap: 16px; align-items: flex-start; padding: 14px 20px; }
+  #intro-panel .intro-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  #intro-panel .intro-body { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  #intro-panel .intro-body ul { margin: 6px 0 0 16px; padding: 0; }
+  #intro-panel .intro-body li { margin-bottom: 4px; }
+  #intro-panel .intro-body strong { color: var(--fg); font-weight: 600; }
+  #intro-panel .intro-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
   #quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
 
   @media (max-width: 860px) {
@@ -742,6 +754,16 @@
   <a href="#" id="update-banner-link" style="margin-left:8px;">Download</a>
   <a href="#" id="update-banner-dismiss" style="margin-left:12px; color:var(--muted);">Dismiss</a>
 </div>
+<div id="intro-panel" style="display:none;">
+  <div class="intro-inner">
+    <div style="flex:1;">
+      <div class="intro-title" id="intro-title"></div>
+      <div class="intro-body" id="intro-body"></div>
+    </div>
+    <button class="btn" id="intro-dismiss" type="button">Got it</button>
+  </div>
+</div>
+
 <div id="shell">
 <nav id="sidebar" aria-label="Sections"></nav>
 <main>
@@ -2910,6 +2932,94 @@ function setApiKeyStatus(state, detail) {
   else { el.textContent = 'Missing — no key entered'; el.className = 'status'; }
 }
 
+// ---------- Welcome, and what's new ----------
+//
+// The changelog ships with the build and is already written for people rather
+// than for a release engineer. Splitting each version into "New" and "Fixed"
+// means the panel after an update can show what was added without reciting a
+// list of things that used to be broken.
+function parseChangelogVersions(md) {
+  const out = [];
+  let current = null;
+  let bucket = 'fixed';
+  for (const raw of String(md || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    // \S+ rather than a character class: a prerelease version has a hyphen in
+    // it, and excluding hyphens turned 1.2.0-beta.1 into 1.2.0, which matches
+    // no running build.
+    const version = /^##\s+v?(\S+)/.exec(line);
+    if (version) {
+      current = { version: version[1], added: [], fixed: [] };
+      bucket = 'fixed';
+      out.push(current);
+      continue;
+    }
+    if (!current) continue;
+    const section = /^###\s+(.+)$/.exec(line);
+    if (section) { bucket = /new|added/i.test(section[1]) ? 'added' : 'fixed'; continue; }
+    const item = /^[-*]\s+(.*)$/.exec(line);
+    if (item && item[1]) current[bucket].push(item[1]);
+  }
+  return out;
+}
+
+// Which panel to show, if any. A fresh install has never seen a version, and
+// wants a welcome rather than a change list it has no context for.
+function chooseIntro(currentVersion, lastSeenVersion, versions) {
+  if (lastSeenVersion && lastSeenVersion === currentVersion) return null;
+  if (!lastSeenVersion) return { kind: 'welcome' };
+  const entry = (versions || []).find((v) => v.version === currentVersion);
+  const added = entry ? entry.added : [];
+  if (!added.length) return null;
+  return { kind: 'whatsnew', version: currentVersion, added };
+}
+
+const WELCOME_HTML = `
+  WallRaven changes your desktop wallpaper on a timer, using pictures from
+  <strong>Wallhaven</strong> or from folders on this PC.
+  <ul>
+    <li><strong>Search &amp; filters</strong> decides what it looks for. <strong>Browse</strong> is for looking around without changing that.</li>
+    <li><strong>Cycling</strong> sets how often it changes. <strong>Timetable</strong> switches sources at times of day, if you want that.</li>
+    <li>The buttons in the title bar act on the wallpaper on screen: like it, skip it, or go back to the last one.</li>
+  </ul>
+  It runs in the system tray, so closing this window leaves it running.`;
+
+async function showIntroPanel() {
+  const panel = $('#intro-panel');
+  if (!panel) return;
+  const version = (document.getElementById('app-version')?.textContent || '').replace(/^v/, '');
+  let versions = [];
+  try { versions = parseChangelogVersions(await api.changelog()); } catch {}
+  const choice = chooseIntro(version, config?.lastSeenVersion || '', versions);
+  if (!choice) return;
+
+  const title = $('#intro-title'), body = $('#intro-body');
+  if (choice.kind === 'welcome') {
+    if (title) title.textContent = 'Welcome to WallRaven';
+    if (body) body.innerHTML = WELCOME_HTML;
+  } else {
+    if (title) title.textContent = `What's new in ${choice.version}`;
+    if (body) body.innerHTML = '<ul>' + choice.added.map((item) => `<li>${renderInline(item)}</li>`).join('') + '</ul>';
+  }
+  panel.style.display = '';
+
+  const dismiss = async () => {
+    panel.style.display = 'none';
+    try { config = await api.setConfig({ lastSeenVersion: version }); } catch {}
+  };
+  const btn = $('#intro-dismiss');
+  if (btn) btn.onclick = dismiss;
+}
+
+// Bold and code only. The changelog is ours, but it is still content being put
+// into innerHTML, so everything else is escaped.
+function renderInline(text) {
+  const esc = String(text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>');
+}
+
 async function loadChangelog() {
   const el = $('#changelog'); if (!el) return;
   try {
@@ -4566,6 +4676,7 @@ api.onConfigChanged?.(async (cfg) => {
     }
   } catch {}
   applyStoreUi();
+  showIntroPanel().catch(() => {});
   if (uiPage === 'browse' && !browseState.searched) { try { runBrowse(); } catch {} }
   try { hotkeyStatus = await api.hotkeysStatus?.(); } catch {}
   renderHotkeyStatus();

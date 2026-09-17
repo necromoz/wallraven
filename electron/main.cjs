@@ -97,6 +97,9 @@ const DEFAULT_CONFIG = {
   cacheMaxMB: 1024,
   autoStart: true,
   startMinimized: false,
+  // The last version whose "what's new" the user has seen. Empty on a fresh
+  // install, which is what the welcome panel keys off.
+  lastSeenVersion: '',
   uiAccent: '#7c5cff',
   theme: 'glass',
   notifyOnChange: false,
@@ -206,7 +209,14 @@ function mergeConfig(defaults, saved) {
 
 function loadConfig() {
   const saved = readJsonWithBackup(CONFIG_PATH);
-  if (saved && typeof saved === 'object' && !Array.isArray(saved)) return mergeConfig(DEFAULT_CONFIG, saved);
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+    const merged = mergeConfig(DEFAULT_CONFIG, saved);
+    // An existing install that predates lastSeenVersion is not a new user, and
+    // should get the "what's new" panel rather than a welcome. Only a config
+    // that was never written at all counts as a first run.
+    if (saved.lastSeenVersion === undefined) merged.lastSeenVersion = 'pre';
+    return merged;
+  }
   return { ...DEFAULT_CONFIG };
 }
 // Point CACHE_DIR at the user-chosen folder (config.cacheDir) when it is set

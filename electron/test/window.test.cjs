@@ -186,6 +186,28 @@ function settle(ms = 60) {
     });
   })();
 
+  console.log("the welcome panel");
+
+  check("a fresh install is greeted", () => {
+    // The stub config has no lastSeenVersion, which is what a first run looks
+    // like: no config file was ever written.
+    const panel = doc.getElementById("intro-panel");
+    assert.ok(panel, "no intro panel in the window");
+    assert.notStrictEqual(panel.style.display, "none", "a fresh install sees nothing at all");
+    assert.ok(/Welcome/i.test(doc.getElementById("intro-title").textContent));
+  });
+
+  // Click, let the write settle, then assert: an async body passed to check()
+  // would pass regardless of what it threw.
+  doc.getElementById("intro-dismiss").click();
+  await settle(60);
+
+  check("dismissing it records the version, so it does not come back", () => {
+    assert.strictEqual(doc.getElementById("intro-panel").style.display, "none");
+    const saved = w.calls.filter((c) => c.name === "setConfig" && c.args[0] && c.args[0].lastSeenVersion);
+    assert.ok(saved.length > 0, "nothing was remembered, so it will greet them again");
+  });
+
   console.log("the status lines the cards draw");
 
   check("the keyboard card can be drawn without a shortcut set", () => {
