@@ -45,7 +45,8 @@ caught before release.
 
 ## Release gates
 
-All three are now closed in code. None are verified end to end, and the
+The original three are closed. A fourth surfaced on 17 Sep and is the only
+remaining blocker to anyone but Steve having an account. None are verified end to end, and the
 distinction matters:
 
 1. ~~**The auto-updater runs unverified executables.**~~ Closed. Pinned host
@@ -63,6 +64,16 @@ distinction matters:
    (home directory, username, Wallhaven key), shown in Settings, and sent only
    when the person chooses to, through the feedback endpoint into Steve's own
    database. No third party. Still no beta channel, and still one tester.
+
+4. **Nobody except Steve can sign up.** Supabase's built-in email service only
+   delivers to members of the project's team and sends two messages an hour,
+   and the project requires email confirmation. So a stranger signing up waits
+   forever for a mail that was never sent. Invisible during development because
+   the only tester is the team owner. Fix is a real SMTP provider: Resend is
+   set up against `wallraven.app` with DKIM, SPF on the `send.` return path and
+   a monitor-only DMARC record. Verify by signing up with an address that is
+   **not** in the Supabase organisation; testing with Steve's own proves
+   nothing.
 
 ## Releasing the pairing change
 
@@ -116,6 +127,14 @@ free plan, at `necromoz-wallraven.necromoz.workers.dev`. Deploy by hand:
 `npm run build` then `npx wrangler deploy` from a checkout. Three secrets belong
 on the Worker; two are set (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`) and
 `SUPABASE_SERVICE_ROLE_KEY` is not, which is why pairing 500s there.
+
+**DNS moved on 17 Sep and the cutover is done.** `wallraven.app` runs on
+Cloudflare's nameservers and is attached to the Worker as a custom domain, so
+the apex and `www` are `AAAA 100::` (the IPv6 discard address Cloudflare parks
+Worker-served hostnames on). Lovable is no longer in the path for anything.
+Rolling back means recreating two A records pointing at 185.158.133.1.
+
+The old note, kept because the reasoning still applies to any future move:
 
 **DNS has not moved.** `wallraven.app` still uses Name.com's nameservers and
 still points at Lovable's server, so the live site is Lovable's build, talking
