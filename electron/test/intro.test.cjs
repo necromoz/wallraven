@@ -77,13 +77,15 @@ check("a version written without sections counts as fixes, not features", () => 
   assert.strictEqual(out[1].fixed.length, 1);
 });
 
-check("the real changelog parses, and the current version has features", () => {
+check("the real changelog parses, and the build being made is in it", () => {
   const out = api.parseChangelogVersions(CHANGELOG);
   assert.ok(out.length >= 3, `only found ${out.length} versions`);
   const version = fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim();
-  const entry = out.find((v) => v.version === version);
-  assert.ok(entry, `no changelog entry for ${version}`);
-  assert.ok(entry.added.length > 0, `${version} has no New section, so nothing would be announced`);
+  assert.ok(out.some((v) => v.version === version), `no changelog entry for ${version}`);
+  // A release can be fixes only, and then the panel correctly shows nothing.
+  // What must not happen is the sections being absent everywhere, which would
+  // mean the convention had quietly been dropped.
+  assert.ok(out.some((v) => v.added.length > 0), "no version anywhere has a New section");
 });
 
 check("junk does not throw", () => {

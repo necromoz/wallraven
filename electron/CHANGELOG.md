@@ -1,5 +1,11 @@
 # Wallraven changelog
 
+## v1.2.0-beta.3 — 17 Sep 2026
+
+### Fixed
+- **The window no longer has a large empty band in it.** In the raven themes, anything between the title bar and the rest of the window was being painted over by the theme's own background: it still took up its space, so the side bar stopped meeting the top and every page started far too low. The what's new panel was the visible casualty; the update notice had the same fault and nobody had hit it yet.
+- **The timetable reads better at the end of the day.** The last entry now says it runs until the first entry the next morning, rather than "until the next entry".
+
 ## v1.2.0-beta.2 — 17 Sep 2026
 
 ### New
