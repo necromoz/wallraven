@@ -45,9 +45,8 @@ caught before release.
 
 ## Release gates
 
-The original three are closed. A fourth surfaced on 17 Sep and is the only
-remaining blocker to anyone but Steve having an account. None are verified end to end, and the
-distinction matters:
+All four are closed. What is verified and what is merely written differs from
+gate to gate, and the distinction matters:
 
 1. ~~**The auto-updater runs unverified executables.**~~ Closed. Pinned host
    allowlist, published SHA-256 checked before the installer is run, redirects
@@ -55,17 +54,26 @@ distinction matters:
    the same manifest as the download URL, so this protects against a swapped
    file on a trusted server, not against that server being taken over. Only a
    signed installer fixes that, and signing also stops SmartScreen frightening
-   people. Not done: it costs money, or a Microsoft Store listing.
+   people. Signing is being solved through the Microsoft Store, which is free
+   and signs the package itself -- see below.
 2. ~~**Device pairing is a one-click account takeover.**~~ Closed. Server
    generates both codes, the user types the short one off the screen of the
-   machine being paired, no CORS. **Never tested against a real pairing**: the
-   endpoints need `SUPABASE_SERVICE_ROLE_KEY` on the Worker and it is not set.
+   machine being paired, no CORS. `/api/public/pair/start` was checked live on
+   17 Sep and returns a server-generated pair: the service role key is set on
+   the Worker and the endpoint works. A pairing has still not been carried
+   through to a signed-in app end to end.
 3. ~~**No crash reporting.**~~ Closed. Crashes are recorded locally, redacted
    (home directory, username, Wallhaven key), shown in Settings, and sent only
    when the person chooses to, through the feedback endpoint into Steve's own
    database. No third party. Still no beta channel, and still one tester.
 
-4. **Nobody except Steve can sign up.** Supabase's built-in email service only
+4. ~~**Nobody except Steve can sign up.**~~ Closed, and confirmed by signing up
+   with an address outside the Supabase organisation: the mail arrived. The
+   templates are still Supabase's generic ones and say so; branding them is
+   cosmetic and outstanding. Original note kept because the failure mode is
+   worth remembering:
+
+   **Nobody except Steve can sign up.** Supabase's built-in email service only
    delivers to members of the project's team and sends two messages an hour,
    and the project requires email confirmation. So a stranger signing up waits
    forever for a mail that was never sent. Invisible during development because
@@ -90,6 +98,42 @@ the site does**, and this is easy to get wrong in either direction:
 So the order is: move DNS, confirm the site serves from Cloudflare, then release
 the app. At that point update every installed copy, including Steve's own, or it
 cannot pair.
+
+## Microsoft Store
+
+The route to a signed build without paying for a certificate every year:
+Microsoft signs Store submissions itself, and a Store-installed app gets no
+SmartScreen warning at all. Registration is free for individuals.
+
+The build produces the package already. `node scripts/build-desktop.mjs
+--platform win32 --arch x64 --msix` packs `electron/app` with
+`electron/msix/AppxManifest.template.xml` and the logos in
+`electron/msix/assets/`, and CI builds it in the same job as the installer and
+fails if `makeappx` produced nothing. It is **not verified**: nothing here has
+run on Windows yet, and the first CI run on a Windows runner is what will say
+whether `makeappx` is found and the manifest is accepted.
+
+What only Steve can do is reserve the app name in Partner Center. That produces
+three values -- Package Identity Name, Publisher (an X.500 name, `CN=...`) and
+Publisher Display Name -- which must match the reservation exactly. They go in
+as repository **variables** (not secrets; they are public in every package):
+`MSIX_IDENTITY_NAME`, `MSIX_PUBLISHER`, `MSIX_PUBLISHER_DISPLAY_NAME`. Until
+they exist the build falls back to obvious placeholders, which install locally
+and can never be submitted.
+
+Two consequences inside the app, both already handled:
+
+- **The updater must not run.** A packaged app cannot replace itself and the
+  Store services it. `electron/packaging.cjs` answers "is this a Store build"
+  from `process.windowsStore`, and check, download, install, the scheduled
+  checks, the tray item and the Updates card all defer to it.
+- **Start-up is Windows's to control.** A packaged app cannot write its own Run
+  key; the manifest declares a startup task, disabled, which the user turns on
+  under Settings > Apps > Startup. A startup task cannot pass arguments, so a
+  Store build reads "start minimized" instead of `--hidden`.
+
+Keep the NSIS installer either way: it is the only route for anyone not using
+the Store, and the updater is what serves them.
 
 ## Known traps
 
