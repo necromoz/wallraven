@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Template for the Microsoft Store (MSIX) package. scripts/msix.mjs fills the double-brace
+  placeholders below; nothing reads this file directly.
+
+  The three identity values come from Partner Center and must match the
+  reservation exactly, or the Store rejects the upload. They are supplied by
+  the build environment rather than committed, so the same template works for
+  a throwaway local package and for the real submission.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 rescap">
+
+  <Identity
+    Name="{{IDENTITY_NAME}}"
+    Publisher="{{PUBLISHER}}"
+    Version="{{VERSION}}"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>WallRaven</DisplayName>
+    <PublisherDisplayName>{{PUBLISHER_DISPLAY_NAME}}</PublisherDisplayName>
+    <Logo>assets\StoreLogo.png</Logo>
+    <Description>Wallpaper manager for Wallhaven.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!-- 17763 is Windows 10 1809, the oldest release still receiving updates
+         when this was written and the floor Electron itself supports. -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-gb" />
+  </Resources>
+
+  <Applications>
+    <Application Id="WallRaven" Executable="app\Wallraven.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="WallRaven"
+        Description="Wallpaper manager for Wallhaven."
+        BackgroundColor="transparent"
+        Square150x150Logo="assets\Square150x150Logo.png"
+        Square44x44Logo="assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          ShortName="WallRaven"
+          Wide310x150Logo="assets\Wide310x150Logo.png"
+          Square310x310Logo="assets\Square310x310Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!--
+          A packaged app cannot write its own Run key: Windows owns start-up
+          for MSIX and exposes it as a startup task the user turns on under
+          Settings > Apps > Startup. Declaring it Enabled="false" means
+          installing WallRaven does not silently add it to start-up; the user
+          decides. The app detects a Store build and says so in Settings
+          rather than offering a checkbox that would do nothing.
+        -->
+        <uap5:Extension Category="windows.startupTask" Executable="app\Wallraven.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="WallRavenStartup" Enabled="false" DisplayName="WallRaven" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Every desktop app in an MSIX package declares this. The Store grants
+         it automatically for full-trust desktop submissions. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

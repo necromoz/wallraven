@@ -7,13 +7,8 @@
 //
 // Run with: node electron/test/settings-ui.test.cjs
 
-const fs = require("fs");
-const path = require("path");
 const assert = require("assert");
-
-const HTML = fs
-  .readFileSync(path.join(__dirname, "..", "settings.html"), "utf8")
-  .replace(/\r\n/g, "\n");
+const { HTML, JS, CSS, extractFrom } = require("./sources.cjs");
 
 let passed = 0;
 let failed = 0;
@@ -29,20 +24,7 @@ function check(label, fn) {
   }
 }
 
-function fn(name) {
-  const at = HTML.indexOf(`function ${name}(`);
-  assert.ok(at !== -1, `no function ${name} in settings.html`);
-  const open = HTML.indexOf("{", HTML.indexOf(")", at));
-  let depth = 0;
-  for (let i = open; i < HTML.length; i++) {
-    if (HTML[i] === "{") depth++;
-    else if (HTML[i] === "}") {
-      depth--;
-      if (depth === 0) return HTML.slice(at, i + 1);
-    }
-  }
-  throw new Error(`unbalanced braces reading ${name}`);
-}
+const fn = (name) => extractFrom(JS, name);
 
 console.log("elements that are moved, not recreated");
 
@@ -58,12 +40,12 @@ check("the Fade button survives the sidebar being rebuilt", () => {
     !/const fb = document\.getElementById\('btn-fade'\)/.test(body),
     "renderSidebar looks the button up again, which is what broke it",
   );
-  assert.ok(/^let fadeBtnEl = null;$/m.test(HTML), "no module-level reference to keep it alive");
+  assert.ok(/^let fadeBtnEl = null;$/m.test(JS), "no module-level reference to keep it alive");
 });
 
 check("the button is only wired once, to the node that is kept", () => {
   assert.ok(
-    /const fadeBtn = fadeBtnEl \|\| document\.getElementById\('btn-fade'\)/.test(HTML),
+    /const fadeBtn = fadeBtnEl \|\| document\.getElementById\('btn-fade'\)/.test(JS),
     "the Fade wiring can attach handlers to a node the sidebar has since dropped",
   );
 });
@@ -94,9 +76,9 @@ check("every band above the shell is lifted above the theme backdrop", () => {
   assert.ok(ids.length >= 2, `expected some bands above the shell, found ${ids.join(", ")}`);
   for (const id of ids) {
     assert.ok(
-      new RegExp(`#${id}[^{]*\\{[^}]*z-index: 1`).test(HTML) ||
-        new RegExp(`#${id},[^{]*\\{[^}]*z-index: 1`).test(HTML) ||
-        new RegExp(`, #${id}[^{]*\\{[^}]*z-index: 1`).test(HTML),
+      new RegExp(`#${id}[^{]*\\{[^}]*z-index: 1`).test(CSS) ||
+        new RegExp(`#${id},[^{]*\\{[^}]*z-index: 1`).test(CSS) ||
+        new RegExp(`, #${id}[^{]*\\{[^}]*z-index: 1`).test(CSS),
       `#${id} sits between the header and the shell but is not lifted above the theme backdrop`,
     );
   }
@@ -105,8 +87,8 @@ check("every band above the shell is lifted above the theme backdrop", () => {
 check("the themes that need it still lift the header and the shell", () => {
   for (const theme of ["raven", "raven-beach", "raven-fire"]) {
     assert.ok(
-      new RegExp(`html\\[data-mascot="${theme}"\\] header \\{ position: relative; z-index: 1`).test(HTML) ||
-        new RegExp(`html\\[data-mascot="${theme}"\\] #shell`).test(HTML),
+      new RegExp(`html\\[data-mascot="${theme}"\\] header \\{ position: relative; z-index: 1`).test(CSS) ||
+        new RegExp(`html\\[data-mascot="${theme}"\\] #shell`).test(CSS),
       `${theme} no longer lifts its chrome`,
     );
   }
@@ -118,8 +100,8 @@ check("there is a thumbnail of the current wallpaper beside the buttons", () => 
   // Like, dislike and skip act on whatever is on the desktop, which is hidden
   // behind this window while you are pressing them.
   assert.ok(/id="hdr-thumb"/.test(HTML));
-  assert.ok(/function renderHeaderThumb\(\)/.test(HTML));
-  const refreshes = HTML.match(/renderHeaderThumb\(\);/g) || [];
+  assert.ok(/function renderHeaderThumb\(\)/.test(JS));
+  const refreshes = JS.match(/renderHeaderThumb\(\);/g) || [];
   assert.ok(refreshes.length >= 2, "the thumbnail is not refreshed on both paths that change the wallpaper");
 });
 
@@ -144,7 +126,7 @@ check("every id the form reads or writes exists in the markup", () => {
 check("every card part names a template that exists", () => {
   // A card with a `parts` list renders each one from tpl-<id>. A part with no
   // template renders as nothing at all, which looks like a missing section.
-  const meta = HTML.slice(HTML.indexOf("const CARD_META = {"), HTML.indexOf("// Quick actions on Home"));
+  const meta = JS.slice(JS.indexOf("const CARD_META = {"), JS.indexOf("// Quick actions on Home"));
   const parts = [...meta.matchAll(/\{ id: '([\w-]+)',\s*label:/g)].map((m) => m[1]);
   assert.ok(parts.length >= 8, `found ${parts.length} card parts, expected more`);
   for (const id of new Set(parts)) {

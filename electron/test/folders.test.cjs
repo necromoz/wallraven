@@ -11,9 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8").replace(/\r\n/g, "\n");
-const HTML = fs.readFileSync(path.join(__dirname, "..", "settings.html"), "utf8");
-const PRELOAD = fs.readFileSync(path.join(__dirname, "..", "preload.cjs"), "utf8");
+const { MAIN: SRC, HTML, JS, PRELOAD } = require("./sources.cjs");
 
 function extract(name) {
   const at = SRC.indexOf(`function ${name}(`);
@@ -123,8 +121,8 @@ check("adding one checks the path rather than trusting the window", () => {
 
 check("the card renders them and the preload exposes them", () => {
   assert.ok(/id="folderQuickAdd"/.test(HTML));
-  assert.ok(/async function renderFolderQuickAdd\(\)/.test(HTML));
-  assert.ok(/renderFolderQuickAdd\(\);/.test(HTML), "it is defined but never called");
+  assert.ok(/async function renderFolderQuickAdd\(\)/.test(JS));
+  assert.ok(/renderFolderQuickAdd\(\);/.test(JS), "it is defined but never called");
   assert.ok(/folderCloudRoots:/.test(PRELOAD) && /folderAddKnown:/.test(PRELOAD));
 });
 

@@ -11,8 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8").replace(/\r\n/g, "\n");
-const HTML = fs.readFileSync(path.join(__dirname, "..", "settings.html"), "utf8").replace(/\r\n/g, "\n");
+const { MAIN: SRC, HTML, JS, extractFrom } = require("./sources.cjs");
 
 function extract(name) {
   const start = SRC.indexOf(`function ${name}(`);
@@ -100,8 +99,7 @@ check("both the single and multi-group paths honour the overrides", () => {
 console.log("the card no longer writes your settings");
 
 check("runBrowse does not save the form", () => {
-  const at = HTML.indexOf("async function runBrowse()");
-  const body = HTML.slice(at, HTML.indexOf("\n}", at));
+  const body = extractFrom(JS, "runBrowse");
   assert.ok(!/api\.setConfig/.test(body), "browsing still overwrites the saved search");
   assert.ok(/query: q \|\| null/.test(body), "the typed query is not sent");
   assert.ok(/browseSortOverrides\(sortValue\)/.test(body), "the sort is not sent");
@@ -116,21 +114,21 @@ check("the card has its own search box and sort", () => {
 check("what was typed survives the card being rebuilt", () => {
   // Every navigation rebuilds the card from its template, which would
   // otherwise clear the box while the results below stayed on screen.
-  const body = HTML.slice(HTML.indexOf("function wireBrowse()"), HTML.indexOf("// ---------- Liked & disliked ----------"));
+  const body = extractFrom(JS, "wireBrowse");
   assert.ok(/q\.value = browseState\.query/.test(body));
   assert.ok(/sort\.value = browseState\.sort/.test(body));
 });
 
 check("opening Browse loads something instead of an empty grid", () => {
-  assert.ok(/if \(id === 'browse' && !browseState\.searched\)/.test(HTML), "goPage does not run the first search");
-  assert.ok(/if \(uiPage === 'browse' && !browseState\.searched\)/.test(HTML), "opening straight onto Browse shows nothing");
+  assert.ok(/if \(id === 'browse' && !browseState\.searched\)/.test(JS), "goPage does not run the first search");
+  assert.ok(/if \(uiPage === 'browse' && !browseState\.searched\)/.test(JS), "opening straight onto Browse shows nothing");
 });
 
 console.log("the AI art control is gone, and the filter is not");
 
 check("no control, and the value is pinned to exclude", () => {
   assert.ok(!/id="aiArtFilter"/.test(HTML), "the control is still there");
-  assert.ok(/aiArtFilter: 1,/.test(HTML), "the saved value is no longer forced to exclude");
+  assert.ok(/aiArtFilter: 1,/.test(JS), "the saved value is no longer forced to exclude");
   // The request must still carry it: Wallhaven's default is exclude, but
   // relying on someone else's default for this is not worth the risk.
   assert.ok(/params\.set\('ai_art_filter', String\(cfg\.aiArtFilter\)\)/.test(SRC));

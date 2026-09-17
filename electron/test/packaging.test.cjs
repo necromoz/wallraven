@@ -214,7 +214,7 @@ check("the launcher waits rather than vanishing on an error", () => {
 
 console.log("the settings window honours it");
 
-const html = fs.readFileSync(path.join(__dirname, "..", "settings.html"), "utf8");
+const { HTML: html, JS: js } = require("./sources.cjs");
 
 check("the Updates card has somewhere to put the explanation", () => {
   assert.ok(/id="upd-store-note"/.test(html));
@@ -222,25 +222,25 @@ check("the Updates card has somewhere to put the explanation", () => {
 });
 
 check("the card asks the main process rather than guessing", () => {
-  assert.ok(/api\.updateInfo\?\.\(\)/.test(html), "settings.html never calls update:info");
-  assert.ok(/meta\.storeManaged/.test(html));
+  assert.ok(/api\.updateInfo\?\.\(\)/.test(js), "nothing calls update:info");
+  assert.ok(/meta\.storeManaged/.test(js));
 });
 
 check("a Store build never kicks off an update check from the renderer", () => {
-  assert.ok(/if \(!storeManaged\) api\.updateCheck/.test(html));
+  assert.ok(/if \(!storeManaged\) api\.updateCheck/.test(js));
 });
 
 check("the Startup row says where the switch actually is", () => {
   assert.ok(/id="startup-store-note"/.test(html));
-  assert.ok(/function applyStoreUi\(\)/.test(html));
-  assert.ok(/applyStoreUi\(\);/.test(html), "applyStoreUi is defined but never called");
-  assert.ok(/auto\.disabled = true/.test(html), "the Run on startup checkbox is still usable");
+  assert.ok(/function applyStoreUi\(\)/.test(js));
+  assert.ok(/applyStoreUi\(\);/.test(js), "applyStoreUi is defined but never called");
+  assert.ok(/auto\.disabled = true/.test(js), "the Run on startup checkbox is still usable");
 });
 
 check("the update banner stays hidden in a Store build", () => {
-  const at = html.indexOf("async function refreshUpdateBanner()");
+  const at = js.indexOf("async function refreshUpdateBanner()");
   assert.ok(at !== -1);
-  const fn = html.slice(at, at + 600);
+  const fn = js.slice(at, at + 600);
   assert.ok(/if \(storeManaged\) \{ banner\.style\.display = 'none'; return; \}/.test(fn));
 });
 

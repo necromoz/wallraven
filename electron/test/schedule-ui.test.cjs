@@ -9,31 +9,11 @@
 //
 // Run with: node electron/test/schedule-ui.test.cjs
 
-const fs = require("fs");
-const path = require("path");
 const assert = require("assert");
+const { JS, extractFrom, extractConstFrom } = require("./sources.cjs");
 
-const HTML = fs
-  .readFileSync(path.join(__dirname, "..", "settings.html"), "utf8")
-  .replace(/\r\n/g, "\n");
-
-function extract(name) {
-  const at = HTML.indexOf(`function ${name}(`);
-  assert.ok(at !== -1, `no function ${name} in settings.html`);
-  const open = HTML.indexOf("{", HTML.indexOf(")", at));
-  let depth = 0;
-  for (let i = open; i < HTML.length; i++) {
-    if (HTML[i] === "{") depth++;
-    else if (HTML[i] === "}") { depth--; if (depth === 0) return HTML.slice(at, i + 1); }
-  }
-  throw new Error(`unbalanced braces reading ${name}`);
-}
-
-function extractConst(name) {
-  const m = new RegExp("const " + name + " = ([\\s\\S]*?);\\n", "m").exec(HTML);
-  assert.ok(m, `no const ${name}`);
-  return `const ${name} = ${m[1]};`;
-}
+const extract = (name) => extractFrom(JS, name);
+const extractConst = (name) => extractConstFrom(JS, name);
 
 const api = new Function(`
   ${extractConst("DAY_LABELS")}

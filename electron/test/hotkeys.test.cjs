@@ -191,14 +191,13 @@ check("there is an IPC handler for the card to ask", () => {
 });
 
 check("the settings window shows it", () => {
-  const html = fs.readFileSync(path.join(__dirname, "..", "settings.html"), "utf8");
-  assert.ok(/id="hk-status"/.test(html), "the hotkeys card has nowhere to show this");
-  assert.ok(/function renderHotkeyStatus\(\)/.test(html));
-  assert.ok(/api\.onHotkeysStatus/.test(html), "live updates are not wired");
+  const { HTML, JS, PRELOAD } = require("./sources.cjs");
+  assert.ok(/id="hk-status"/.test(HTML), "the hotkeys card has nowhere to show this");
+  assert.ok(/function renderHotkeyStatus\(\)/.test(JS));
+  assert.ok(/api\.onHotkeysStatus/.test(JS), "live updates are not wired");
   // The cards are rebuilt on navigation, so the status has to be re-rendered.
-  assert.ok(/renderHotkeyStatus\(\);\n  applyStoreUi\(\);/.test(html.replace(/\r\n/g, "\n")));
-  const preload = fs.readFileSync(path.join(__dirname, "..", "preload.cjs"), "utf8");
-  assert.ok(/hotkeysStatus:/.test(preload) && /onHotkeysStatus:/.test(preload));
+  assert.ok(/renderHotkeyStatus\(\);\n  applyStoreUi\(\);/.test(JS));
+  assert.ok(/hotkeysStatus:/.test(PRELOAD) && /onHotkeysStatus:/.test(PRELOAD));
 });
 
 console.log();

@@ -13,12 +13,9 @@
 //
 // Run with: node electron/test/window.test.cjs
 
-const fs = require("fs");
-const path = require("path");
 const assert = require("assert");
 const { JSDOM, VirtualConsole } = require("jsdom");
-
-const HTML = fs.readFileSync(path.join(__dirname, "..", "settings.html"), "utf8");
+const { HTML, JS } = require("./sources.cjs");
 
 let passed = 0;
 let failed = 0;
@@ -115,9 +112,11 @@ function loadWindow() {
   const onRejection = (e) => note("unhandled rejection: " + ((e && e.message) || e));
   process.on("unhandledRejection", onRejection);
 
-  const script = HTML.match(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/)[1];
+  // settings.html loads settings.js with a script tag, and jsdom is told not to
+  // fetch anything, so the file is read and run here instead. Same code, same
+  // order: the tag is at the end of the body, after the markup exists.
   try {
-    dom.window.eval(script);
+    dom.window.eval(JS);
   } catch (e) {
     errors.push("the window threw while starting: " + e.message);
   }

@@ -11,23 +11,10 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const HTML = fs
-  .readFileSync(path.join(__dirname, "..", "settings.html"), "utf8")
-  .replace(/\r\n/g, "\n");
-const CHANGELOG = fs.readFileSync(path.join(__dirname, "..", "CHANGELOG.md"), "utf8");
-const MAIN = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8");
+const { JS, MAIN, read, extractFrom } = require("./sources.cjs");
+const CHANGELOG = read("CHANGELOG.md");
 
-function extract(name) {
-  const at = HTML.indexOf(`function ${name}(`);
-  assert.ok(at !== -1, `no function ${name} in settings.html`);
-  const open = HTML.indexOf("{", HTML.indexOf(")", at));
-  let depth = 0;
-  for (let i = open; i < HTML.length; i++) {
-    if (HTML[i] === "{") depth++;
-    else if (HTML[i] === "}") { depth--; if (depth === 0) return HTML.slice(at, i + 1); }
-  }
-  throw new Error(`unbalanced braces reading ${name}`);
-}
+const extract = (name) => extractFrom(JS, name);
 
 const api = new Function(`
   ${extract("parseChangelogVersions")}
