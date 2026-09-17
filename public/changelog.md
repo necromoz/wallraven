@@ -1,5 +1,19 @@
 # Wallraven changelog
 
+## v1.1.0 — 17 Sep 2026
+- **Signing in works again.** It had stopped working entirely: the website moved and the app did not follow the redirect, so it gave up and blamed your internet connection. It now follows the site wherever it lives.
+- **Linking the app to your account is safe.** Previously, anyone who could get you to open a link could have signed their own copy of WallRaven into your account with one button press, and nothing on the page would have looked wrong. Now the app shows you a code and the website asks you to type it, so linking only works if you are sat at the machine doing the asking.
+- **Your saved wallpapers stop disappearing.** Syncing stripped the file locations off your playlists, which left the cache cleaner free to delete the pictures in them. Liked wallpapers could vanish from disk with nothing to explain it.
+- **Wallpapers no longer stop changing until you restart.** Opening the presets gallery when a change was due could jam the queue permanently. The app sat on "Fetching…" forever and said nothing.
+- **Disliking hits the right wallpaper.** After pressing Back, Like and Dislike acted on a different picture from the one on screen, so Dislike could blacklist a wallpaper you had never seen and then rotate away from the one you were looking at.
+- **Opening Settings no longer resets your rotation timer.** WallRaven remembers which page you were on, and saving that was restarting the countdown. Glancing at Settings 25 minutes into a 30-minute cycle cost you another 30 minutes.
+- **"Different wallpaper per monitor" shows the wallpaper it just fetched.** With a playlist selected it was quietly ignoring every new wallpaper and showing the same fixed pair forever, while still announcing the change.
+- **Choosing a wallpaper by hand respects your settings.** Picking one from Browse skipped lock screen mirroring and the per-monitor mode, which only worked on automatic changes.
+- **Pausing from the tray updates the window.** It kept saying "Playing", and pressing it then started cycling again.
+- **WallRaven tells you when it breaks.** Crashes are now recorded and shown in Settings, with your username, folders and Wallhaven key stripped out. Nothing is sent anywhere unless you read it and choose to send it.
+- **Cloud sync is more careful with your settings.** It no longer overwrites the cloud when it cannot read it first, no longer signs you out because a network device returned the wrong error, and tells you when a download fails instead of continuing to report everything as fine.
+- **Sign-in with Google has been removed** for now. It only ever worked through the service that used to host the website, so it could not come with us. Email and password are unaffected.
+
 ## v1.0.2 — 16 Sep 2026
 - **Updates are checked before they are installed**: WallRaven now only accepts an update from its own release sites, over a secure connection, and checks the downloaded installer against a published fingerprint before running it. If anything does not match, the update is discarded rather than installed. A silent background update will not run at all unless that check passed.
 
