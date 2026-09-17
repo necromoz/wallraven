@@ -1345,6 +1345,9 @@
       <button class="btn secondary" id="btn-upd-page" type="button" style="display:none;">Open release page</button>
     </div>
   </div>
+  <div class="row" id="upd-store-note" style="display:none;"><label></label>
+    <div class="help" style="margin:0; flex:1;" id="upd-store-text"></div>
+  </div>
   <div class="row"><label></label>
     <div style="flex:1;">
       <div id="upd-progress-wrap" style="display:none; height:8px; background:rgba(255,255,255,.12); border-radius:6px; overflow:hidden; max-width:420px;">
@@ -1359,7 +1362,7 @@
       <label class="check"><input type="checkbox" id="autoDownloadUpdates"/> <span>Download new installers in the background as soon as they appear</span></label>
     </div>
   </div>
-  <div class="help" style="margin: -4px 0 8px 174px;">WallRaven checks for updates at startup and every 6 hours. Installing launches the signed-in-place installer and restarts the app — your settings, cache and playlists are kept.</div>
+  <div class="help" id="upd-help-auto" style="margin: -4px 0 8px 174px;">WallRaven checks for updates at startup and every 6 hours. Installing launches the signed-in-place installer and restarts the app — your settings, cache and playlists are kept.</div>
   <hr/>
   <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
     <button class="btn secondary" id="btn-changelog-toggle" type="button" style="flex:1; text-align:left;">
@@ -2553,6 +2556,12 @@ function renderCachePlan(plan, applied = false) {
 }
 
 // ---------- Updates card ----------
+// Set once from the main process. The renderer has no way of knowing how the
+// app was installed, and guessing from the path here would only duplicate the
+// answer main.cjs already has.
+let storeManaged = false;
+let storeMessage = '';
+
 function setUpdStatus(msg, kind = '') {
   const el = $('#upd-status'); if (!el) return;
   el.textContent = msg || '\u00a0';
@@ -2564,6 +2573,28 @@ function renderUpdatesCard() {
   const i = config?.updateInfo || {};
   const curEl = $('#upd-current'); if (curEl) curEl.textContent = cur ? 'v' + cur : 'unknown';
   const latestEl = $('#upd-latest'); if (!latestEl) return;
+
+  // In a Microsoft Store build the app cannot update itself: the package lives
+  // in a system-owned folder and the Store services it. Showing controls that
+  // silently do nothing would be worse than showing none, so the card explains
+  // who is in charge instead.
+  const storeNote = $('#upd-store-note');
+  if (storeManaged) {
+    latestEl.textContent = 'Managed by the Microsoft Store';
+    for (const sel of ['#btn-upd-check', '#btn-upd-download', '#btn-upd-install', '#btn-upd-page']) {
+      const b = $(sel); if (b) b.style.display = 'none';
+    }
+    const autoRow = $('#autoInstallUpdates')?.closest('.row'); if (autoRow) autoRow.style.display = 'none';
+    const autoHelp = $('#upd-help-auto'); if (autoHelp) autoHelp.style.display = 'none';
+    if (storeNote) {
+      storeNote.style.display = '';
+      const t = $('#upd-store-text'); if (t) t.textContent = storeMessage;
+    }
+    setUpdStatus('');
+    return;
+  }
+  if (storeNote) storeNote.style.display = 'none';
+
   const newer = !!i.latestVersion && cmpVersions(i.latestVersion, cur) > 0;
   latestEl.textContent = i.latestVersion
     ? `v${i.latestVersion}${newer ? ' — update available' : ' — you are up to date'}${i.checkedAt ? ' (checked ' + new Date(i.checkedAt).toLocaleString() + ')' : ''}`
@@ -2629,6 +2660,9 @@ function cmpVersions(a, b) {
 async function refreshUpdateBanner() {
   const info = config?.updateInfo || {};
   const banner = $('#update-banner'); if (!banner) return;
+  // Never nag about a version the Store will bring on its own -- and never
+  // show a stale one left behind by an earlier, non-Store install.
+  if (storeManaged) { banner.style.display = 'none'; return; }
   const cur = (document.getElementById('app-version')?.textContent || '').replace(/^v/, '');
   if (!info.latestVersion || info.latestVersion === info.dismissed) { banner.style.display = 'none'; return; }
   // Only advertise strictly newer versions — never the same or an older one.
@@ -4184,7 +4218,17 @@ api.onConfigChanged?.(async (cfg) => {
   refreshUpdateBanner();
   await refreshAccount();
 
-  api.updateCheck?.().then(info => { if (info) { config.updateInfo = info; refreshUpdateBanner(); renderUpdatesCard(); } }).catch(() => {});
+  try {
+    const meta = await api.updateInfo?.();
+    if (meta && meta.storeManaged) {
+      storeManaged = true;
+      storeMessage = meta.storeMessage || 'The Microsoft Store keeps this copy up to date.';
+    }
+  } catch {}
+  renderUpdatesCard();
+  refreshUpdateBanner();
+
+  if (!storeManaged) api.updateCheck?.().then(info => { if (info) { config.updateInfo = info; refreshUpdateBanner(); renderUpdatesCard(); } }).catch(() => {});
   api.onUpdateStatus?.(async (s) => {
     const wrap = $('#upd-progress-wrap'), bar = $('#upd-progress');
     if (s.phase === 'downloading') {
@@ -4198,6 +4242,7 @@ api.onConfigChanged?.(async (cfg) => {
     else if (s.phase === 'available') { config = await api.getConfig(); renderUpdatesCard(); refreshUpdateBanner(); }
     else if (s.phase === 'uptodate') { config = await api.getConfig(); renderUpdatesCard(); setUpdStatus('You are on the latest version.', 'ok'); }
     else if (s.phase === 'installing') setUpdStatus('Launching installer — WallRaven will close…');
+    else if (s.phase === 'store') { storeManaged = true; storeMessage = s.message || storeMessage; renderUpdatesCard(); }
     else if (s.phase === 'error') setUpdStatus(s.message || 'Update failed', 'err');
   });
 

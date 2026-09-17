@@ -52,6 +52,10 @@ if (IS_PORTABLE) {
 }
 
 const { SITE_ORIGIN, siteUrls } = require('./site.cjs');
+const { isStoreBuild, STORE_UPDATE_MESSAGE } = require('./packaging.cjs');
+// Answered once at startup: nothing about how the app was installed changes
+// while it is running.
+const STORE_BUILD = isStoreBuild();
 const DATA_DIR = path.join(app.getPath('userData'));
 const DEFAULT_CACHE_DIR = path.join(DATA_DIR, 'cache');
 // Mutable: the user can relocate the cache from Settings (config.cacheDir).
@@ -1921,6 +1925,11 @@ async function fetchUpdateManifest() {
 }
 
 async function checkForUpdates(force = false) {
+  // A Store build has no business announcing updates it cannot install.
+  if (STORE_BUILD) {
+    sendUpdateStatus({ phase: 'store', message: STORE_UPDATE_MESSAGE });
+    return config.updateInfo || {};
+  }
   try {
     const last = config.updateInfo?.checkedAt || 0;
     if (!force && Date.now() - last < 6 * 60 * 60 * 1000) return config.updateInfo;
@@ -1975,6 +1984,7 @@ async function checkForUpdates(force = false) {
 let updateDownloading = false;
 // Download the installer for the known latest version into <userData>/updates.
 async function downloadUpdate() {
+  if (STORE_BUILD) return { ok: false, reason: 'store' };
   const info = config.updateInfo || {};
   const url = info.downloadUrl || '';
   if (!url) throw new Error('No installer URL for this release');
@@ -2072,6 +2082,7 @@ async function downloadUpdate() {
 // Launch the downloaded installer and quit so it can replace the files.
 // silent = true runs the NSIS installer with /S (no UI); it relaunches Wallraven itself.
 async function installUpdate(silent = false) {
+  if (STORE_BUILD) return { ok: false, reason: 'store' };
   const info = config.updateInfo || {};
   const file = info.downloadedFile;
   if (!file || !fs.existsSync(file)) return { ok: false, reason: 'Installer not downloaded yet' };
@@ -2116,6 +2127,7 @@ async function installUpdate(silent = false) {
 // Silent update-on-launch: download the new installer, then install it and restart.
 let autoUpdateRunning = false;
 async function autoUpdateFlow() {
+  if (STORE_BUILD) return;
   if (autoUpdateRunning) return;
   autoUpdateRunning = true;
   try {
@@ -2195,7 +2207,7 @@ function updateTrayMenu() {
     { label: 'Settings…', click: openSettings },
     { label: `Fit: ${config.fitMode || 'fill'}  ·  Cycle: ${effectiveCycleMinutes()} min${paused ? ' (paused)' : ''}`, enabled: false },
     { label: (() => { const s = cacheStats(); return `Cache: ${s.totalMB.toFixed(1)} / ${config.cacheMaxMB} MB (${s.pinnedMB.toFixed(1)} pinned)`; })(), enabled: false },
-    { label: `Check for updates`, click: () => checkForUpdates(true).then(updateTrayMenu) },
+    ...(STORE_BUILD ? [] : [{ label: `Check for updates`, click: () => checkForUpdates(true).then(updateTrayMenu) }]),
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } },
   );
@@ -2898,7 +2910,12 @@ ipcMain.handle('update:dismiss', (_e, version) => {
 });
 ipcMain.handle('update:download', () => downloadUpdate());
 ipcMain.handle('update:install', () => installUpdate());
-ipcMain.handle('update:info', () => ({ current: app.getVersion(), info: config.updateInfo || {} }));
+ipcMain.handle('update:info', () => ({
+  current: app.getVersion(),
+  info: config.updateInfo || {},
+  storeManaged: STORE_BUILD,
+  storeMessage: STORE_BUILD ? STORE_UPDATE_MESSAGE : '',
+}));
 
 // Prefer the changelog shipped with the build. Some older staging scripts
 // omitted Markdown files, so fall back to the published copy rather than
@@ -3406,8 +3423,10 @@ else {
     registerHotkeys();
     // Kick an update check on startup, then every 6h.
     // Always check on launch (Teams-style), then every 6 hours.
-    setTimeout(() => checkForUpdates(true), 3000);
-    setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1000);
+    if (!STORE_BUILD) {
+      setTimeout(() => checkForUpdates(true), 3000);
+      setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1000);
+    }
 
     const startedHidden = process.argv.includes('--hidden');
     if (!startedHidden) openSettings();
