@@ -3201,6 +3201,19 @@ ipcMain.handle('app:portable', () => ({ portable: IS_PORTABLE, dataDir: DATA_DIR
 // opens it, which usually just works and is occasionally slow. If it cannot,
 // the image check refuses it with a plain message instead of setting a black
 // desktop.
+// A key for comparing two paths that mean the same folder.
+//
+// CI caught this on Windows and Linux did not: path.join uses a backslash on
+// Windows, so a folder built by joining did not match the same folder as it
+// arrives in an environment variable with forward slashes, and OneDrive was
+// offered twice. Separators, trailing separators and case are all noise here.
+function samePathKey(p) {
+  return String(p || '')
+    .replace(/[\\/]+/g, '/')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+}
+
 function cloudFolderCandidates(env, home) {
   const e = env || {};
   const join = (...parts) => path.join(...parts);
@@ -3223,14 +3236,14 @@ function cloudFolderCandidates(env, home) {
   const withPictures = [];
   const seen = new Set();
   for (const item of out) {
-    const key = item.path.toLowerCase();
+    const key = samePathKey(item.path);
     if (seen.has(key)) continue;
     seen.add(key);
     withPictures.push(item);
     if (!/pictures$/i.test(item.path)) {
       const pics = join(item.path, 'Pictures');
-      if (!seen.has(pics.toLowerCase())) {
-        seen.add(pics.toLowerCase());
+      if (!seen.has(samePathKey(pics))) {
+        seen.add(samePathKey(pics));
         withPictures.push({ label: `${item.label} \u203a Pictures`, path: pics });
       }
     }
@@ -3240,10 +3253,10 @@ function cloudFolderCandidates(env, home) {
 
 // Only the ones that are actually there, and only ones not already added.
 ipcMain.handle('folder:cloudRoots', () => {
-  const chosen = new Set((config.folderPaths || []).map((p) => String(p).toLowerCase()));
+  const chosen = new Set((config.folderPaths || []).map(samePathKey));
   return cloudFolderCandidates(process.env, app.getPath('home'))
     .filter((item) => {
-      if (chosen.has(item.path.toLowerCase())) return false;
+      if (chosen.has(samePathKey(item.path))) return false;
       try { return fs.statSync(item.path).isDirectory(); } catch { return false; }
     })
     .slice(0, 6);

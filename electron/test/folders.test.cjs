@@ -27,7 +27,13 @@ function extract(name) {
   throw new Error(`unbalanced braces reading ${name}`);
 }
 
-const cloudFolderCandidates = new Function("path", `${extract("cloudFolderCandidates")}; return cloudFolderCandidates;`)(path);
+const built = new Function(
+  "path",
+  `${extract("samePathKey")}
+   ${extract("cloudFolderCandidates")}
+   return { samePathKey, cloudFolderCandidates };`,
+)(path);
+const { samePathKey, cloudFolderCandidates } = built;
 
 let passed = 0;
 let failed = 0;
@@ -68,9 +74,28 @@ check("Pictures does not get a Pictures inside it", () => {
 
 check("the same folder is never offered twice", () => {
   // OneDrive appears both as an environment variable and as a guess at the
-  // folder name, and those are usually the same place.
-  const out = paths(cloudFolderCandidates({ OneDrive: `${HOME}/OneDrive` }, HOME));
-  assert.strictEqual(new Set(out).size, out.length, `duplicates: ${out.join(", ")}`);
+  // folder name, and those are usually the same place. This failed on Windows
+  // and passed on Linux, because path.join joins with a backslash there and
+  // the environment variable came back with forward slashes, so the two
+  // spellings of one folder did not match.
+  for (const spelling of [`${HOME}/OneDrive`, `${HOME}\\OneDrive`, `${HOME}\\OneDrive\\`]) {
+    const out = cloudFolderCandidates({ OneDrive: spelling }, HOME).map((x) => samePathKey(x.path));
+    assert.strictEqual(new Set(out).size, out.length, `duplicates for ${spelling}: ${out.join(", ")}`);
+  }
+});
+
+check("two spellings of one folder compare equal", () => {
+  assert.strictEqual(samePathKey("C:/Users/steve/OneDrive"), samePathKey("C:\\Users\\Steve\\OneDrive"));
+  assert.strictEqual(samePathKey("C:/Users/steve/OneDrive/"), samePathKey("C:/Users/steve/OneDrive"));
+  assert.notStrictEqual(samePathKey("C:/Users/steve/OneDrive"), samePathKey("C:/Users/steve/OneDrive2"));
+  assert.strictEqual(samePathKey(null), "");
+});
+
+check("a folder already added is compared the same way", () => {
+  const at = SRC.indexOf("ipcMain.handle('folder:cloudRoots'");
+  const handler = SRC.slice(at, at + 700);
+  assert.ok(/\(config\.folderPaths \|\| \[\]\)\.map\(samePathKey\)/.test(handler));
+  assert.ok(/chosen\.has\(samePathKey\(item\.path\)\)/.test(handler));
 });
 
 check("no home directory is not a crash", () => {
@@ -85,7 +110,7 @@ check("only folders that exist and are not already added are offered", () => {
   assert.ok(at !== -1, "nothing offers them");
   const handler = SRC.slice(at, at + 700);
   assert.ok(/statSync\(item\.path\)\.isDirectory\(\)/.test(handler), "a folder that is not there would still be offered");
-  assert.ok(/chosen\.has\(item\.path\.toLowerCase\(\)\)/.test(handler), "a folder already added would be offered again");
+  assert.ok(/chosen\.has\(samePathKey\(item\.path\)\)/.test(handler), "a folder already added would be offered again");
   assert.ok(/slice\(0, 6\)/.test(handler), "the list is unbounded");
 });
 
