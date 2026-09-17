@@ -45,8 +45,11 @@ caught before release.
 
 ## Running it locally
 
-Steve tests by hand, so the loop has to be short. Electron is a devDependency,
-which means the app runs straight from the repo with no packaging step:
+Steve does not use a terminal. `Run WallRaven.bat` at the repo root is his way
+in: double-click, it installs dependencies on first run and offers the two
+profiles below. Keep it working -- a test checks it still calls scripts that
+exist. Electron is a devDependency, so the app runs straight from the repo with
+no packaging step:
 
 - `npm run app` uses the real profile, so it sees the settings, cache, history
   and playlists of the installed copy. **Quit the installed WallRaven from the

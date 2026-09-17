@@ -175,6 +175,32 @@ check("update:info tells the renderer which kind of build this is", () => {
   assert.ok(/storeMessage/.test(handler));
 });
 
+console.log("running it from source");
+
+check("the double-click launcher calls scripts that exist", () => {
+  // This file is Steve's only way in: he does not use a terminal. Renaming a
+  // script in package.json without changing it would leave him with a window
+  // that opens, prints an npm error and closes.
+  const bat = fs.readFileSync(path.join(__dirname, "..", "..", "Run WallRaven.bat"), "utf8");
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8"));
+  for (const name of ["app", "app:clean"]) {
+    assert.ok(pkg.scripts[name], `package.json has no "${name}" script`);
+    assert.ok(bat.includes(`npm run ${name}`), `the launcher never runs "${name}"`);
+  }
+  assert.ok(/electron electron\/main\.cjs/.test(pkg.scripts.app), "npm run app no longer starts the app");
+  assert.ok(/--user-data-dir/.test(pkg.scripts["app:clean"]), "the clean profile is not separate any more");
+});
+
+check("the launcher waits rather than vanishing on an error", () => {
+  const bat = fs.readFileSync(path.join(__dirname, "..", "..", "Run WallRaven.bat"), "utf8");
+  // Every exit path pauses; a console window that closes instantly takes the
+  // error message with it.
+  const exits = bat.match(/exit \/b 1/g) || [];
+  const pauses = bat.match(/\npause/g) || [];
+  assert.ok(exits.length >= 2, "no failure paths");
+  assert.ok(pauses.length >= exits.length + 1, "a failure path closes without pausing");
+});
+
 console.log("the settings window honours it");
 
 const html = fs.readFileSync(path.join(__dirname, "..", "settings.html"), "utf8");
