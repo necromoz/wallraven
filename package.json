@@ -12,7 +12,7 @@
     "app:clean": "electron electron/main.cjs --user-data-dir=.devprofile",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "test": "node electron/test/logic.test.cjs && node electron/test/pairing.test.cjs && node electron/test/site.test.cjs && node electron/test/sync.test.cjs && node electron/test/gate.test.cjs && node electron/test/packaging.test.cjs && node electron/test/msix.test.mjs && node electron/test/history.test.cjs && node electron/test/hotkeys.test.cjs && node electron/test/settings-ui.test.cjs",
+    "test": "node electron/test/logic.test.cjs && node electron/test/pairing.test.cjs && node electron/test/site.test.cjs && node electron/test/sync.test.cjs && node electron/test/gate.test.cjs && node electron/test/packaging.test.cjs && node electron/test/msix.test.mjs && node electron/test/history.test.cjs && node electron/test/hotkeys.test.cjs && node electron/test/settings-ui.test.cjs && node electron/test/browse.test.cjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."

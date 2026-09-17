@@ -2692,13 +2692,32 @@ ipcMain.handle('folder:removeSource', (_e, { folderPath } = {}) => {
 
 
 // ---------- Static browse (search results without cycling) ----------
-ipcMain.handle('search:run', async (_e, { page = 1 } = {}) => {
+// What Browse is allowed to change for one search. Anything else -- purity,
+// categories, resolution, colours -- stays exactly as configured, so browsing
+// can never quietly widen what the app is willing to show.
+const BROWSE_SORTS = new Set(['relevance', 'date_added', 'views', 'favorites', 'toplist', 'random']);
+const BROWSE_RANGES = new Set(['1d', '3d', '1w', '1M', '3M', '6M', '1y']);
+
+function browseOverrides(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  if (BROWSE_SORTS.has(raw.sorting)) out.sorting = raw.sorting;
+  if (BROWSE_RANGES.has(raw.topRange)) out.topRange = raw.topRange;
+  return out;
+}
+
+// Browse used to save the whole settings form before every search, so looking
+// for something meant overwriting the search your wallpapers rotate on. It can
+// now be given a query and a sort for one search only, and touches nothing.
+ipcMain.handle('search:run', async (_e, { page = 1, query = null, overrides = null } = {}) => {
+  const overs = browseOverrides(overrides);
+  const source = typeof query === 'string' ? query : config.query;
   // Split on top-level commas → run one request per OR-group and union
   // results (dedupe by id). Preserves Wallhaven's `+`/space AND syntax
   // within each group. Single group behaves exactly like before.
-  const groups = splitQueryGroups(config.query);
+  const groups = splitQueryGroups(source);
   if (groups.length <= 1) {
-    const url = buildSearchUrl({}, page, groups[0] || '');
+    const url = buildSearchUrl(overs, page, groups[0] || '');
     const data = await httpsGetJSON(url);
     return { items: (data && data.data) || [], meta: (data && data.meta) || {} };
   }
@@ -2707,7 +2726,7 @@ ipcMain.handle('search:run', async (_e, { page = 1 } = {}) => {
   let meta = {};
   for (const g of groups) {
     try {
-      const data = await httpsGetJSON(buildSearchUrl({}, page, g));
+      const data = await httpsGetJSON(buildSearchUrl(overs, page, g));
       meta = (data && data.meta) || meta;
       for (const w of (data && data.data) || []) {
         if (!seen.has(w.id)) { seen.add(w.id); items.push(w); }

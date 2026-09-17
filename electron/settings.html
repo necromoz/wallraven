@@ -860,9 +860,6 @@
       <option value="1y">Last year</option>
     </select>
   </div>
-  <div class="row"><label>AI art</label>
-    <select id="aiArtFilter"><option value="1">Exclude AI generated</option><option value="0">Include AI generated</option></select>
-  </div>
   <div class="row"><label>Blacklist tag IDs</label>
     <input id="blacklistTagIds" type="text" placeholder="e.g. 65,412,890 — excluded from every search" />
   </div>
@@ -871,21 +868,33 @@
 
 
 <template id="tpl-browse">
+  <div class="card-intro">Look through Wallhaven without touching your own settings. What you type here is used for this search only: the search your wallpapers rotate on is the one in Search &amp; filters, and it stays exactly as you left it.</div>
   <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+    <input id="browseQuery" type="text" placeholder="Search for anything, or leave empty for your saved search" style="flex:1; min-width:200px;" />
+    <select id="browseSort" style="min-width:150px;" title="How to order the results">
+      <option value="">My saved sort order</option>
+      <option value="toplist:1M">Top this month</option>
+      <option value="toplist:1w">Top this week</option>
+      <option value="date_added">Newest first</option>
+      <option value="relevance">Best match</option>
+      <option value="random">Random</option>
+    </select>
     <button class="btn" id="btn-browse-run" type="button">Search</button>
-    <button class="btn secondary" id="btn-browse-prev" type="button">‹ Prev</button>
-    <span id="browsePageLabel" style="color:var(--muted); font-size:12px; min-width:80px; text-align:center;">page 1</span>
-    <button class="btn secondary" id="btn-browse-next" type="button">Next ›</button>
-    <span style="flex:1;"></span>
-    <span style="color:var(--muted); font-size:11px;">Uses your Search &amp; filters card settings</span>
   </div>
-  <div class="row"><label>Add to playlist on <strong>+</strong></label>
-    <select id="browseAddTarget"><option value="">(don't add, just set as wallpaper)</option></select>
+  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+    <button class="btn secondary" id="btn-browse-prev" type="button">‹ Previous page</button>
+    <span id="browsePageLabel" style="color:var(--muted); font-size:12px; min-width:90px; text-align:center;">page 1</span>
+    <button class="btn secondary" id="btn-browse-next" type="button">Next page ›</button>
+    <span style="flex:1;"></span>
+    <span style="color:var(--muted); font-size:11px;">Your resolution, colour and purity filters still apply</span>
+  </div>
+  <div class="row"><label>When I press <strong>+</strong></label>
+    <select id="browseAddTarget"><option value="">Just set it as my wallpaper</option></select>
   </div>
   <div id="browseGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:8px; max-height:560px; overflow-y:auto;">
-    <span style="color:var(--muted); font-size:12px;">Click <strong>Search</strong> to load results.</span>
+    <span style="color:var(--muted); font-size:12px;">Loading the top wallpapers of the month…</span>
   </div>
-  <div class="help" style="margin-top:8px;">Click a thumbnail to set it as your wallpaper (pauses cycling). Use <strong>+</strong> to add to the selected playlist.</div>
+  <div class="help" style="margin-top:8px;">Click a picture to use it now, which pauses the automatic changes. <strong>+</strong> also saves it to the playlist chosen above.</div>
 </template>
 
 <template id="tpl-resolution">
@@ -1016,7 +1025,7 @@
     <button class="btn" id="btn-preset-save" type="button">Save as new</button>
   </div>
   <div class="help" style="margin-top:8px;">
-    Built-in presets (Default, General, Anime, People, Nature, Toplist, Latest) are always available and use your current screen resolution and aspect ratio. "Default" resets everything back to the app defaults. <strong>Overwrite</strong> updates the selected preset with your current settings without retyping the name. Presets capture module order, collapsed state, search query, tags, categories, purity, sort, resolution, aspect ratios, colours, AI filter, cycle interval and Wallhaven source. API key, theme and startup options are left alone.
+    Built-in presets (Default, General, Anime, People, Nature, Toplist, Latest) are always available and use your current screen resolution and aspect ratio. "Default" resets everything back to the app defaults. <strong>Overwrite</strong> updates the selected preset with your current settings without retyping the name. Presets capture module order, collapsed state, search query, tags, categories, purity, sort, resolution, aspect ratios, colours, cycle interval and Wallhaven source. API key, theme and startup options are left alone.
   </div>
 </template>
 
@@ -1032,7 +1041,7 @@
   <div id="libList" style="max-height:320px; overflow:auto; display:flex; flex-direction:column; gap:6px;"></div>
   <div class="help" style="margin-top:10px;">
     Presets that come with WallRaven are listed first, then presets shared by other people.
-    Applying one only changes the search, tags, categories, purity, sort, colours and AI filter.
+    Applying one only changes the search, tags, categories, purity, sort and colours.
     Your own timetable, cycle interval, resolution, aspect ratio, monitor setup, API key, theme and
     layout are never touched.
   </div>
@@ -1799,6 +1808,10 @@ function goPage(id) {
   if (leavingLibrary) { try { releaseGalleries(); } catch {} }
   if (id === 'library') { try { loadHistory(); renderFavourites(); } catch {} }
   if (id === 'presets') { try { refreshPresetsUI(); } catch {} }
+  // Opening Browse with an empty grid and a Search button asked the user to
+  // press a button to find out what the card does. One request to Wallhaven,
+  // against a 45-per-minute limit, is not worth saving.
+  if (id === 'browse' && !browseState.searched) { try { runBrowse(); } catch {} }
 }
 
 
@@ -1892,7 +1905,7 @@ function hydrateInputs(c) {
   chk('#cat-general', c.categories?.general); chk('#cat-anime', c.categories?.anime); chk('#cat-people', c.categories?.people);
   chk('#pur-sfw', c.purity?.sfw); chk('#pur-sketchy', c.purity?.sketchy); chk('#pur-nsfw', c.purity?.nsfw);
   set('#sorting', c.sorting); set('#topRange', c.topRange);
-  set('#aiArtFilter', String(c.aiArtFilter));
+
   // Update "Current screen" option label with real device dimensions
   const cur = $('#opt-current-res');
   if (cur) {
@@ -1975,7 +1988,10 @@ function collect() {
     purity: { sfw: chk('#pur-sfw'), sketchy: chk('#pur-sketchy'), nsfw: chk('#pur-nsfw') },
     sorting: val('#sorting') || 'random',
     topRange: val('#topRange') || '1M',
-    aiArtFilter: num('#aiArtFilter', 1),
+    // Wallhaven filters AI art out by default and the control only offered a
+    // way to put it back, which is not what "Exclude AI art" reads as. Pinned
+    // to exclude, including for anyone whose saved config said otherwise.
+    aiArtFilter: 1,
     atleastResolution: (val('#atleastResolution') === '__current__' ? ($('#opt-current-res')?.dataset.res || '') : val('#atleastResolution')),
     resolutions: val('#resolutions').trim(),
     ratios: (() => {
@@ -3669,7 +3685,17 @@ async function loadCollectionItems() {
 }
 
 // ---------- Static Browse ----------
-const browseState = { page: 1, lastPage: 1, items: [] };
+// `searched` records whether this session has run a browse yet, so opening the
+// page can load something rather than showing an empty grid and a button.
+const browseState = { page: 1, lastPage: 1, items: [], searched: false, query: '', sort: 'toplist:1M' };
+
+// The sort dropdown carries both the sort and, for toplists, the period.
+function browseSortOverrides(value) {
+  const v = String(value || '');
+  if (!v) return {};
+  const [sorting, topRange] = v.split(':');
+  return topRange ? { sorting, topRange } : { sorting };
+}
 function refreshBrowseTargetSelect() {
   const sel = $('#browseAddTarget'); if (!sel) return;
   const pls = (config && config.playlists) || {};
@@ -3683,10 +3709,20 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;'
 async function runBrowse() {
   const grid = $('#browseGrid'); if (!grid) return;
   grid.innerHTML = '<span style="color:var(--muted); font-size:12px;">Searching…</span>';
+  browseState.searched = true;
   try {
-    // Save current search settings first so server-side buildSearchUrl uses them
-    config = await api.setConfig(collect());
-    const res = await api.searchRun({ page: browseState.page });
+    // This used to save the whole settings form before every search, so
+    // looking something up here overwrote the search the wallpapers rotate on.
+    // The query and sort are now sent with the request and used once.
+    const q = ($('#browseQuery')?.value ?? browseState.query).trim();
+    browseState.query = q;
+    const sortValue = $('#browseSort')?.value ?? browseState.sort;
+    browseState.sort = sortValue;
+    const res = await api.searchRun({
+      page: browseState.page,
+      query: q || null,
+      overrides: browseSortOverrides(sortValue),
+    });
     browseState.items = res.items || [];
     browseState.lastPage = res.meta?.last_page || 1;
     renderBrowseResults();
@@ -3717,6 +3753,17 @@ function renderBrowseResults() {
 function wireBrowse() {
   if (!$('#btn-browse-run')) return;
   refreshBrowseTargetSelect();
+  // The card is rebuilt on every navigation, so put back what was typed.
+  const q = $('#browseQuery');
+  if (q) {
+    q.value = browseState.query;
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { browseState.page = 1; runBrowse(); } });
+  }
+  const sort = $('#browseSort');
+  if (sort) {
+    sort.value = browseState.sort;
+    sort.addEventListener('change', () => { browseState.page = 1; runBrowse(); });
+  }
   $('#btn-browse-run').onclick = () => { browseState.page = 1; runBrowse(); };
   $('#btn-browse-prev').onclick = () => { if (browseState.page > 1) { browseState.page--; runBrowse(); } };
   $('#btn-browse-next').onclick = () => { if (browseState.page < browseState.lastPage) { browseState.page++; runBrowse(); } };
@@ -4335,6 +4382,7 @@ api.onConfigChanged?.(async (cfg) => {
     }
   } catch {}
   applyStoreUi();
+  if (uiPage === 'browse' && !browseState.searched) { try { runBrowse(); } catch {} }
   try { hotkeyStatus = await api.hotkeysStatus?.(); } catch {}
   renderHotkeyStatus();
   api.onHotkeysStatus?.((st) => { hotkeyStatus = st; renderHotkeyStatus(); });
