@@ -1,5 +1,16 @@
 # Wallraven changelog
 
+## v1.2.0-beta.2 — 17 Sep 2026
+
+### New
+- **The timetable explains itself.** Every entry now says in plain words when it starts, when it stops, on which days and how often the wallpaper changes. The entry in charge right now is marked, entries are listed in the order they take effect, days are buttons with weekday and weekend shortcuts, and two entries set to the same time on the same day say so instead of one silently never happening.
+- **WallRaven introduces itself.** A first run explains what the app does and where the controls are; an update shows what was added, and only what was added.
+- **Your cloud folders are offered.** Dropbox, Google Drive and OneDrive all sync into ordinary folders, so "Pictures on this PC" now offers whichever of them exist on this machine, and their Pictures subfolders, as one-click buttons.
+
+### Fixed
+- **Every control in the Settings window works again.** A mistake in the beta.1 build threw an error while the window was starting, which left buttons and sliders unwired from that point on. Fade was the obvious casualty; it was not the only one.
+- **AI art stays excluded** even for anyone whose saved settings had switched it back on.
+
 ## v1.2.0-beta.1 — 17 Sep 2026
 
 ### New
