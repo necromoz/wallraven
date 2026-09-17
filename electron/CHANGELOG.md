@@ -1,45 +1,24 @@
 # Wallraven changelog
 
-## v1.2.0-beta.4 — 17 Sep 2026
-
-The first build produced by the build server rather than by hand.
-
-### Fixed
-- **OneDrive is no longer offered twice** in the folder list. Windows and the app spelled the same folder two different ways, so it did not recognise its own suggestion.
-- **A hung wallpaper fetch can no longer come back and overwrite a newer one.** If a change took more than 30 seconds, the app would start again without it, and the original would eventually finish and put its own wallpaper on top of the one you had asked for.
-
-## v1.2.0-beta.3 — 17 Sep 2026
-
-### Fixed
-- **The window no longer has a large empty band in it.** In the raven themes, anything between the title bar and the rest of the window was being painted over by the theme's own background: it still took up its space, so the side bar stopped meeting the top and every page started far too low. The what's new panel was the visible casualty; the update notice had the same fault and nobody had hit it yet.
-- **The timetable reads better at the end of the day.** The last entry now says it runs until the first entry the next morning, rather than "until the next entry".
-
-## v1.2.0-beta.2 — 17 Sep 2026
-
-### New
-- **The timetable explains itself.** Every entry now says in plain words when it starts, when it stops, on which days and how often the wallpaper changes. The entry in charge right now is marked, entries are listed in the order they take effect, days are buttons with weekday and weekend shortcuts, and two entries set to the same time on the same day say so instead of one silently never happening.
-- **WallRaven introduces itself.** A first run explains what the app does and where the controls are; an update shows what was added, and only what was added.
-- **Your cloud folders are offered.** Dropbox, Google Drive and OneDrive all sync into ordinary folders, so "Pictures on this PC" now offers whichever of them exist on this machine, and their Pictures subfolders, as one-click buttons.
-
-### Fixed
-- **Every control in the Settings window works again.** A mistake in the beta.1 build threw an error while the window was starting, which left buttons and sliders unwired from that point on. Fade was the obvious casualty; it was not the only one.
-- **AI art stays excluded** even for anyone whose saved settings had switched it back on.
-
-## v1.2.0-beta.1 — 17 Sep 2026
+## v1.2.0 — 17 Sep 2026
 
 ### New
 - **Browse has its own search.** Looking something up no longer overwrites the search your wallpapers rotate on. The box and the sort order in Browse apply to that search only, and opening the page shows the top wallpapers of the month without being asked.
 - **Saving does something you can see.** Change what you are searching for, press Save, and a matching wallpaper arrives straight away instead of at some point in the next half hour.
-- **The wallpaper on screen is in the title bar.** Like, dislike and skip act on something this window is covering up, so there is now a thumbnail of it next to those buttons.
-- **The timetable explains itself.** Every entry says in words when it starts, when it stops, on which days and how often it changes, the entry in charge right now is marked, and two entries set to the same time say so.
-- **Settings are grouped.** General is now Appearance, Startup, Gaming, Network and Portable mode, and each setting's explanation sits with the setting rather than running into the next one.
+- **The wallpaper on screen is in the title bar**, next to the like and dislike buttons that act on it.
+- **The timetable explains itself.** Every entry says in plain words when it starts, when it stops, on which days and how often the wallpaper changes. The entry in charge is marked, entries are listed in the order they take effect, days are buttons with weekday and weekend shortcuts, and two entries set to the same time on the same day say so instead of one silently never happening.
+- **WallRaven introduces itself.** A first run explains what the app does and where the controls are; an update shows what was added.
+- **Your cloud folders are offered.** Dropbox, Google Drive and OneDrive all sync into ordinary folders, so "Pictures on this PC" offers whichever of them exist on this machine, and their Pictures subfolders, as one-click buttons.
+- **Settings are grouped.** General is now Appearance, Startup, Gaming, Network and Portable mode, and each setting's explanation sits with the setting.
 - **Sizes read as sizes.** 20480 MB is 20 GB.
 
 ### Fixed
 - **Back and Forward work.** They did nothing at all once the cache had deleted the picture, which it does constantly. A wallpaper from Wallhaven is now downloaded again, pictures from your own folders that have been deleted are skipped, and the arrows grey out when there is nothing left to go back to.
 - **The app can no longer claim a wallpaper it never set.** Windows accepts a picture that is not there, paints the desktop black and reports success, so the history, the statistics and the notification all recorded a wallpaper nobody could see.
+- **A hung change can no longer overwrite a newer one.** If a change took more than 30 seconds the app started again without it, and the original would eventually finish and put its own wallpaper on top of the one you had asked for.
 - **Keyboard shortcuts say when they are refused.** Another program owning the combination made the shortcut do nothing, with nothing anywhere to explain it.
 - **Fade is back.** It was being deleted the first time you clicked anything in the sidebar.
+- **Your timetable survives a sync.** A settings sync from your account could replace a timetable that had entries in it with an empty one.
 - **AI art stays excluded.** The control only offered a way to put it back, which is not what its label said.
 
 ## v1.1.0 — 17 Sep 2026
