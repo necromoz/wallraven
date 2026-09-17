@@ -344,23 +344,20 @@
   .wp-card { position:relative; aspect-ratio:16/9; background:var(--panel-2); border-radius:6px; border:2px solid transparent; cursor:pointer; overflow:hidden; }
   .wp-card.active { border-color:var(--accent); }
   .wp-card img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
-  .wp-card .hover { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,.75) 100%); opacity:0; transition:opacity .15s; display:flex; flex-direction:column; justify-content:flex-end; padding:6px; }
-  .wp-card:hover .hover, .wp-card:focus-within .hover { opacity:1; }
-  .wp-card .hover .meta { color:#fff; font-size:11px; margin-bottom:4px; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-  /* The reaction buttons only appear on hover, so a card that is liked or
-     disliked wears a permanent badge — that is what makes the state readable
-     at a glance, and clicking the matching button clears it. */
+  /* The controls used to appear only on hover, which meant a liked or disliked
+     card needed a badge on top of it to show its state at all: two mechanisms
+     solving the same problem, and neither visible on a touchpad without
+     hunting. The buttons are always on now and carry their own state, so the
+     badge is gone. Only the filename fades in, since that is reference rather
+     than something to press. */
+  .wp-card .hover { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,.55) 100%); transition:background .15s; display:flex; flex-direction:column; justify-content:flex-end; padding:6px; }
+  .wp-card:hover .hover, .wp-card:focus-within .hover { background:linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.8) 100%); }
+  .wp-card .hover .meta { color:#fff; font-size:11px; margin-bottom:4px; text-shadow:0 1px 2px rgba(0,0,0,.8); opacity:0; transition:opacity .15s; }
+  .wp-card:hover .hover .meta, .wp-card:focus-within .hover .meta { opacity:1; }
+  /* The border still carries the state, quietly, for anyone scanning the grid
+     rather than reading the buttons. */
   .wp-card[data-state="liked"] { border-color:var(--accent); }
   .wp-card[data-state="disliked"] { border-color:var(--danger, #e5484d); }
-  .wp-card[data-state="liked"]::after,
-  .wp-card[data-state="disliked"]::after {
-    content:'👍'; position:absolute; top:6px; left:6px; z-index:3;
-    width:24px; height:22px; display:flex; align-items:center; justify-content:center;
-    font-size:12px; border-radius:6px; background:var(--accent); color:#fff;
-    box-shadow:0 0 0 2px rgba(255,255,255,.85); pointer-events:none;
-  }
-  .wp-card[data-state="disliked"]::after { content:'👎'; background:var(--danger, #e5484d); }
-  .wp-card[data-state="liked"]:hover::after, .wp-card[data-state="disliked"]:hover::after { opacity:0; }
 
 
   /* ---- Cereal (easter egg) ---- */
@@ -439,12 +436,30 @@
   .stat .stat-l { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
   hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
   .help { font-size: 11px; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
-  .help.help-indent { margin: -4px 0 0 174px; }
+  /* Help text belongs to the control above it. The old rule pulled it up with a
+     negative margin and left no gap underneath, so a line of help sat as close
+     to the next setting as to the one it described -- with several settings in
+     a row the whole card read as one block of text. The rule ties it to its own
+     control and puts real space before the next one. */
+  .help.help-indent {
+    margin: 2px 0 16px 174px;
+    padding-left: 10px;
+    border-left: 2px solid var(--border);
+  }
+  /* One line at the top of a card, saying what the card is for. */
+  .card-intro {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.45;
+    margin: 0 0 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
   .card > .card-body { container-type: inline-size; }
   .card { container-type: inline-size; container-name: card; }
   @container (max-width: 420px) {
     .row { grid-template-columns: 1fr; align-items: start; gap: 4px 0; }
-    .help.help-indent { margin: 4px 0 0 0; }
+    .help.help-indent { margin: 4px 0 14px 0; }
     .slider-row { grid-template-columns: 1fr 64px; }
   }
   /* When a card ends up wide (few cards on a page, maximised window), let its
@@ -949,7 +964,7 @@
       <input type="range" id="cacheMaxMB" min="100" max="20480" step="100" />
       <input type="number" id="cacheMaxMBNum" min="100" max="20480" />
     </div>
-    <div class="help">MB - oldest wallpapers are deleted past this size. Files kept by a playlist or favourite never count as prunable.</div>
+    <div class="help" id="cacheLimitHelp">Megabytes. Once downloads pass this size the oldest are deleted to make room. Anything in a playlist or liked is kept whatever happens, and so is the wallpaper on screen.</div>
   </div>
   <div class="status" id="cacheStats" style="margin-top:8px;">&nbsp;</div>
   <hr/>
@@ -961,12 +976,12 @@
       <button class="btn secondary" id="btn-cache-default" type="button" title="Move back to the default location">Use default</button>
     </div>
   </div>
-  <div class="help help-indent">Downloaded wallpapers live here. The cache and your history survive updates &mdash; changing this asks whether to move existing files across.</div>
+  <div class="help help-indent">Downloaded wallpapers live here. Both the downloads and your history survive updates. Changing the folder asks whether to move what is already there.</div>
   <hr/>
 
   <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <button class="btn secondary" id="btn-clear">Clear cache</button>
-    <button class="btn secondary" id="btn-cache-test" title="Preview which wallpapers the size limit would delete">Test cache cleanup</button>
+    <button class="btn secondary" id="btn-clear" title="Deletes every downloaded wallpaper except the one on screen and anything kept">Delete all downloads</button>
+    <button class="btn secondary" id="btn-cache-test" title="Shows what the size limit would delete, without deleting anything">What would the limit delete?</button>
     <button class="btn secondary" id="btn-clear-dislikes" title="Allow disliked wallpapers to appear again">Clear dislikes (<span id="dislikeCount">0</span>)</button>
   </div>
   <div id="cacheTestOut" style="display:none; margin-top:8px; font-size:12px; color:var(--muted); max-height:220px; overflow:auto;"></div>
@@ -989,6 +1004,7 @@
 </template>
 
 <template id="tpl-presets">
+  <div class="card-intro">A preset is a saved set of search settings: what to look for, resolution, colours and the rest. Load one and WallRaven keeps fetching new wallpapers that match it. For a fixed set of pictures that never changes, use a playlist instead.</div>
   <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
     <select id="presetSelect" style="flex:1; min-width:160px;"><option value="">- saved presets -</option></select>
     <button class="btn secondary" id="btn-preset-apply" type="button">Apply</button>
@@ -1043,6 +1059,7 @@
 
 
 <template id="tpl-playlists">
+  <div class="card-intro">A playlist is a fixed set of pictures you have chosen, cycled in order. It does not search for anything and it does not change on its own. A preset is the opposite: saved search settings that fetch something new every time.</div>
   <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
     <select id="playlistSelect" style="flex:1; min-width:160px;"><option value="">- pick a playlist -</option></select>
     <button class="btn secondary" id="btn-playlist-rename" type="button">Rename</button>
@@ -1125,7 +1142,7 @@
 </template>
 
 <template id="tpl-app">
-
+  <div class="card-intro">How WallRaven looks and how it behaves on this PC. Nothing here changes which wallpapers you get.</div>
   <div class="row"><label>Theme</label>
     <select id="theme">
       <option value="midnight">Midnight</option>
@@ -1139,26 +1156,32 @@
       <option value="light">Light</option>
       <option value="glass">Glass ✨ (default)</option>
       <option value="raven">Raven 🐦‍⬛</option>
-      <option value="raven-beach">Raven Summer 🌶️</option>
-      <option value="raven-fire">Raven Fyra 🔥</option>
+      <option value="raven-beach">Raven Summer 🌶️ (sketchy)</option>
+      <option value="raven-fire">Raven Fyra 🔥 (sketchy)</option>
     </select>
   </div>
-  <div class="row"><label>Accent color</label><input id="uiAccent" type="color" /></div>
-  <div class="row"><label>Startup</label><div>
-    <label class="check"><input type="checkbox" id="autoStart"/> Run on startup</label>
-    <label class="check"><input type="checkbox" id="startMinimized"/> Start minimized to tray</label>
+  <div class="help help-indent">The two marked sketchy have a cheekier raven in the background. Everything else is a plain colour scheme.</div>
+  <div class="row"><label>Accent colour</label><input id="uiAccent" type="color" /></div>
+</template>
+
+<template id="tpl-startup">
+  <div class="row"><label>Starting up</label><div>
+    <label class="check"><input type="checkbox" id="autoStart"/> Start WallRaven when I sign in to Windows</label>
+    <label class="check"><input type="checkbox" id="startMinimized"/> Start in the tray, without opening this window</label>
     <div class="help" id="startup-store-note" style="display:none; margin:4px 0 0;"></div>
   </div></div>
   <div class="row"><label>Notifications</label>
-    <label class="check"><input type="checkbox" id="notifyOnChange"/> Notify when wallpaper changes</label>
+    <label class="check"><input type="checkbox" id="notifyOnChange"/> Tell me each time the wallpaper changes</label>
   </div>
   <div class="row"><label>Lock screen</label>
-    <label class="check"><input type="checkbox" id="matchLockScreen"/> Match Windows lock screen to current wallpaper</label>
+    <label class="check"><input type="checkbox" id="matchLockScreen"/> Put the wallpaper on the Windows lock screen too</label>
   </div>
-  <div class="help help-indent">When enabled, each new wallpaper is also applied as your lock-screen image so it rotates in sync. Uses the built-in Windows lock-screen API (no admin required).</div>
+  <div class="help help-indent">Each new wallpaper is applied to the lock screen as well, so the two stay in step. Uses the built-in Windows lock-screen API, no admin rights needed.</div>
+</template>
 
-  <div class="row"><label>Gaming</label>
-    <label class="check"><input type="checkbox" id="pauseOnFullscreen"/> Don't change wallpaper while a fullscreen app is running</label>
+<template id="tpl-gaming">
+  <div class="row"><label>While gaming</label>
+    <label class="check"><input type="checkbox" id="pauseOnFullscreen"/> Don’t change the wallpaper while a fullscreen app is running</label>
   </div>
   <div class="row"><label>Applies to</label>
     <select id="pauseFullscreenMode">
@@ -1176,20 +1199,25 @@
       <div class="status" id="detectStatus" style="margin-top:6px;">&nbsp;</div>
     </div>
   </div>
-  <div class="help help-indent">Comma-separated process names (the <code>.exe</code> is optional, case-insensitive). Manual "Next" always works.</div>
+  <div class="help help-indent">Separate names with commas. The <code>.exe</code> is optional and capitals do not matter. Pressing Next yourself always works, game or no game.</div>
+</template>
 
-  <div class="row"><label>Network</label>
-    <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
-      <label class="check"><input type="checkbox" id="offlineCachedOnlyManual"/> Offline / cached-only mode (skip Wallhaven, cycle the cache)</label>
-      <label class="check"><input type="checkbox" id="prefetchEnabled"/> Smart prefetch (download next wallpaper in advance for instant swaps)</label>
-    </div>
+<template id="tpl-network">
+  <div class="row"><label>Offline</label>
+    <label class="check"><input type="checkbox" id="offlineCachedOnlyManual"/> Only use wallpapers already downloaded</label>
   </div>
-  <div class="help help-indent">Offline mode uses only cached wallpapers — handy on metered or broken connections. Prefetch grabs the next candidate in the background so rotations feel instant.</div>
+  <div class="help help-indent">Skips Wallhaven entirely and cycles what is already in your cache. Useful on a metered connection, or when the internet is having a day.</div>
+  <div class="row"><label>Prefetch</label>
+    <label class="check"><input type="checkbox" id="prefetchEnabled"/> Download the next wallpaper in advance</label>
+  </div>
+  <div class="help help-indent">The next candidate is fetched quietly in the background, so the change itself is instant instead of waiting on a download.</div>
+</template>
 
-  <div class="row"><label>Portable mode</label>
+<template id="tpl-portable">
+  <div class="row"><label>Status</label>
     <span id="portableStatus" style="color:var(--muted); font-size:12px;">Checking…</span>
   </div>
-  <div class="help help-indent">Create a file named <code>portable.flag</code> next to <code>WallRaven.exe</code> to store config, cache and history in <code>./data/</code> next to the exe instead of AppData. Restart required.</div>
+  <div class="help help-indent">Portable mode keeps your settings, cache and history in a <code>data</code> folder next to <code>WallRaven.exe</code> instead of in AppData, so the whole thing can live on a USB stick. To switch it on, put an empty file called <code>portable.flag</code> beside <code>WallRaven.exe</code> and restart WallRaven.</div>
 </template>
 
 <template id="tpl-hotkeys">
@@ -1435,10 +1463,15 @@ const CARD_META = {
   playlists:   { title: 'Playlists',                  page: 'library', sec: 'playlists' },
   library:     { title: 'Pictures on this PC',        page: 'library', sec: 'local' },
   presets:     { title: 'My presets',                 page: 'presets' },
-  community:   { title: 'Browse presets',             page: 'presets' },
+  community:   { title: 'Community presets',          page: 'presets' },
   cycle:       { title: 'Cycling',                    page: 'schedule' },
   schedule:    { title: 'Timetable',                  page: 'schedule' },
-  app:         { title: 'General',                    page: 'settings', sec: 'general' },
+  app:         { title: 'General',                    page: 'settings', sec: 'general',
+                 parts: [{ id: 'app',      label: 'Appearance' },
+                         { id: 'startup',  label: 'Startup & notifications' },
+                         { id: 'gaming',   label: 'Gaming' },
+                         { id: 'network',  label: 'Network' },
+                         { id: 'portable', label: 'Portable mode' }] },
   cache:       { title: 'Storage',                    page: 'settings', sec: 'storage' },
   hotkeys:     { title: 'Keyboard shortcuts',         page: 'settings', sec: 'keyboard' },
   account:     { title: 'Account & sync',             page: 'settings', sec: 'account' },
@@ -2556,7 +2589,16 @@ function syncFullscreenRows() {
 }
 
 // ---------- Cache cleanup test ----------
-const mb = (n) => `${(Number(n) || 0).toFixed(1)} MB`;
+// Everything inside the app counts in MB, but nobody thinks in thousands of
+// megabytes: a 20 GB cache limit was being shown as 20480 MB.
+function formatSize(mbValue) {
+  const n = Math.max(0, Number(mbValue) || 0);
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} TB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(n >= 10240 ? 1 : 2)} GB`;
+  if (n >= 10) return `${n.toFixed(0)} MB`;
+  return `${n.toFixed(1)} MB`;
+}
+const mb = (n) => formatSize(n);
 function renderCachePlan(plan, applied = false) {
   const esc = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const lines = [];
@@ -3229,8 +3271,8 @@ async function refreshInfo() {
     if (has && currentWp.id && currentWp.id !== prevId) { thumb.classList.add('fade'); setTimeout(() => thumb.classList.remove('fade'), 60); }
     if (has) { thumb.dataset.wpId = currentWp.id || '';
       thumb.style.backgroundImage = `url("file://${currentWp.file.replace(/\\/g,'/')}")`;
-      const pinnedTxt = info.pinnedMB > 0.05 ? ` (${info.pinnedMB.toFixed(1)} MB kept)` : '';
-      meta.innerHTML = `<strong>${currentWp.id}</strong>${currentWp.resolution || ''} • cached ${info.cacheMB.toFixed(1)} MB / ${config?.cacheMaxMB || '?'} MB${pinnedTxt} • ${info.historyCount} in history`;
+      const pinnedTxt = info.pinnedMB > 0.05 ? ` (${formatSize(info.pinnedMB)} kept)` : '';
+      meta.innerHTML = `<strong>${currentWp.id}</strong>${currentWp.resolution || ''} • cached ${formatSize(info.cacheMB)} of ${formatSize(config?.cacheMaxMB || 0)}${pinnedTxt} • ${info.historyCount} in history`;
     } else {
       thumb.style.backgroundImage = '';
       meta.innerHTML = 'No wallpaper yet - press <strong>►</strong> in the top bar.';
@@ -3242,7 +3284,7 @@ async function refreshInfo() {
   const cs = $('#cacheStats');
   if (cs) {
     const total = (info.cacheMB || 0), pinned = (info.pinnedMB || 0), max = config?.cacheMaxMB || 0;
-    cs.innerHTML = `Total <strong>${total.toFixed(1)} MB</strong> / ${max} MB &nbsp;·&nbsp; Kept <strong style="color:var(--accent)">${pinned.toFixed(1)} MB</strong> &nbsp;·&nbsp; Prunable <strong>${Math.max(0, total - pinned).toFixed(1)} MB</strong>`;
+    cs.innerHTML = `Using <strong>${formatSize(total)}</strong> of ${formatSize(max)} &nbsp;·&nbsp; Kept for good <strong style="color:var(--accent)">${formatSize(pinned)}</strong> &nbsp;·&nbsp; Can be deleted <strong>${formatSize(Math.max(0, total - pinned))}</strong>`;
   }
   renderPlaylistUI();
   renderFavourites();

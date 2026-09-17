@@ -2310,7 +2310,7 @@ function updateTrayMenu() {
       } },
     { label: 'Settings…', click: openSettings },
     { label: `Fit: ${config.fitMode || 'fill'}  ·  Cycle: ${effectiveCycleMinutes()} min${paused ? ' (paused)' : ''}`, enabled: false },
-    { label: (() => { const s = cacheStats(); return `Cache: ${s.totalMB.toFixed(1)} / ${config.cacheMaxMB} MB (${s.pinnedMB.toFixed(1)} pinned)`; })(), enabled: false },
+    { label: (() => { const s = cacheStats(); return `Downloads: ${formatSizeMB(s.totalMB)} of ${formatSizeMB(config.cacheMaxMB)} (${formatSizeMB(s.pinnedMB)} kept)`; })(), enabled: false },
     ...(STORE_BUILD ? [] : [{ label: `Check for updates`, click: () => checkForUpdates(true).then(updateTrayMenu) }]),
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } },
@@ -3308,6 +3308,17 @@ function stampChangedSections(before, after) {
 
 function touchSection(name) {
   config._syncStamps = { ...(config._syncStamps || {}), [name]: Date.now() };
+}
+
+// Sizes are counted in MB everywhere inside the app, which stops reading as a
+// size somewhere around a thousand of them: the tray menu was offering
+// "1024.0 / 20480 MB".
+function formatSizeMB(mbValue) {
+  const n = Math.max(0, Number(mbValue) || 0);
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} TB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(n >= 10240 ? 1 : 2)} GB`;
+  if (n >= 10) return `${n.toFixed(0)} MB`;
+  return `${n.toFixed(1)} MB`;
 }
 
 function notifySettings(kind, payload) {

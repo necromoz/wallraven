@@ -476,6 +476,37 @@ check("survives being handed something that is not a string", () => {
   }
 });
 
+// ---------------------------------------------------------------- formatSizeMB
+
+const formatSizeMB = new Function(`${extract("formatSizeMB")}; return formatSizeMB;`)();
+
+console.log("formatSizeMB");
+
+check("small sizes keep a decimal, larger ones do not need one", () => {
+  assert.strictEqual(formatSizeMB(0), "0.0 MB");
+  assert.strictEqual(formatSizeMB(5.25), "5.3 MB");
+  assert.strictEqual(formatSizeMB(40), "40 MB");
+  assert.strictEqual(formatSizeMB(1023), "1023 MB");
+});
+
+check("it switches to GB where people would", () => {
+  // The cache limit slider goes to 20480 MB, which is nobody's idea of a size.
+  assert.strictEqual(formatSizeMB(1024), "1.00 GB");
+  assert.strictEqual(formatSizeMB(5120), "5.00 GB");
+  assert.strictEqual(formatSizeMB(20480), "20.0 GB");
+});
+
+check("and to TB, for anyone pointing the cache at a NAS", () => {
+  assert.strictEqual(formatSizeMB(1024 * 1024), "1.00 TB");
+  assert.strictEqual(formatSizeMB(1024 * 1024 * 2.5), "2.50 TB");
+});
+
+check("nonsense does not produce NaN on the tray menu", () => {
+  for (const v of [null, undefined, "", NaN, -5, {}]) {
+    assert.strictEqual(formatSizeMB(v), "0.0 MB", `failed on ${String(v)}`);
+  }
+});
+
 // ---------------------------------------------------------------- summary
 
 console.log();

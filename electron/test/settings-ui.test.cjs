@@ -79,6 +79,35 @@ check("card-rendered status lines are restored by wireAllCards", () => {
   }
 });
 
+console.log("no control is lost when templates are moved around");
+
+check("every id the form reads or writes exists in the markup", () => {
+  // The settings window is templates plus two functions that walk them by id:
+  // hydrateInputs puts the config on screen, collectConfig reads it back. Move
+  // a control into a different template and drop it by accident and neither
+  // function complains -- the setting simply stops being saved, silently, and
+  // the next save writes whatever the default happens to be.
+  const ids = new Set();
+  for (const name of ["hydrateInputs", "collect"]) {
+    const body = fn(name);
+    for (const m of body.matchAll(/[$(]?['"]#([A-Za-z][\w-]*)['"]/g)) ids.add(m[1]);
+  }
+  assert.ok(ids.size > 30, `only found ${ids.size} ids, the extractor is probably broken`);
+  const missing = [...ids].filter((id) => !new RegExp(`id="${id}"`).test(HTML));
+  assert.deepStrictEqual(missing, [], `ids referenced but not in any template: ${missing.join(", ")}`);
+});
+
+check("every card part names a template that exists", () => {
+  // A card with a `parts` list renders each one from tpl-<id>. A part with no
+  // template renders as nothing at all, which looks like a missing section.
+  const meta = HTML.slice(HTML.indexOf("const CARD_META = {"), HTML.indexOf("// Quick actions on Home"));
+  const parts = [...meta.matchAll(/\{ id: '([\w-]+)',\s*label:/g)].map((m) => m[1]);
+  assert.ok(parts.length >= 8, `found ${parts.length} card parts, expected more`);
+  for (const id of new Set(parts)) {
+    assert.ok(new RegExp(`<template id="tpl-${id}">`).test(HTML), `no template for card part ${id}`);
+  }
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);
