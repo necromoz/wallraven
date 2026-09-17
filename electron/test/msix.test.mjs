@@ -158,6 +158,26 @@ check("full trust is declared", () => {
   assert.ok(/rescap:Capability Name="runFullTrust"/.test(template));
 });
 
+console.log("a prerelease build");
+
+check("the Store step is skipped rather than failing the build", () => {
+  // CI failed a beta build over this: msixVersion refuses a prerelease, which
+  // is right for a release and wrong as a reason to fail a build whose whole
+  // point is the installer.
+  const build = fs.readFileSync(path.join(ROOT, "scripts", "build-desktop.mjs"), "utf8");
+  const at = build.indexOf("function buildMsix(");
+  const body = build.slice(at, at + 700);
+  assert.ok(/if \(!\/\^\\d\+\\\.\\d\+\\\.\\d\+\$\/\.test\(version\)\)/.test(body), "a prerelease still tries to build a Store package");
+  assert.ok(/return null;/.test(body));
+});
+
+check("and the workflow does not then demand the package it skipped", () => {
+  const wf = fs.readFileSync(path.join(ROOT, ".github", "workflows", "desktop.yml"), "utf8");
+  const at = wf.indexOf("Check the Store package was produced");
+  const step = wf.slice(at, at + 800);
+  assert.ok(/is a prerelease, so no Store package is expected/.test(step));
+});
+
 console.log("assets");
 
 check("every logo the manifest names exists at the right size", () => {

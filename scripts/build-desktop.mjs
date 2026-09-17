@@ -177,6 +177,15 @@ function findMakeappx() {
 // with its own certificate, and a self-signed package would only be
 // installable on machines that had been told to trust it.
 function buildMsix(version) {
+  // The Store reserves the fourth field of the version, so a prerelease has
+  // nowhere to put its suffix and msixVersion refuses it. That is right for a
+  // release and wrong as a reason to fail a beta build: the installer is the
+  // point of a beta, and there is no Store channel to publish one to anyway.
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    log(`skipping the Store package: ${version} is a prerelease and the Store has nowhere to put the suffix`);
+    return null;
+  }
+
   const identity = identityFromEnv(process.env);
   if (isPlaceholderIdentity(identity)) {
     log("MSIX identity not set, using placeholders: this package can be installed locally but not submitted");

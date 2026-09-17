@@ -102,6 +102,15 @@ jobs:
       - name: Check the Store package was produced
         shell: bash
         run: |
+          version="${{ steps.version.outputs.version }}"
+          # A prerelease has no Store package by design: the Store reserves the
+          # fourth version field, so a -beta suffix has nowhere to go.
+          case "$version" in
+            *-*)
+              echo "$version is a prerelease, so no Store package is expected"
+              exit 0
+              ;;
+          esac
           shopt -s nullglob
           pkgs=(dist/*.msix)
           if [ ${#pkgs[@]} -eq 0 ]; then
@@ -114,6 +123,7 @@ jobs:
         shell: bash
         run: |
           cd dist
+          shopt -s nullglob
           sha256sum *.exe *.msix | tee SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
