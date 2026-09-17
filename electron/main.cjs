@@ -937,8 +937,24 @@ function runPowerShell(script, { timeout = 20000, label = 'powershell' } = {}) {
 app.on('will-quit', () => { try { writeConfigNow(); } catch {} });
 app.on('will-quit', () => { for (const c of LIVE_CHILDREN) killTree(c); LIVE_CHILDREN.clear(); });
 
+// Windows will happily "set" a wallpaper that does not exist: the desktop goes
+// black and SystemParametersInfo still reports success. Everything downstream
+// then behaves as though it worked -- history entry, statistics, "Wallpaper
+// updated" notification -- and the only evidence is a black screen. Check the
+// file first, and check what Windows says rather than discarding it.
+function assertImageReadable(filePath) {
+  let st;
+  try { st = fs.statSync(filePath); } catch {
+    throw new Error(`the image file is no longer there (${path.basename(String(filePath))})`);
+  }
+  if (!st.isFile() || st.size === 0) {
+    throw new Error(`the image file is empty or not a file (${path.basename(String(filePath))})`);
+  }
+}
+
 function setWindowsWallpaper(filePath) {
   return new Promise((resolve, reject) => {
+    try { assertImageReadable(filePath); } catch (e) { return reject(e); }
     if (process.platform !== 'win32') {
       console.log('[dev] would set wallpaper to', filePath);
       return resolve();
@@ -956,7 +972,8 @@ public class Wp {
 "@
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name WallpaperStyle -Value '${mode.style}'
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Desktop' -Name TileWallpaper  -Value '${mode.tile}'
-[Wp]::SystemParametersInfo(20, 0, '${escaped}', 3) | Out-Null
+$ok = [Wp]::SystemParametersInfo(20, 0, '${escaped}', 3)
+if (-not $ok) { Write-Error 'SystemParametersInfo refused the wallpaper'; exit 1 }
 `;
     runPowerShell(ps, { timeout: 20000, label: 'wallpaper' }).then(({ code, err }) => {
       if (code === 0) resolve();
@@ -1011,7 +1028,9 @@ function setWindowsWallpaperPerMonitor(filePaths) {
       console.log('[dev] would set per-monitor wallpapers', filePaths);
       return resolve();
     }
+    // See assertImageReadable: this path fails the same silent way.
     if (!filePaths || !filePaths.length) return reject(new Error('No files'));
+    try { for (const f of filePaths) assertImageReadable(f); } catch (e) { return reject(e); }
     const arr = filePaths.map(p => `'${p.replace(/'/g, "''")}'`).join(',');
     const ps = `
 $sig = @"
@@ -1229,20 +1248,99 @@ function takePrefetched() {
 
 // Browser-style back/forward over the history timeline. Navigation never
 // appends to history — it just moves a cursor and re-applies the file.
+// A Wallhaven entry can be fetched again after its cached copy is pruned. A
+// local one -- a playlist image, a file from a watched folder -- cannot: if the
+// file is gone the entry is dead. Wallhaven ids are short alphanumeric strings;
+// local ids are prefixed 'local:' and so never match.
+function historyRestorable(item) {
+  return !!(item && typeof item.id === 'string' && /^[A-Za-z0-9]{4,12}$/.test(item.id));
+}
+
+function historyFileUsable(item, exists) {
+  return !!(item && item.file && exists(item.file));
+}
+
+// The nearest entry in `step` direction that can actually be put on screen,
+// either because it is still cached or because it can be downloaded again.
+// -1 when there is none. The restorable test is checked first because it costs
+// nothing, where the file test hits the disk.
+function findReachableHistoryIndex(items, from, step, exists) {
+  for (let i = from + step; i >= 0 && i < items.length; i += step) {
+    const item = items[i];
+    if (historyRestorable(item) || historyFileUsable(item, exists)) return i;
+  }
+  return -1;
+}
+
+function fileExistsSafe(f) {
+  try { return fs.existsSync(f); } catch { return false; }
+}
+
+// Fetch a wallpaper the cache has since thrown away. The history entry keeps
+// the id, and the API gives back the current direct path for it, so nothing
+// has to be guessed from the filename.
+async function restoreHistoryFile(item) {
+  if (!historyRestorable(item)) return null;
+  const key = config.apiKey ? `?apikey=${encodeURIComponent(config.apiKey)}` : '';
+  const info = await httpsGetJSON(`https://wallhaven.cc/api/v1/w/${encodeURIComponent(item.id)}${key}`);
+  const src = info && info.data && info.data.path;
+  if (!src) return null;
+  const ext = String(info.data.file_type || '').includes('png') ? 'png' : 'jpg';
+  const dest = path.join(CACHE_DIR, `${item.id}.${ext}`);
+  if (!fileExistsSafe(dest)) await downloadFile(src, dest);
+  return dest;
+}
+
+// Back and forward over the history timeline.
+//
+// This used to move navPos by one, check whether that entry's file still
+// existed, and return quietly if it did not. With the cache limit at its 1 GB
+// default that happens constantly: the file behind an entry from an hour ago is
+// usually already pruned. The button appeared to do nothing, over and over,
+// while navPos kept moving -- so the position and the screen disagreed and the
+// next press skipped further back than the user expected. Now a pruned entry is
+// downloaded again, and only an entry that cannot be recovered at all is
+// stepped over.
 async function navigateHistory(dir) {
   if (!history.items.length) return;
-  const last = history.items.length - 1;
-  if (dir === 'back') navPos = Math.max(0, navPos - 1);
-  else navPos = Math.min(last, navPos + 1);
-  const item = history.items[navPos];
-  if (!item || !item.file || !fs.existsSync(item.file)) { notifyRenderer(); updateTrayMenu(); return; }
+  const step = dir === 'back' ? -1 : 1;
+  const from = (navPos >= 0 && navPos < history.items.length) ? navPos : history.items.length - 1;
+
+  let idx = findReachableHistoryIndex(history.items, from, step, fileExistsSafe);
+  while (idx !== -1) {
+    const item = history.items[idx];
+    let file = historyFileUsable(item, fileExistsSafe) ? item.file : null;
+    if (!file) {
+      try { file = await restoreHistoryFile(item); }
+      catch (e) { console.warn('[wallraven] could not restore', item && item.id, e.message); }
+    }
+    if (file) {
+      navPos = idx;
+      try {
+        await applyWallpaper(file, null);
+        item.file = file;
+        history.currentId = item.id;
+        saveHistory();
+        updateTrayMenu();
+        notifyRenderer();
+      } catch (e) {
+        console.error('nav error', e);
+        try { notifySettings('app-toast', { msg: 'Could not set that wallpaper: ' + e.message, kind: 'err' }); } catch {}
+      }
+      return;
+    }
+    idx = findReachableHistoryIndex(history.items, idx, step, fileExistsSafe);
+  }
+
+  // Nothing in that direction is recoverable. Say so rather than looking broken.
   try {
-    await applyWallpaper(item.file, null);
-    history.currentId = item.id;
-    saveHistory();
-    updateTrayMenu();
-    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('wallpaper-changed', currentInfo());
-  } catch (e) { console.error('nav error', e); }
+    notifySettings('app-toast', {
+      msg: dir === 'back' ? 'No earlier wallpaper is still available' : 'No later wallpaper is still available',
+      kind: 'err',
+    });
+  } catch {}
+  notifyRenderer();
+  updateTrayMenu();
 }
 
 
@@ -1520,8 +1618,11 @@ function currentInfo() {
   return {
     current: cur || null,
     cacheMB: st.totalMB, pinnedMB: st.pinnedMB, historyCount: history.items.length,
-    canBack: navPos > 0,
-    canForward: navPos >= 0 && navPos < history.items.length - 1,
+    // Reachable, not merely present: an entry whose file was pruned and whose
+    // id is local cannot be shown again, and an arrow that does nothing when
+    // pressed is worse than one that is greyed out.
+    canBack: findReachableHistoryIndex(history.items, navPos >= 0 ? navPos : history.items.length - 1, -1, fileExistsSafe) !== -1,
+    canForward: navPos >= 0 && findReachableHistoryIndex(history.items, navPos, 1, fileExistsSafe) !== -1,
     paused,
   };
 }
@@ -2716,9 +2817,14 @@ ipcMain.handle('playlist:setActive', (_e, { name }) => {
 });
 ipcMain.handle('history:get', () => history.items.slice().reverse());
 ipcMain.handle('history:setFromFile', async (_e, { file, id, url, resolution }) => {
-  if (!file || !fs.existsSync(file)) throw new Error('File missing from cache');
-  await applyWallpaper(file, null);
-  history.items.push({ id, url, file, ts: Date.now(), resolution });
+  // Clicking a thumbnail in the history card used to fail outright once the
+  // cache had pruned that file, which is routine. Fetch it again first, the
+  // same way Back does, and only refuse when it really cannot be recovered.
+  let target = file && fileExistsSafe(file) ? file : null;
+  if (!target) target = await restoreHistoryFile({ id, file }).catch(() => null);
+  if (!target) throw new Error('That wallpaper is no longer cached and could not be downloaded again');
+  await applyWallpaper(target, null);
+  history.items.push({ id, url, file: target, ts: Date.now(), resolution });
   history.currentId = id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
   navPos = history.items.length - 1;
