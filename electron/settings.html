@@ -1138,9 +1138,11 @@
 <template id="tpl-library">
   <div style="font-weight:600; margin-bottom:6px;">Rotate a folder (no playlist needed)</div>
   <div class="help" style="margin-bottom:10px;">
-    Point WallRaven at one or more folders and it cycles through those images the way Windows does &mdash; but with your interval, fit mode, schedule, hotkeys and multi-monitor settings.
+    Point WallRaven at one or more folders and it cycles through those images the way Windows does, but with your interval, fit mode, timetable, shortcuts and multi-monitor settings.
+    Dropbox, Google Drive and OneDrive all sync into ordinary folders, so pointing it at one of those works too. A picture kept online only is downloaded by Windows when it is needed, which is occasionally slow.
   </div>
   <div id="folderSourceList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;"></div>
+  <div id="folderQuickAdd" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:10px;"></div>
   <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
     <button class="btn secondary" id="btn-folder-add" type="button">＋ Add folder…</button>
     <button class="btn" id="btn-folder-use" type="button">▶ Use folders for cycling</button>
@@ -4386,6 +4388,31 @@ async function renderFolderSources(rescan = false) {
     };
   });
 }
+// Offer the folders this PC already has, rather than making the user go and
+// find a path they have never typed. Dropbox, Google Drive and OneDrive all
+// sync into ordinary folders, so there is nothing to integrate with: the app
+// just has to know where to look.
+async function renderFolderQuickAdd() {
+  const host = $('#folderQuickAdd');
+  if (!host) return;
+  let roots = [];
+  try { roots = await api.folderCloudRoots?.() || []; } catch {}
+  if (!roots.length) { host.style.display = 'none'; host.innerHTML = ''; return; }
+  host.style.display = 'flex';
+  host.innerHTML = '<span style="font-size:11px; color:var(--muted);">Found on this PC:</span>' +
+    roots.map((r) => `<button type="button" class="btn secondary quick-folder" data-path="${escapeHtml(r.path)}" title="${escapeHtml(r.path)}" style="font-size:12px; padding:4px 10px;">＋ ${escapeHtml(r.label)}</button>`).join('');
+  host.querySelectorAll('.quick-folder').forEach((btn) => {
+    btn.onclick = async () => {
+      const r = await api.folderAddKnown?.(btn.dataset.path);
+      if (!r) { flash('That folder is no longer there', 'err'); renderFolderQuickAdd(); return; }
+      config = await api.getConfig();
+      await renderFolderSources(true);
+      renderFolderQuickAdd();
+      flash(`Added — ${r.count} picture${r.count === 1 ? '' : 's'} available`, 'ok');
+    };
+  });
+}
+
 function wireFolderRotation() {
   if (!$('#btn-folder-add')) return;
   const rec = $('#folderRecursive'), ord = $('#folderOrder');
@@ -4399,6 +4426,7 @@ function wireFolderRotation() {
     await renderFolderSources(true);
     flash(`Folder added — ${r.count} image(s) available`, 'ok');
   };
+  renderFolderQuickAdd();
   $('#btn-folder-rescan').onclick = async () => { await renderFolderSources(true); flash('Folders rescanned', 'ok'); };
   $('#btn-folder-use').onclick = async () => {
     const info = await api.folderSources({ rescan: true });

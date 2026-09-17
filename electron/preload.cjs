@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('api', {
   // Pass 2 — portable, folders, export, tags, hotkeys
   portableInfo: () => ipcRenderer.invoke('app:portable'),
   folderPick: () => ipcRenderer.invoke('folder:pick'),
+  folderCloudRoots: () => ipcRenderer.invoke('folder:cloudRoots'),
+  folderAddKnown: (folderPath) => ipcRenderer.invoke('folder:addKnown', { folderPath }),
   folderImportAsPlaylist: (opts) => ipcRenderer.invoke('folder:importAsPlaylist', opts),
   playlistExport: (opts) => ipcRenderer.invoke('playlist:export', opts),
   playlistSetItemTags: (opts) => ipcRenderer.invoke('playlist:setItemTags', opts),

@@ -2702,6 +2702,18 @@ ipcMain.handle('folder:addSource', async () => {
   const files = localFolderFiles(true);
   return { paths: list, count: files.length };
 });
+// Adding one of the offered folders, without a file dialog. The path has to be
+// one this machine actually has and a directory, whatever the window sent.
+ipcMain.handle('folder:addKnown', (_e, { folderPath } = {}) => {
+  const dir = String(folderPath || '');
+  try { if (!fs.statSync(dir).isDirectory()) return null; } catch { return null; }
+  const list = (config.folderPaths || []).slice();
+  if (!list.includes(dir)) list.push(dir);
+  config.folderPaths = list;
+  saveConfig();
+  const files = localFolderFiles(true);
+  return { paths: list, count: files.length };
+});
 ipcMain.handle('folder:removeSource', (_e, { folderPath } = {}) => {
   config.folderPaths = (config.folderPaths || []).filter((p) => p !== folderPath);
   saveConfig();
@@ -3143,6 +3155,68 @@ ipcMain.handle('cache:test', async (_e, { apply = false, limitMB = null } = {}) 
 
 // ---------- Pass 2 IPC: portable, folder libs, export, tags, hotkeys, monitors ----------
 ipcMain.handle('app:portable', () => ({ portable: IS_PORTABLE, dataDir: DATA_DIR }));
+
+// Folders that are probably worth offering, because the pictures people want
+// on their desktop usually live in one of them.
+//
+// Dropbox, Google Drive and OneDrive all sync into ordinary folders, so
+// nothing special is needed to read from them: the app only has to know where
+// to look, rather than making the user find a path they have never typed. The
+// Pictures subfolder is offered where it exists, since that is nearly always
+// the one meant.
+//
+// One caveat worth knowing rather than coding around: all three can leave a
+// file as an online-only placeholder. Windows downloads it when something
+// opens it, which usually just works and is occasionally slow. If it cannot,
+// the image check refuses it with a plain message instead of setting a black
+// desktop.
+function cloudFolderCandidates(env, home) {
+  const e = env || {};
+  const join = (...parts) => path.join(...parts);
+  const out = [];
+  const add = (label, dir) => { if (dir) out.push({ label, path: dir }); };
+
+  for (const key of ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial']) {
+    if (e[key]) add('OneDrive', e[key]);
+  }
+  if (home) {
+    add('OneDrive', join(home, 'OneDrive'));
+    add('Dropbox', join(home, 'Dropbox'));
+    add('Google Drive', join(home, 'Google Drive'));
+    add('Google Drive', join(home, 'My Drive'));
+    add('iCloud Drive', join(home, 'iCloudDrive'));
+    add('Pictures', join(home, 'Pictures'));
+  }
+
+  // Each candidate's Pictures subfolder is usually the interesting one.
+  const withPictures = [];
+  const seen = new Set();
+  for (const item of out) {
+    const key = item.path.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    withPictures.push(item);
+    if (!/pictures$/i.test(item.path)) {
+      const pics = join(item.path, 'Pictures');
+      if (!seen.has(pics.toLowerCase())) {
+        seen.add(pics.toLowerCase());
+        withPictures.push({ label: `${item.label} \u203a Pictures`, path: pics });
+      }
+    }
+  }
+  return withPictures;
+}
+
+// Only the ones that are actually there, and only ones not already added.
+ipcMain.handle('folder:cloudRoots', () => {
+  const chosen = new Set((config.folderPaths || []).map((p) => String(p).toLowerCase()));
+  return cloudFolderCandidates(process.env, app.getPath('home'))
+    .filter((item) => {
+      if (chosen.has(item.path.toLowerCase())) return false;
+      try { return fs.statSync(item.path).isDirectory(); } catch { return false; }
+    })
+    .slice(0, 6);
+});
 
 ipcMain.handle('folder:pick', async () => {
   const res = await dialog.showOpenDialog(settingsWindow || undefined, {
