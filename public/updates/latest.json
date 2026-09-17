@@ -1,9 +1,9 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "releasedAt": "2026-09-17",
-  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.1.0/Wallraven-Setup-v1.1.0.exe",
-  "sha256": "044d9c24a415663f769976252df1f4ca79d6ebdda569e03448582f70f08c2102",
-  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.1.0",
-  "sizeBytes": 112335836,
-  "notes": "Sign-in works again, linking the app to your account is now safe, and saved wallpapers stop disappearing. Plus a dozen other fixes."
+  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.2.0/Wallraven-Setup-v1.2.0.exe",
+  "sha256": "e1f57b15685499a8169be154f6ad77d5d69241d976da18ef5e2ce36ad1937632",
+  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.2.0",
+  "sizeBytes": 112564316,
+  "notes": "Back and Forward work again, Browse has its own search that leaves your settings alone, saving a filter change fetches a matching wallpaper straight away, and the timetable now explains itself. Plus the app can no longer report success for a wallpaper it did not set."
 }
