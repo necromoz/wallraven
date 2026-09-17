@@ -683,6 +683,18 @@
     }
   }
 
+  /* The like and dislike buttons in the title bar act on whatever is on screen,
+     which you cannot see while looking at this window. A thumbnail of it sits
+     next to them so there is no guessing. */
+  #hdr-thumb {
+    width: 46px; height: 26px; padding: 0; flex: none;
+    border-radius: 5px; border: 1px solid var(--border);
+    background: var(--panel-2) center/cover no-repeat;
+    cursor: pointer; display: none;
+  }
+  #hdr-thumb.has-image { display: block; }
+  #hdr-thumb:hover { border-color: var(--accent); }
+
   #quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
 
   @media (max-width: 860px) {
@@ -701,6 +713,7 @@
   </div>
   <div id="toast-stack" aria-live="polite"></div>
   <div class="right">
+    <button id="hdr-thumb" type="button" title="The wallpaper on screen now. Click to open Now playing." aria-label="Current wallpaper"></button>
     <button class="btn secondary icon-btn" id="hdr-like" title="Like this wallpaper">👍</button>
     <button class="btn secondary icon-btn" id="hdr-dislike" title="Dislike and skip">👎</button>
     <button class="btn secondary icon-btn" id="hdr-prev" title="Previous wallpaper">◄</button>
@@ -3294,6 +3307,7 @@ async function refreshInfo() {
       meta.innerHTML = 'No wallpaper yet - press <strong>►</strong> in the top bar.';
     }
   }
+  renderHeaderThumb();
   renderHistory();
   const sub = document.querySelector('[data-id="history"] [data-role="sub"]');
   if (sub) sub.textContent = historyItems.length ? `- ${historyItems.length}` : '';
@@ -3307,10 +3321,23 @@ async function refreshInfo() {
   renderStats?.();
 }
 
+// Put the wallpaper on screen into the title bar, beside the buttons that act
+// on it.
+function renderHeaderThumb() {
+  const el = document.getElementById('hdr-thumb');
+  if (!el) return;
+  const file = currentWp && currentWp.file;
+  if (!file) { el.classList.remove('has-image'); el.style.backgroundImage = ''; return; }
+  el.style.backgroundImage = `url("file://${String(file).replace(/\\/g, '/')}")`;
+  el.title = `Now showing ${currentWp.id || ''}${currentWp.resolution ? ' \u00b7 ' + currentWp.resolution : ''}. Click to open Now playing.`;
+  el.classList.add('has-image');
+}
+
 // Apply an info payload directly (used by back/forward) without refetching.
 function refreshInfoFrom(info) {
   currentWp = info.current || null;
   const has = !!currentWp;
+  renderHeaderThumb();
   const bo = $('#btn-open'), bf = $('#btn-folder'), bb = $('#btn-back'), bfw = $('#btn-forward');
   if (bo) bo.disabled = !has; if (bf) bf.disabled = !has;
   if (bb) bb.disabled = !info.canBack; if (bfw) bfw.disabled = !info.canForward;
@@ -4311,6 +4338,7 @@ function renderPlayPause() {
   b.title = cyclePaused ? 'Resume automatic changes' : 'Pause automatic changes';
   b.classList.toggle('on', cyclePaused);
 }
+document.getElementById('hdr-thumb')?.addEventListener('click', () => goPage('home'));
 document.getElementById('hdr-like')?.addEventListener('click', async () => {
   const r = await api.like();
   flash(r.ok ? 'Added to Liked' : r.reason, r.ok ? 'ok' : 'err');

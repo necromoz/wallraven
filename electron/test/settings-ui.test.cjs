@@ -79,6 +79,17 @@ check("card-rendered status lines are restored by wireAllCards", () => {
   }
 });
 
+console.log("the title bar says what it is acting on");
+
+check("there is a thumbnail of the current wallpaper beside the buttons", () => {
+  // Like, dislike and skip act on whatever is on the desktop, which is hidden
+  // behind this window while you are pressing them.
+  assert.ok(/id="hdr-thumb"/.test(HTML));
+  assert.ok(/function renderHeaderThumb\(\)/.test(HTML));
+  const refreshes = HTML.match(/renderHeaderThumb\(\);/g) || [];
+  assert.ok(refreshes.length >= 2, "the thumbnail is not refreshed on both paths that change the wallpaper");
+});
+
 console.log("no control is lost when templates are moved around");
 
 check("every id the form reads or writes exists in the markup", () => {

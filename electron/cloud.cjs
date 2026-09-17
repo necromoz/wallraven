@@ -565,6 +565,11 @@ async function pull(config, { force = false } = {}) {
       if (name === 'playlists' && patch.playlists) {
         patch.playlists = restorePlaylistFiles(config.playlists, patch.playlists);
       }
+      // A timetable is work. Nothing that arrives from the account should be
+      // able to delete one and leave nothing in its place.
+      if (name === 'settings') {
+        patch.schedule = keepBetterSchedule(config.schedule, patch.schedule);
+      }
       stamps[name] = remoteStamp || Date.now();
       changed = true;
     }
@@ -573,6 +578,24 @@ async function pull(config, { force = false } = {}) {
   if (!changed) return { ok: true, changed: false, at: Date.now() };
   patch._syncStamps = stamps;
   return { ok: true, changed: true, patch, at: Date.now() };
+}
+
+// Keep a timetable that has rules in it over one that does not.
+//
+// The schedule travels in the `settings` section, and a pull replaces that
+// section wholesale. So an account row written by an older version, or by a
+// machine that never had a timetable, would silently wipe a working one -- and
+// an update restarts the app, which pulls within seconds of launch, which is
+// exactly when Steve reported his schedule resetting.
+//
+// This is deliberately narrow: a remote timetable that has rules always wins,
+// because that is a real edit from another machine. Only the empty case is
+// refused.
+function keepBetterSchedule(localSchedule, incomingSchedule) {
+  const rules = (s) => (s && Array.isArray(s.rules) ? s.rules.length : 0);
+  if (rules(incomingSchedule) > 0) return incomingSchedule;
+  if (rules(localSchedule) > 0) return localSchedule;
+  return incomingSchedule === undefined ? localSchedule : incomingSchedule;
 }
 
 // ---------- community presets ----------
@@ -738,6 +761,7 @@ async function markCommunityPresetCopied(id) {
 }
 
 module.exports = {
+  keepBetterSchedule,
   setSignedOutHandler,
   SECTIONS,
   SHARE_FIELDS,

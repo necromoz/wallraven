@@ -2380,6 +2380,16 @@ ipcMain.handle('config:set', (_e, next) => {
   registerHotkeysAndReport();
   updateTrayMenu();
   queueCloudPush();
+
+  // Changing what you are looking for and pressing Save used to do nothing you
+  // could see: the new settings took effect at the next rotation, up to half an
+  // hour later, so the app looked like it had ignored you. Only when the search
+  // itself moved, and not while cycling is paused, since a pause is a deliberate
+  // "leave my wallpaper alone".
+  if (filtersMoved && !paused) {
+    notifySettings('app-toast', { msg: 'Saved. Finding a wallpaper that matches\u2026', kind: 'ok' });
+    fetchAndSetWallpaper(true).catch((e) => console.warn('save-triggered fetch', e && e.message));
+  }
   return config;
 });
 ipcMain.handle('wp:next', () => fetchAndSetWallpaper(true));
