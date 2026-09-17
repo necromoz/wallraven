@@ -79,6 +79,39 @@ check("card-rendered status lines are restored by wireAllCards", () => {
   }
 });
 
+console.log("nothing between the header and the shell gets painted over");
+
+check("every band above the shell is lifted above the theme backdrop", () => {
+  // The raven themes cover the window with a fixed picture and a fixed tint at
+  // z-index 0, and lift only the header and the shell above them. A panel
+  // between the two keeps its height and loses its contents: the window shows
+  // a tall empty band and the sidebar stops meeting the header. beta.2 shipped
+  // exactly that.
+  // Between the end of the header and the start of the shell: the header is
+  // lifted by the themes already, and so is everything inside it.
+  const body = HTML.slice(HTML.indexOf("</header>"), HTML.indexOf('<div id="shell">'));
+  const ids = [...body.matchAll(/<div id="([\w-]+)"/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 2, `expected some bands above the shell, found ${ids.join(", ")}`);
+  for (const id of ids) {
+    assert.ok(
+      new RegExp(`#${id}[^{]*\\{[^}]*z-index: 1`).test(HTML) ||
+        new RegExp(`#${id},[^{]*\\{[^}]*z-index: 1`).test(HTML) ||
+        new RegExp(`, #${id}[^{]*\\{[^}]*z-index: 1`).test(HTML),
+      `#${id} sits between the header and the shell but is not lifted above the theme backdrop`,
+    );
+  }
+});
+
+check("the themes that need it still lift the header and the shell", () => {
+  for (const theme of ["raven", "raven-beach", "raven-fire"]) {
+    assert.ok(
+      new RegExp(`html\\[data-mascot="${theme}"\\] header \\{ position: relative; z-index: 1`).test(HTML) ||
+        new RegExp(`html\\[data-mascot="${theme}"\\] #shell`).test(HTML),
+      `${theme} no longer lifts its chrome`,
+    );
+  }
+});
+
 console.log("the title bar says what it is acting on");
 
 check("there is a thumbnail of the current wallpaper beside the buttons", () => {

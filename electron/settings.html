@@ -707,10 +707,23 @@
   .day-chips { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
   .day-chip { font-size:11px; padding:3px 9px; border-radius:99px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; }
   .day-chip.on { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 22%, transparent); color:var(--fg); }
+  /* The shortcuts set the days rather than being days, so they do not look
+     like something that can be on. */
+  .day-chip.sch-day-preset { border-style:dashed; opacity:.75; margin-left:2px; }
+  .day-chip.sch-day-preset:hover { opacity:1; border-color:var(--accent); }
 
   /* Welcome on a fresh install, what's new after an update. One panel, because
      they are the same thing at different times: here is what this does for
      you, now go and use it. */
+  /* The raven themes paint a picture and a tint across the whole window as
+     fixed layers at z-index 0, and lift only the header and the shell above
+     them. Anything else between the two is painted over: it still takes up its
+     height, so the window looks like it has a large empty band in it and the
+     sidebar no longer meets the header. That is what happened to this panel,
+     and the update banner underneath it has always had the same fault. Both
+     are lifted here rather than in each theme, so a new theme cannot
+     reintroduce it. */
+  #intro-panel, #update-banner { position: relative; z-index: 1; }
   #intro-panel { border-bottom: 1px solid var(--border); background: var(--panel-2); }
   #intro-panel .intro-inner { display: flex; gap: 16px; align-items: flex-start; padding: 14px 20px; }
   #intro-panel .intro-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
@@ -2409,7 +2422,18 @@ function describeRule(rule, rules, config, globalCycle) {
   const every = Number(rule.intervalMin) > 0
     ? `${rule.intervalMin} minutes`
     : `${globalCycle || 30} minutes (the usual interval)`;
-  const window = until ? `until ${until.startHHMM}` : 'until the next entry, or all night';
+  let window;
+  if (until) {
+    window = `until ${until.startHHMM}`;
+  } else {
+    // The last entry of the day runs until the first one comes round again,
+    // which is the following morning. Saying "until the next entry" was true
+    // and useless.
+    const first = sortRules(rules).find((r) => ruleMinutes(r) !== null);
+    window = first && first !== rule
+      ? `until ${first.startHHMM} the next morning`
+      : 'for the rest of the day and overnight';
+  }
   return `From <strong>${time}</strong> ${window}, ${describeDays(rule.days)}, use ${describeSource(rule, config)}, changing every ${every}.`;
 }
 

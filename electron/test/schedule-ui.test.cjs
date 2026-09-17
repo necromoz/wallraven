@@ -108,10 +108,16 @@ check("it says when it stops, which is the next entry", () => {
   assert.ok(/From 08:00 until 18:00/.test(text), text);
 });
 
-check("the last entry of the day says so instead of pretending to end", () => {
-  const a = { id: "a", startHHMM: "22:00", sourceType: "search" };
-  const text = plain(api.describeRule(a, [a], CFG, 30));
-  assert.ok(/all night/.test(text), text);
+check("the last entry of the day runs until the first one comes round again", () => {
+  const morning = { id: "a", startHHMM: "08:00", sourceType: "search" };
+  const evening = { id: "b", startHHMM: "22:00", sourceType: "search" };
+  const text = plain(api.describeRule(evening, [morning, evening], CFG, 30));
+  assert.ok(/until 08:00 the next morning/.test(text), text);
+});
+
+check("a lone entry is in force from then on, with nothing to hand over to", () => {
+  const only = { id: "a", startHHMM: "22:00", sourceType: "search" };
+  assert.ok(/for the rest of the day and overnight/.test(plain(api.describeRule(only, [only], CFG, 30))));
 });
 
 check("a blank interval is spelled out, not left as an empty box", () => {
@@ -134,7 +140,7 @@ check("an entry on other days does not end this one", () => {
   const saturday = { id: "b", startHHMM: "12:00", sourceType: "search", days: [6] };
   assert.strictEqual(api.nextRuleAfter(weekday, [weekday, saturday]), null);
   const text = plain(api.describeRule(weekday, [weekday, saturday], CFG, 30));
-  assert.ok(/all night/.test(text) && /on weekdays/.test(text), text);
+  assert.ok(/rest of the day and overnight/.test(text) && /on weekdays/.test(text), text);
 });
 
 check("an every-day entry is bounded by any later entry", () => {
