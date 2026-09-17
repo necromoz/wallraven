@@ -695,6 +695,19 @@
   #hdr-thumb.has-image { display: block; }
   #hdr-thumb:hover { border-color: var(--accent); }
 
+  /* Timetable entries. The plain-English line under each one is the point:
+     the controls say what the entry is made of, the sentence says what it
+     will do. */
+  .sch-rule { border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; background:var(--panel-2); }
+  .sch-rule.is-active { border-color: var(--accent); }
+  .sch-summary { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.4; }
+  .sch-summary strong { color: var(--text, var(--fg)); font-weight:600; }
+  .sch-badge { font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:2px 6px; border-radius:99px; background:var(--accent); color:#fff; margin-left:6px; }
+  .sch-warn { color: var(--danger, #e5484d); }
+  .day-chips { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+  .day-chip { font-size:11px; padding:3px 9px; border-radius:99px; border:1px solid var(--border); background:transparent; color:var(--muted); cursor:pointer; }
+  .day-chip.on { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 22%, transparent); color:var(--fg); }
+
   #quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
 
   @media (max-width: 860px) {
@@ -1013,16 +1026,14 @@
 </template>
 
 <template id="tpl-schedule">
+  <div class="card-intro">A timetable switches what WallRaven pulls from at set times of day. Each entry says "from this time, use this", and it stays in force until the next one starts. With nothing due yet today, the last entry from the day before carries over.</div>
   <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-    <label class="check"><input type="checkbox" id="scheduleEnabled"/> Enable timetable</label>
+    <label class="check"><input type="checkbox" id="scheduleEnabled"/> Use the timetable</label>
     <span id="scheduleStatus" style="color:var(--muted); font-size:12px;"></span>
   </div>
-  <div class="help" style="margin-bottom:10px;">
-    Rules fire in start-time order for each day. The most recent rule whose start time has passed is the active source.
-    A manual <strong>►</strong> still respects the active rule.
-  </div>
   <div id="scheduleRules"></div>
-  <button class="btn secondary" id="btn-add-rule" type="button" style="margin-top:8px;">＋ Add rule</button>
+  <button class="btn secondary" id="btn-add-rule" type="button" style="margin-top:8px;">＋ Add a time</button>
+  <div class="help" style="margin-top:8px;">Pressing ► yourself always works and takes the picture from whichever entry is in force.</div>
 </template>
 
 <template id="tpl-presets">
@@ -2298,37 +2309,152 @@ function wireAllCards() {
 }
 
 // ---------- Schedule wiring ----------
-const DAY_LABELS = ['S','M','T','W','T','F','S'];
-function renderScheduleRules(rules) {
+const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const WEEKDAYS = [1, 2, 3, 4, 5];
+const WEEKEND = [0, 6];
+
+// Everything below turns a timetable entry into a sentence. The old card put
+// four controls in a row and left the user to work out what they added up to:
+// what a blank interval meant, what happened after an entry, what "days" with
+// nothing ticked did. None of that is visible in a form.
+function sameDays(a, b) {
+  const x = [...new Set(a || [])].sort();
+  const y = [...new Set(b || [])].sort();
+  return x.length === y.length && x.every((v, i) => v === y[i]);
+}
+
+function describeDays(days) {
+  const d = days || [];
+  if (!d.length || d.length === 7) return 'every day';
+  if (sameDays(d, WEEKDAYS)) return 'on weekdays';
+  if (sameDays(d, WEEKEND)) return 'at weekends';
+  return 'on ' + [...d].sort().map((n) => DAY_LABELS[n]).join(', ');
+}
+
+function describeSource(rule, config) {
+  const ref = (rule.sourceRef || '').trim();
+  switch (rule.sourceType) {
+    case 'playlist': return ref ? `the playlist "${ref}"` : 'a playlist (none chosen yet)';
+    case 'preset': return ref ? `the preset "${ref}"` : 'a preset (none chosen yet)';
+    case 'collection': return ref ? `Wallhaven collection ${ref}` : 'a Wallhaven collection (no id yet)';
+    default: return 'your saved search';
+  }
+}
+
+// Minutes since midnight, or null when the time is unusable.
+function ruleMinutes(rule) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String((rule && rule.startHHMM) || ''));
+  if (!m) return null;
+  const h = Number(m[1]), min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+function sortRules(rules) {
+  // Entries take effect in time order whatever order they were typed in, so
+  // the list is shown that way. Unreadable times sink to the bottom rather
+  // than being dropped.
+  return [...(rules || [])].sort((a, b) => {
+    const ma = ruleMinutes(a), mb = ruleMinutes(b);
+    if (ma === null && mb === null) return 0;
+    if (ma === null) return 1;
+    if (mb === null) return -1;
+    return ma - mb;
+  });
+}
+
+// The entry that follows this one on the same day, which is what decides when
+// this one stops. Entries on different days never bound each other.
+function nextRuleAfter(rule, rules) {
+  const mine = ruleMinutes(rule);
+  if (mine === null) return null;
+  const overlapping = sortRules(rules).filter((r) => {
+    if (r === rule) return false;
+    const m = ruleMinutes(r);
+    if (m === null || m <= mine) return false;
+    const a = (rule.days || []), b = (r.days || []);
+    if (!a.length || !b.length) return true;
+    return b.some((d) => a.includes(d));
+  });
+  return overlapping[0] || null;
+}
+
+function describeRule(rule, rules, config, globalCycle) {
+  const time = rule.startHHMM || '??:??';
+  const until = nextRuleAfter(rule, rules);
+  const every = Number(rule.intervalMin) > 0
+    ? `${rule.intervalMin} minutes`
+    : `${globalCycle || 30} minutes (the usual interval)`;
+  const window = until ? `until ${until.startHHMM}` : 'until the next entry, or all night';
+  return `From <strong>${time}</strong> ${window}, ${describeDays(rule.days)}, use ${describeSource(rule, config)}, changing every ${every}.`;
+}
+
+// Two entries at the same time on the same day: the later one in the list wins
+// and the other silently never happens.
+function clashingRuleIds(rules) {
+  const clashes = new Set();
+  const list = rules || [];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      if (ruleMinutes(a) === null || ruleMinutes(a) !== ruleMinutes(b)) continue;
+      const da = a.days || [], db = b.days || [];
+      const overlap = !da.length || !db.length || db.some((d) => da.includes(d));
+      if (overlap) { clashes.add(a.id); clashes.add(b.id); }
+    }
+  }
+  return clashes;
+}
+function renderScheduleRules(rules, activeRuleId) {
   const host = $('#scheduleRules'); if (!host) return;
   const pls = Object.keys(config?.playlists || {}).sort();
   const presets = Object.keys(config?.presets || {}).sort();
-  if (!rules.length) { host.innerHTML = '<div class="help">No rules yet. Add one to start switching sources by time.</div>'; return; }
-  host.innerHTML = rules.map((r, i) => `
-    <div class="sch-rule" data-idx="${i}" style="border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; background:var(--panel-2);">
-      <div style="display:grid; grid-template-columns:100px 1fr 100px auto; gap:8px; align-items:center;">
-        <input type="time" class="sch-time" value="${escapeHtml(r.startHHMM || '08:00')}" />
-        <select class="sch-src-type">
-          <option value="search"${r.sourceType==='search'?' selected':''}>Current search &amp; filters</option>
-          <option value="playlist"${r.sourceType==='playlist'?' selected':''}>Playlist</option>
-          <option value="collection"${r.sourceType==='collection'?' selected':''}>Wallhaven collection ID</option>
-          <option value="preset"${r.sourceType==='preset'?' selected':''}>Saved preset</option>
+  const ordered = sortRules(rules);
+  if (!ordered.length) {
+    host.innerHTML = '<div class="help">Nothing scheduled. Add a time to have WallRaven switch sources during the day: a calm playlist for work hours, your usual search in the evening, that sort of thing.</div>';
+    return;
+  }
+  const clashes = clashingRuleIds(ordered);
+  const cycle = Number(config?.cycleMinutes) || 30;
+  const active = activeRuleId || scheduleActiveRuleId;
+
+  host.innerHTML = ordered.map((r, i) => `
+    <div class="sch-rule${active && r.id === active ? ' is-active' : ''}" data-idx="${i}" data-id="${escapeHtml(String(r.id || ''))}">
+      <div style="display:grid; grid-template-columns:110px 1fr auto; gap:8px; align-items:center;">
+        <input type="time" class="sch-time" value="${escapeHtml(r.startHHMM || '08:00')}" aria-label="Start time" />
+        <select class="sch-src-type" aria-label="What to use from this time">
+          <option value="search"${r.sourceType === 'search' ? ' selected' : ''}>My saved search</option>
+          <option value="playlist"${r.sourceType === 'playlist' ? ' selected' : ''}>A playlist</option>
+          <option value="preset"${r.sourceType === 'preset' ? ' selected' : ''}>A preset</option>
+          <option value="collection"${r.sourceType === 'collection' ? ' selected' : ''}>A Wallhaven collection</option>
         </select>
-        <input type="number" class="sch-interval" placeholder="min" min="1" max="1440" value="${r.intervalMin || ''}" title="Rotation interval (blank = use global cycle)" />
-        <button class="icon-btn danger sch-del" title="Delete rule">✕</button>
+        <button class="icon-btn danger sch-del" title="Remove this time" aria-label="Remove this time">✕</button>
       </div>
-      <div style="margin-top:8px;">
-        ${r.sourceType==='playlist' ? `<select class="sch-src-ref"><option value="">— pick playlist —</option>${pls.map(n => `<option value="${escapeHtml(n)}"${r.sourceRef===n?' selected':''}>${escapeHtml(n)}</option>`).join('')}</select>` :
-          r.sourceType==='preset' ? `<select class="sch-src-ref"><option value="">— pick preset —</option>${presets.map(n => `<option value="${escapeHtml(n)}"${r.sourceRef===n?' selected':''}>${escapeHtml(n)}</option>`).join('')}</select>` :
-          r.sourceType==='collection' ? `<input type="text" class="sch-src-ref" placeholder="collection id" value="${escapeHtml(r.sourceRef || '')}" />` :
-          `<input type="text" class="sch-src-ref" disabled placeholder="uses the current Search &amp; filters card" />`}
+      <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        ${r.sourceType === 'playlist' ? `<select class="sch-src-ref" style="flex:1; min-width:160px;"><option value="">— pick a playlist —</option>${pls.map(n => `<option value="${escapeHtml(n)}"${r.sourceRef === n ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>` :
+          r.sourceType === 'preset' ? `<select class="sch-src-ref" style="flex:1; min-width:160px;"><option value="">— pick a preset —</option>${presets.map(n => `<option value="${escapeHtml(n)}"${r.sourceRef === n ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select>` :
+          r.sourceType === 'collection' ? `<input type="text" class="sch-src-ref" style="flex:1; min-width:160px;" placeholder="Collection id from Wallhaven" value="${escapeHtml(r.sourceRef || '')}" />` :
+          `<input type="text" class="sch-src-ref" style="flex:1; min-width:160px;" disabled placeholder="Whatever Search &amp; filters is set to" />`}
+        <label style="font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+          change every
+          <input type="number" class="sch-interval" min="1" max="1440" style="width:74px;" placeholder="${cycle}" value="${r.intervalMin || ''}" />
+          min
+        </label>
       </div>
-      <div style="margin-top:8px; display:flex; gap:4px; flex-wrap:wrap;">
-        <span style="color:var(--muted); font-size:11px; margin-right:6px; align-self:center;">Days (blank = every day):</span>
-        ${DAY_LABELS.map((lbl, d) => `<label class="check" style="margin:0;"><input type="checkbox" class="sch-day" data-day="${d}" ${((r.days||[]).includes(d))?'checked':''}/> ${lbl}</label>`).join('')}
+      <div class="day-chips" style="margin-top:8px;">
+        ${DAY_LABELS.map((lbl, d) => `<button type="button" class="day-chip sch-day${(r.days || []).includes(d) ? ' on' : ''}" data-day="${d}">${lbl}</button>`).join('')}
+        <button type="button" class="day-chip sch-day-preset" data-preset="all">Every day</button>
+        <button type="button" class="day-chip sch-day-preset" data-preset="weekdays">Weekdays</button>
+        <button type="button" class="day-chip sch-day-preset" data-preset="weekend">Weekend</button>
+      </div>
+      <div class="sch-summary">
+        ${describeRule(r, ordered, config, cycle)}
+        ${active && r.id === active ? '<span class="sch-badge">on now</span>' : ''}
+        ${clashes.has(r.id) ? '<div class="sch-warn" style="margin-top:4px;">Another entry starts at the same time on the same day. Only one of them can win.</div>' : ''}
       </div>
     </div>
   `).join('');
+
   host.querySelectorAll('.sch-rule').forEach(row => {
     row.querySelectorAll('input, select').forEach(el => el.addEventListener('change', persistSchedule));
     row.querySelector('.sch-del').addEventListener('click', () => {
@@ -2337,10 +2463,25 @@ function renderScheduleRules(rules) {
       renderScheduleRules(rules2); persistSchedule();
     });
     row.querySelector('.sch-src-type').addEventListener('change', () => {
-      // Rerender the current rules to swap the source-ref input.
-      const rules2 = collectSchedule().rules;
-      renderScheduleRules(rules2);
+      // Swap the reference control for the new source type, keeping everything
+      // else the user has typed.
+      renderScheduleRules(collectSchedule().rules);
     });
+    // Day chips toggle in place, then the whole card is redrawn so the
+    // sentence underneath keeps up.
+    row.querySelectorAll('.sch-day').forEach(chip => chip.addEventListener('click', () => {
+      chip.classList.toggle('on');
+      const rules2 = collectSchedule().rules;
+      renderScheduleRules(rules2); persistSchedule();
+    }));
+    row.querySelectorAll('.sch-day-preset').forEach(btn => btn.addEventListener('click', () => {
+      const want = btn.dataset.preset === 'weekdays' ? WEEKDAYS : btn.dataset.preset === 'weekend' ? WEEKEND : [];
+      row.querySelectorAll('.sch-day').forEach(chip => {
+        chip.classList.toggle('on', want.includes(Number(chip.dataset.day)));
+      });
+      const rules2 = collectSchedule().rules;
+      renderScheduleRules(rules2); persistSchedule();
+    }));
   });
 }
 function collectSchedule() {
@@ -2353,7 +2494,7 @@ function collectSchedule() {
     sourceType: row.querySelector('.sch-src-type').value || 'search',
     sourceRef: row.querySelector('.sch-src-ref')?.value || '',
     intervalMin: Number(row.querySelector('.sch-interval').value) || null,
-    days: [...row.querySelectorAll('.sch-day')].filter(el => el.checked).map(el => Number(el.dataset.day)),
+    days: [...row.querySelectorAll('.sch-day')].filter(el => el.classList.contains('on')).map(el => Number(el.dataset.day)),
   }));
   return { enabled, rules };
 }
@@ -2362,14 +2503,25 @@ async function persistSchedule() {
   config = await api.setConfig({ schedule });
   updateScheduleStatus();
 }
+let scheduleActiveRuleId = null;
 async function updateScheduleStatus() {
   const el = $('#scheduleStatus'); if (!el) return;
   try {
     const p = await api.schedulePreview();
-    const r = (config?.schedule?.rules || []).find(x => x.id === p.activeRuleId);
-    el.textContent = p.enabled
-      ? (r ? `Active rule: ${r.startHHMM} → ${r.sourceType}${r.sourceRef ? ':' + r.sourceRef : ''} · every ${p.effectiveIntervalMin} min` : 'Enabled, waiting for first rule time.')
-      : 'Timetable disabled.';
+    const rules = config?.schedule?.rules || [];
+    const r = rules.find(x => x.id === p.activeRuleId);
+    const wasActive = scheduleActiveRuleId;
+    scheduleActiveRuleId = p.activeRuleId || null;
+    el.textContent = !p.enabled
+      ? 'The timetable is off, so your usual settings are in charge.'
+      : r
+        ? `In force now: the ${r.startHHMM} entry, changing every ${p.effectiveIntervalMin} minutes.`
+        : 'On, but nothing has started yet today.';
+    // Only redraw when the badge would move, since redrawing throws away
+    // anything half-typed in the card.
+    if (wasActive !== scheduleActiveRuleId && $('#scheduleRules')) {
+      renderScheduleRules(rules, scheduleActiveRuleId);
+    }
   } catch {}
 }
 
