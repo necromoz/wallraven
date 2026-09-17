@@ -2377,7 +2377,7 @@ ipcMain.handle('config:set', (_e, next) => {
   scheduleCycle();
   startScheduleTicker();
   applyAutoStart();
-  try { registerHotkeys(); } catch {}
+  registerHotkeysAndReport();
   updateTrayMenu();
   queueCloudPush();
   return config;
@@ -3212,6 +3212,9 @@ function registerHotkeys() {
   };
   const registered = [];
   const failed = [];
+  // Accelerators are typed by hand, so a typo is ordinary. Electron throws on
+  // some malformed strings and silently returns false on others; both end up
+  // in `failed` and both are the user's to fix.
   for (const [key, fn] of Object.entries(bindings)) {
     const accel = config.hotkeys?.[key];
     if (!accel) continue;
@@ -3220,9 +3223,36 @@ function registerHotkeys() {
       if (ok) registered.push({ key, accel }); else failed.push({ key, accel });
     } catch (e) { failed.push({ key, accel, error: e.message }); }
   }
-  return { ok: true, registered, failed };
+  lastHotkeyStatus = { ok: true, registered, failed, at: Date.now() };
+  return lastHotkeyStatus;
 }
-ipcMain.handle('hotkeys:reregister', () => registerHotkeys());
+
+// Registering a global shortcut fails whenever another program already owns it
+// -- Discord, GeForce Experience and Teams all claim combinations in the same
+// range WallRaven suggests. That failure used to be thrown away at every call
+// site, so the hotkey simply did not work and nothing anywhere said why. Report
+// it to the settings window, and keep the last result so the card can show it
+// on open rather than only in the moment it happened.
+let lastHotkeyStatus = { ok: true, registered: [], failed: [] };
+
+function registerHotkeysAndReport({ announce = true } = {}) {
+  let status;
+  try { status = registerHotkeys(); }
+  catch (e) { status = { ok: false, registered: [], failed: [], error: e.message }; lastHotkeyStatus = status; }
+  notifySettings('hotkeys-status', status);
+  if (announce && status.failed && status.failed.length) {
+    const names = status.failed.map((f) => f.accel).join(', ');
+    notifySettings('app-toast', {
+      msg: `Windows would not give WallRaven ${status.failed.length === 1 ? 'this shortcut' : 'these shortcuts'}: ${names}. Another program already has ${status.failed.length === 1 ? 'it' : 'them'}.`,
+      kind: 'err',
+    });
+    console.warn('[wallraven] hotkeys refused:', names);
+  }
+  return status;
+}
+
+ipcMain.handle('hotkeys:reregister', () => registerHotkeysAndReport());
+ipcMain.handle('hotkeys:status', () => lastHotkeyStatus);
 
 function applyAutoStart() {
   // A packaged (Store) app cannot manage its own start-up. Windows exposes it
@@ -3326,7 +3356,8 @@ async function cloudPull({ force = false } = {}) {
     persistConfigQuiet();
     scheduleCycle();
     startScheduleTicker();
-    try { registerHotkeys(); } catch {}
+    // A pull is not the user pressing Save, so it reports without a toast.
+    registerHotkeysAndReport({ announce: false });
     updateTrayMenu();
     notifySettings('config-changed', config);
   }
@@ -3542,7 +3573,7 @@ else {
     scheduleCycle();
     startScheduleTicker();
     applyAutoStart();
-    registerHotkeys();
+    registerHotkeysAndReport({ announce: false });
     // Kick an update check on startup, then every 6h.
     // Always check on launch (Teams-style), then every 6 hours.
     if (!STORE_BUILD) {

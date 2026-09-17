@@ -62,6 +62,8 @@ contextBridge.exposeInMainWorld('api', {
   playlistSetItemTags: (opts) => ipcRenderer.invoke('playlist:setItemTags', opts),
   playlistSetTagFilter: (opts) => ipcRenderer.invoke('playlist:setTagFilter', opts),
   hotkeysReregister: () => ipcRenderer.invoke('hotkeys:reregister'),
+  hotkeysStatus: () => ipcRenderer.invoke('hotkeys:status'),
+  onHotkeysStatus: (cb) => ipcRenderer.on('hotkeys-status', (_e, s) => cb(s)),
   setWindowOpacity: (v) => ipcRenderer.invoke('window:setOpacity', v),
   // v0.4.0 — account + cloud sync
   accountStatus: () => ipcRenderer.invoke('account:status'),

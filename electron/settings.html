@@ -1204,6 +1204,7 @@
     <div><label class="hk-l" for="hk-back">Back in history</label><input id="hk-back" type="text" placeholder="CmdOrCtrl+Alt+Left" /></div>
     <div><label class="hk-l" for="hk-forward">Forward in history</label><input id="hk-forward" type="text" placeholder="CmdOrCtrl+Alt+Right" /></div>
   </div>
+  <div class="status" id="hk-status" style="margin-top:8px;">&nbsp;</div>
 </template>
 
 <template id="tpl-account">
@@ -1996,6 +1997,11 @@ async function openOnWallhaven(item) {
 }
 
 function wireAllCards() {
+  // The cards are rebuilt from templates on every navigation, so anything
+  // rendered into one has to be put back here or it vanishes when the user
+  // leaves the page and comes back.
+  renderHotkeyStatus();
+  applyStoreUi();
   bindSlider('cycleMinutes', 'cycleMinutesNum');
   bindSlider('cacheMaxMB', 'cacheMaxMBNum');
 
@@ -2554,6 +2560,35 @@ function renderCachePlan(plan, applied = false) {
       `<li>${esc(f.name)} — ${mb(f.sizeMB)} · ${esc(f.reason)}</li>`).join('') + '</ul>');
   }
   return lines.join('');
+}
+
+// Which shortcuts Windows actually granted.
+//
+// A global shortcut fails whenever another program already owns it, and until
+// now that failure went nowhere: the key did nothing and the card looked fine.
+// Held as a module value so re-rendering the card can put it straight back.
+let hotkeyStatus = null;
+
+function renderHotkeyStatus() {
+  const el = $('#hk-status');
+  if (!el) return;
+  const st = hotkeyStatus;
+  if (!st) { el.textContent = '\u00a0'; el.className = 'status'; return; }
+  const failed = st.failed || [];
+  const registered = st.registered || [];
+  if (failed.length) {
+    const names = failed.map(f => f.accel).join(', ');
+    el.textContent = `Not available: ${names} \u2014 another program already has ${failed.length === 1 ? 'it' : 'them'}. Pick a different combination.`;
+    el.className = 'status err';
+    return;
+  }
+  if (!registered.length) {
+    el.textContent = chk('#hotkeysEnabled') ? 'No shortcuts set.' : 'Shortcuts are switched off.';
+    el.className = 'status';
+    return;
+  }
+  el.textContent = `${registered.length} shortcut${registered.length === 1 ? '' : 's'} active.`;
+  el.className = 'status ok';
 }
 
 // Things a Store build cannot do, explained where the control used to be.
@@ -4244,6 +4279,9 @@ api.onConfigChanged?.(async (cfg) => {
     }
   } catch {}
   applyStoreUi();
+  try { hotkeyStatus = await api.hotkeysStatus?.(); } catch {}
+  renderHotkeyStatus();
+  api.onHotkeysStatus?.((st) => { hotkeyStatus = st; renderHotkeyStatus(); });
   renderUpdatesCard();
   refreshUpdateBanner();
 
