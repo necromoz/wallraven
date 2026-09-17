@@ -1,9 +1,9 @@
 {
-  "version": "1.0.2",
-  "releasedAt": "2026-09-16",
-  "url": "https://github.com/necromoz/wallraven/releases/download/v1.0.2/Wallraven-Setup-v1.0.2.exe",
-  "sha256": "a70e2c7dd115ff6a8fecbe57c140ed207c891fa4a456778cb7b6896cc03aff00",
-  "pageUrl": "https://github.com/necromoz/wallraven/releases/tag/v1.0.2",
-  "sizeBytes": 112326624,
-  "notes": "Updates are now checked before they are installed: WallRaven only accepts an installer from its own release sites and verifies it against a published fingerprint before running it."
+  "version": "1.1.0",
+  "releasedAt": "2026-09-17",
+  "url": "https://github.com/necromoz/wallraven/releases/download/v1.1.0/Wallraven-Setup-v1.1.0.exe",
+  "sha256": "044d9c24a415663f769976252df1f4ca79d6ebdda569e03448582f70f08c2102",
+  "pageUrl": "https://github.com/necromoz/wallraven/releases/tag/v1.1.0",
+  "sizeBytes": 112335836,
+  "notes": "Sign-in works again, linking the app to your account is now safe, and saved wallpapers stop disappearing. Plus a dozen other fixes."
 }
