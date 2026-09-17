@@ -1660,6 +1660,10 @@ function renderCards() {
 }
 
 // ---------- Application shell: sidebar, page header, sub-tabs ----------
+// The Fade button is created in the header markup and lives in the sidebar.
+// Kept here so renderSidebar can put it back after clearing the sidebar.
+let fadeBtnEl = null;
+
 function renderSidebar() {
   const host = $('#sidebar');
   if (!host) return;
@@ -1681,8 +1685,18 @@ function renderSidebar() {
   host.appendChild(foot);
   // Peek-at-the-wallpaper lives down here beside the version, well away from
   // the wallpaper controls in the title bar.
-  const fb = document.getElementById('btn-fade');
-  if (fb) { fb.hidden = false; fb.classList.add('secondary'); foot.appendChild(fb); }
+  //
+  // It is moved here out of the header, and this function clears the sidebar
+  // before rebuilding it -- so the first click on any nav item destroyed the
+  // button, and Fade was gone until the window was reopened. Holding the
+  // element itself means the same node (with its handlers still attached) goes
+  // back in every time, whether or not it is currently in the document.
+  if (!fadeBtnEl) fadeBtnEl = document.getElementById('btn-fade');
+  if (fadeBtnEl) {
+    fadeBtnEl.hidden = false;
+    fadeBtnEl.classList.add('secondary');
+    foot.appendChild(fadeBtnEl);
+  }
   const v = $('#app-version');
   const sv = $('#sidebar-version');
   if (v && sv) sv.textContent = v.textContent;
@@ -4307,7 +4321,7 @@ api.onConfigChanged?.(async (cfg) => {
   // header, toasts and all) to invisible so you can see the wallpaper behind
   // it. Click to pin it faded; click again, press Esc or move the mouse away
   // to bring it back.
-  const fadeBtn = document.getElementById('btn-fade');
+  const fadeBtn = fadeBtnEl || document.getElementById('btn-fade');
   if (fadeBtn && api.setWindowOpacity) {
     let restoreTimer = null;
     let pinned = false;
