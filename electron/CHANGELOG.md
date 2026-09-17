@@ -1,5 +1,13 @@
 # Wallraven changelog
 
+## v1.2.0-beta.4 — 17 Sep 2026
+
+The first build produced by the build server rather than by hand.
+
+### Fixed
+- **OneDrive is no longer offered twice** in the folder list. Windows and the app spelled the same folder two different ways, so it did not recognise its own suggestion.
+- **A hung wallpaper fetch can no longer come back and overwrite a newer one.** If a change took more than 30 seconds, the app would start again without it, and the original would eventually finish and put its own wallpaper on top of the one you had asked for.
+
 ## v1.2.0-beta.3 — 17 Sep 2026
 
 ### Fixed
