@@ -2668,7 +2668,11 @@ function renderHotkeyStatus() {
     return;
   }
   if (!registered.length) {
-    el.textContent = chk('#hotkeysEnabled') ? 'No shortcuts set.' : 'Shortcuts are switched off.';
+    // Not chk(): that helper is local to hydrateInputs and collect. Calling it
+    // here threw a ReferenceError out of wireAllCards, which is the first thing
+    // renderCards does, so every control in the window lost its wiring.
+    const on = !!document.getElementById('hotkeysEnabled')?.checked;
+    el.textContent = on ? 'No shortcuts set.' : 'Shortcuts are switched off.';
     el.className = 'status';
     return;
   }
