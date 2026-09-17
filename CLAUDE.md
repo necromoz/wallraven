@@ -174,9 +174,19 @@ the Store, and the updater is what serves them.
   only one that can push.
 - The site URL is hardcoded in five places across `cloud.cjs` and `main.cjs`, split
   between `wallraven.lovable.app` and `wallraven.app`.
-- All Wallhaven API calls are serialised through one promise chain (`WH_CHAIN`) and
-  the JSON helpers have no timeouts, so one stalled request wedges every wallpaper
-  change. 0.8.13 papers over this with a 30-second lock takeover.
+- ~~The JSON helpers have no timeouts, so one stalled request wedges every
+  wallpaper change.~~ Fixed: connect, stall and overall deadlines plus a body
+  size cap on every JSON request, and the gate no longer lets a low-priority
+  call wait behind a high-priority one that is queued behind it. Wallhaven calls
+  are still serialised through one chain (`WH_CHAIN`), which is deliberate --
+  Wallhaven rate-limits per key -- and the 30-second fetch-lock takeover is
+  still there as a last resort.
+- Windows accepts a wallpaper path that does not exist, paints the desktop black
+  and reports success. `assertImageReadable` is the guard; do not call
+  `setWindowsWallpaper` or the per-monitor variant around it.
+- The cache prunes oldest-first, so most history entries older than a few hours
+  have no file behind them. Anything that shows or sets a history entry has to
+  cope: Wallhaven ones are re-downloaded from the id, local ones are gone.
 
 ## Hosting and the database
 
