@@ -70,6 +70,26 @@ Edits to `electron/` take effect on restart; there is no build step for the app
 itself. `npm test` after every change -- it is a few seconds and covers the
 logic that is awkward to reach by hand.
 
+## Building without a Windows machine
+
+The installer can be built from Linux: NSIS cross-compiles, and
+`scripts/build-desktop.mjs` now uses `-D` off Windows and `/D` on it. That is
+how 1.2.0-beta.1 was produced from the desktop Linux VM, which is the only
+shell this session can actually run a build in.
+
+Two things that matter if it is done again:
+
+- Build on local disk, not in the mounted folder. The packaged app is ~360 MB
+  and writing that through the mount is slow enough to look hung. Copy the
+  repo out (no `node_modules`, symlink it instead), build there, copy back only
+  the installer.
+- NSIS is not installed in that VM and there is no root. `apt-get download nsis
+  nsis-common`, `dpkg-deb -x` each into a prefix, then run it with `NSISDIR`
+  pointing at `usr/share/nsis` and that `usr/bin` on PATH.
+
+A build made this way is unsigned, exactly like the CI one, and is not
+published anywhere: the update manifest still points at the last real release.
+
 ## Release gates
 
 All four are closed. What is verified and what is merely written differs from

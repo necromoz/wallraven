@@ -191,6 +191,17 @@ check("the double-click launcher calls scripts that exist", () => {
   assert.ok(/--user-data-dir/.test(pkg.scripts["app:clean"]), "the clean profile is not separate any more");
 });
 
+check("the installer build works off Windows too", () => {
+  // NSIS cross-compiles, and the beta was built on Linux because that is where
+  // this session can run a build at all. It takes -D on POSIX and /D on
+  // Windows, and getting that wrong looks like NSIS being absent.
+  const build = fs.readFileSync(path.join(__dirname, "..", "..", "scripts", "build-desktop.mjs"), "utf8");
+  assert.ok(/const NSIS_FLAG = process\.platform === "win32" \? "\/" : "-";/.test(build));
+  assert.ok(/\$\{NSIS_FLAG\}DOUTFILE=/.test(build), "the output path still assumes Windows flags");
+  assert.ok(/\$\{NSIS_FLAG\}DAPP_VERSION=/.test(build));
+  assert.ok(/probe\.status === 0/.test(build), "a makensis that runs but fails is treated as found");
+});
+
 check("the launcher waits rather than vanishing on an error", () => {
   const bat = fs.readFileSync(path.join(__dirname, "..", "..", "Run WallRaven.bat"), "utf8");
   // Every exit path pauses; a console window that closes instantly takes the

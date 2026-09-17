@@ -222,14 +222,19 @@ function buildMsix(version) {
   return outFile;
 }
 
+// NSIS takes /DNAME=value on Windows and -DNAME=value everywhere else, and it
+// cross-compiles: a Windows installer can be built from Linux, which is how the
+// beta was produced without a Windows machine in the loop.
+const NSIS_FLAG = process.platform === "win32" ? "/" : "-";
+
 function findMakensis() {
   for (const candidate of [
     "makensis",
     "C:\\Program Files (x86)\\NSIS\\makensis.exe",
     "C:\\Program Files\\NSIS\\makensis.exe",
   ]) {
-    const probe = spawnSync(candidate, ["/VERSION"], { encoding: "utf8" });
-    if (!probe.error) return candidate;
+    const probe = spawnSync(candidate, [`${NSIS_FLAG}VERSION`], { encoding: "utf8" });
+    if (!probe.error && probe.status === 0) return candidate;
   }
   return null;
 }
@@ -249,7 +254,7 @@ function buildInstaller(version) {
   // the working directory: `app\*.*`, `icon.ico`.
   const res = spawnSync(
     makensis,
-    [`/DOUTFILE=${outFile}`, `/DAPP_VERSION=${version}`, "installer.nsi"],
+    [`${NSIS_FLAG}DOUTFILE=${outFile}`, `${NSIS_FLAG}DAPP_VERSION=${version}`, "installer.nsi"],
     { cwd: ELECTRON_DIR, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
 
