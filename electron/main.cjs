@@ -180,6 +180,18 @@ let tray = null;
 let settingsWindow = null;
 let cycleTimer = null;
 let isFetching = false;
+// Which fetch is the current one.
+//
+// The 30-second safety valve below takes the lock away from a fetch that has
+// hung, but it cannot stop that fetch: if it was stuck on a slow download it
+// will eventually finish, set its wallpaper over the top of the one the user
+// asked for, and push its own entry into history. It also used to clear
+// isFetching in its finally block, freeing the lock while the newer fetch was
+// still using it. Each fetch takes a number; anything that is no longer the
+// current number finishes quietly and changes nothing.
+let fetchGeneration = 0;
+function startFetchGeneration() { return ++fetchGeneration; }
+function fetchSuperseded(gen) { return gen !== fetchGeneration; }
 let paused = false;
 // v0.5.0 runtime state
 let offlineNotified = false;          // only toast on online/offline *change*
@@ -1403,7 +1415,13 @@ async function fetchAndSetWallpaper(manual = false) {
     });
     // Safety valve: a lock held this long means something hung — take it over
     // rather than leaving the app stuck on one wallpaper until it restarts.
-    if (waitedOut) { console.warn('[wallraven] fetch lock held too long — taking over'); isFetching = false; }
+    if (waitedOut) {
+      console.warn('[wallraven] fetch lock held too long, taking over');
+      // Retiring the generation is what makes the hung fetch harmless when it
+      // does come back.
+      startFetchGeneration();
+      isFetching = false;
+    }
   }
 
   if (paused && !manual) return;
@@ -1419,6 +1437,7 @@ async function fetchAndSetWallpaper(manual = false) {
     } catch {}
   }
   isFetching = true;
+  const generation = startFetchGeneration();
   updateTrayMenu();
   let servedFromCache = false;     // stats: true when no network download was needed
   // Validate the chosen source before using it. A source can go stale at any
@@ -1433,6 +1452,7 @@ async function fetchAndSetWallpaper(manual = false) {
     // modes never touch the network so they run their normal path below.
     if ((mode === 'search' || mode === 'collection') && (await useCachedOnly())) {
       const cachedFile = pickCachedWallpaper();
+      if (cachedFile && fetchSuperseded(generation)) return;
       if (cachedFile) {
         await applyWallpaper(cachedFile, null);
         const id = path.basename(cachedFile, path.extname(cachedFile));
@@ -1528,6 +1548,12 @@ async function fetchAndSetWallpaper(manual = false) {
         servedFromCache = true;        // already cached — no download this rotation
       }
     }
+    // Last check before anything the user can see. A download can take a long
+    // time, and the lock may have been taken away while it ran.
+    if (fetchSuperseded(generation)) {
+      console.warn('[wallraven] fetch superseded, discarding its result');
+      return;
+    }
     await applyWallpaper(dest, playlistChoice ? choice : null);
     history.items.push({ id: choice.id, url: choice.url, file: dest, ts: Date.now(), resolution: choice.resolution });
     history.currentId = choice.id;
@@ -1550,8 +1576,13 @@ async function fetchAndSetWallpaper(manual = false) {
       new Notification({ title: 'WallRaven', body: 'Error: ' + e.message, icon: ICON_PATH }).show();
     }
   } finally {
-    isFetching = false;
-    updateTrayMenu();
+    // Only the current fetch owns the lock. A superseded one clearing it would
+    // free the lock while the fetch that took it over is still working, which
+    // is how two rotations end up running at once.
+    if (!fetchSuperseded(generation)) {
+      isFetching = false;
+      updateTrayMenu();
+    }
   }
 }
 

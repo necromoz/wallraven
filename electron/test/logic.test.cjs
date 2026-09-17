@@ -507,6 +507,58 @@ check("nonsense does not produce NaN on the tray menu", () => {
   }
 });
 
+// ---------------------------------------------------------------- fetch generations
+
+const fetches = new Function(`
+  let fetchGeneration = 0;
+  ${extract("startFetchGeneration")}
+  ${extract("fetchSuperseded")}
+  return { startFetchGeneration, fetchSuperseded };
+`)();
+
+console.log("fetch generations");
+
+check("the fetch that holds the lock is the current one", () => {
+  const mine = fetches.startFetchGeneration();
+  assert.strictEqual(fetches.fetchSuperseded(mine), false);
+});
+
+check("taking the lock away retires whoever had it", () => {
+  // The 30-second safety valve can take the lock from a fetch that has hung,
+  // but it cannot stop that fetch. When it finally comes back it must not set
+  // its wallpaper over the top of the one the user asked for.
+  const hung = fetches.startFetchGeneration();
+  fetches.startFetchGeneration();            // the takeover
+  const replacement = fetches.startFetchGeneration();
+  assert.strictEqual(fetches.fetchSuperseded(hung), true, "the hung fetch would still apply its result");
+  assert.strictEqual(fetches.fetchSuperseded(replacement), false, "the replacement thinks it is stale");
+});
+
+check("a retired fetch stays retired", () => {
+  const old = fetches.startFetchGeneration();
+  fetches.startFetchGeneration();
+  assert.strictEqual(fetches.fetchSuperseded(old), true);
+  assert.strictEqual(fetches.fetchSuperseded(old), true);
+});
+
+check("the rotation checks before it changes anything, and before freeing the lock", () => {
+  const at = SRC.indexOf("async function fetchAndSetWallpaper(");
+  const body = SRC.slice(at, SRC.indexOf("\n}", SRC.indexOf("} finally {", at)));
+  assert.ok(/const generation = startFetchGeneration\(\)/.test(body), "the fetch does not take a generation");
+  assert.ok(
+    /if \(fetchSuperseded\(generation\)\) \{/.test(body),
+    "a superseded fetch still applies its wallpaper",
+  );
+  assert.ok(
+    /if \(!fetchSuperseded\(generation\)\) \{\n      isFetching = false;/.test(body),
+    "a superseded fetch still frees the lock, which lets two rotations run at once",
+  );
+  assert.ok(
+    /startFetchGeneration\(\);\n      isFetching = false;/.test(body),
+    "the takeover does not retire the fetch it is taking over from",
+  );
+});
+
 // ---------------------------------------------------------------- summary
 
 console.log();
