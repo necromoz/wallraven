@@ -136,6 +136,21 @@ check("the scheduled update checks do not run in a Store build", () => {
   assert.ok(/if \(!STORE_BUILD\) \{/.test(window), "the startup checks are not gated on STORE_BUILD");
 });
 
+check("applyAutoStart does nothing in a Store build", () => {
+  // Writing a Run key from inside an MSIX package either does nothing or
+  // registers a path the shell will not launch. Windows owns start-up there.
+  const b = body("applyAutoStart");
+  assert.ok(/if \(STORE_BUILD\) return;/.test(b), "applyAutoStart still tries to register start-up");
+});
+
+check("a Store build honours start-minimized without a --hidden argument", () => {
+  // A startup task cannot pass arguments, so the setting is all there is.
+  assert.ok(
+    /startedHidden = process\.argv\.includes\('--hidden'\) \|\| \(STORE_BUILD && !!config\.startMinimized\)/.test(main),
+    "a Store build launched at login would open the settings window every time",
+  );
+});
+
 check("the tray hides Check for updates in a Store build", () => {
   assert.ok(
     /STORE_BUILD \? \[\] : \[\{ label: `Check for updates`/.test(main),
@@ -167,6 +182,13 @@ check("the card asks the main process rather than guessing", () => {
 
 check("a Store build never kicks off an update check from the renderer", () => {
   assert.ok(/if \(!storeManaged\) api\.updateCheck/.test(html));
+});
+
+check("the Startup row says where the switch actually is", () => {
+  assert.ok(/id="startup-store-note"/.test(html));
+  assert.ok(/function applyStoreUi\(\)/.test(html));
+  assert.ok(/applyStoreUi\(\);/.test(html), "applyStoreUi is defined but never called");
+  assert.ok(/auto\.disabled = true/.test(html), "the Run on startup checkbox is still usable");
 });
 
 check("the update banner stays hidden in a Store build", () => {

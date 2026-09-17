@@ -3115,6 +3115,13 @@ function registerHotkeys() {
 ipcMain.handle('hotkeys:reregister', () => registerHotkeys());
 
 function applyAutoStart() {
+  // A packaged (Store) app cannot manage its own start-up. Windows exposes it
+  // as a startup task the user turns on in Settings > Apps > Startup, declared
+  // in AppxManifest.xml and off until they say otherwise. Writing a Run key
+  // from inside the package would either be ignored or point at a path in
+  // WindowsApps that the shell refuses to launch, so the honest thing is to
+  // leave it alone and let the Settings window say where the switch lives.
+  if (STORE_BUILD) return;
   if (process.platform !== 'win32' && process.platform !== 'darwin') return;
   try {
     // Portable/zip installs move around, so re-register with the current exe
@@ -3428,7 +3435,9 @@ else {
       setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1000);
     }
 
-    const startedHidden = process.argv.includes('--hidden');
+    // A startup task cannot pass arguments, so a Store build has no --hidden to
+    // read: "start minimized" is the only thing left to go on.
+    const startedHidden = process.argv.includes('--hidden') || (STORE_BUILD && !!config.startMinimized);
     if (!startedHidden) openSettings();
     // Initial fetch if no wallpaper yet
     if (!history.items.length) fetchAndSetWallpaper(false);

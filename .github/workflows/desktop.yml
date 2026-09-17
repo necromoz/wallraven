@@ -69,12 +69,23 @@ jobs:
       # minute. The packager downloads Electron from GitHub's release servers,
       # and that has already returned a 500 once mid-build. Nothing about the
       # code was wrong; the artifact simply was not there that second.
-      - name: Build installer
+      # The Store package is built from the same packaged app as the installer,
+      # in the same job, so the two can never be built from different commits.
+      #
+      # The identity values come from Partner Center. Until the name is
+      # reserved these repository variables are unset and the build falls back
+      # to placeholders: the package is then installable locally for testing
+      # but cannot be submitted, which is the safe way round.
+      - name: Build installer and Store package
         shell: bash
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
         run: |
           for attempt in 1 2 3; do
             echo "::group::Build attempt $attempt"
-            if node scripts/build-desktop.mjs --platform win32 --arch x64; then
+            if node scripts/build-desktop.mjs --platform win32 --arch x64 --msix; then
               echo "::endgroup::"
               exit 0
             fi
@@ -85,17 +96,32 @@ jobs:
           echo "::error::the installer build failed three times; this is unlikely to be transient"
           exit 1
 
+      # A skipped MSIX step would otherwise look like a successful build. The
+      # runner image is expected to carry the Windows SDK; if it stops doing
+      # so, this is where that is discovered.
+      - name: Check the Store package was produced
+        shell: bash
+        run: |
+          shopt -s nullglob
+          pkgs=(dist/*.msix)
+          if [ ${#pkgs[@]} -eq 0 ]; then
+            echo "::error::no .msix was produced -- makeappx was probably not found on the runner"
+            exit 1
+          fi
+          ls -la "${pkgs[@]}"
+
       - name: Checksum
         shell: bash
         run: |
           cd dist
-          sha256sum *.exe | tee SHA256SUMS.txt
+          sha256sum *.exe *.msix | tee SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
           name: Wallraven-Setup-v${{ steps.version.outputs.version }}
           path: |
             dist/*.exe
+            dist/*.msix
             dist/SHA256SUMS.txt
           retention-days: 14
           if-no-files-found: error

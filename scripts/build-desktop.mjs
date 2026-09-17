@@ -21,6 +21,13 @@
 // quick.
 
 import { packager } from "@electron/packager";
+import {
+  checkAssets,
+  identityFromEnv,
+  isPlaceholderIdentity,
+  msixVersion,
+  renderManifest,
+} from "./msix.mjs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -144,6 +151,77 @@ async function pack(version, platform, arch) {
   return APP_DIR;
 }
 
+const MSIX_DIR = path.join(ELECTRON_DIR, "msix");
+
+function findMakeappx() {
+  // makeappx.exe ships with the Windows SDK, which GitHub's windows runners
+  // already have. Take the highest SDK version present rather than pinning
+  // one, because the runner image changes without notice.
+  const probe = spawnSync("makeappx", ["/?"], { encoding: "utf8" });
+  if (!probe.error) return "makeappx";
+
+  const roots = ["C:\\Program Files (x86)\\Windows Kits\\10\\bin", "C:\\Program Files\\Windows Kits\\10\\bin"];
+  const found = [];
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    for (const entry of fs.readdirSync(root)) {
+      const exe = path.join(root, entry, "x64", "makeappx.exe");
+      if (fs.existsSync(exe)) found.push({ version: entry, exe });
+    }
+  }
+  found.sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }));
+  return found.length ? found[found.length - 1].exe : null;
+}
+
+// Build the Store package. Unsigned on purpose: the Store signs submissions
+// with its own certificate, and a self-signed package would only be
+// installable on machines that had been told to trust it.
+function buildMsix(version) {
+  const identity = identityFromEnv(process.env);
+  if (isPlaceholderIdentity(identity)) {
+    log("MSIX identity not set, using placeholders: this package can be installed locally but not submitted");
+  }
+
+  const assetProblems = checkAssets(path.join(MSIX_DIR, "assets"));
+  if (assetProblems.length) {
+    throw new Error(`MSIX assets are wrong:\n  - ${assetProblems.join("\n  - ")}`);
+  }
+
+  const template = fs.readFileSync(path.join(MSIX_DIR, "AppxManifest.template.xml"), "utf8");
+  const manifest = renderManifest(template, { identity, version });
+
+  const stage = path.join(PKG_DIR, "msix");
+  fs.rmSync(stage, { recursive: true, force: true });
+  fs.mkdirSync(stage, { recursive: true });
+  fs.cpSync(APP_DIR, path.join(stage, "app"), { recursive: true });
+  fs.cpSync(path.join(MSIX_DIR, "assets"), path.join(stage, "assets"), { recursive: true });
+  fs.writeFileSync(path.join(stage, "AppxManifest.xml"), manifest);
+
+  const makeappx = findMakeappx();
+  if (!makeappx) {
+    log("makeappx not found, skipping the MSIX step");
+    log(`the staged package is at ${path.relative(ROOT, stage)}; install the Windows SDK to pack it`);
+    return null;
+  }
+
+  fs.mkdirSync(DIST_DIR, { recursive: true });
+  const outFile = path.join(DIST_DIR, `WallRaven-${version}-x64.msix`);
+  const res = spawnSync(makeappx, ["pack", "/d", stage, "/p", outFile, "/o"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (res.status !== 0) {
+    console.error(res.stdout || "");
+    console.error(res.stderr || "");
+    throw new Error(`makeappx exited ${res.status}`);
+  }
+
+  const mb = fs.statSync(outFile).size / (1024 * 1024);
+  if (mb < 20) throw new Error(`the MSIX is only ${mb.toFixed(1)} MB, so it is missing the app`);
+  log(`msix: ${path.relative(ROOT, outFile)} (${mb.toFixed(1)} MB, version ${msixVersion(version)})`);
+  return outFile;
+}
+
 function findMakensis() {
   for (const candidate of [
     "makensis",
@@ -215,6 +293,10 @@ async function main() {
 
   if (platform === "win32") {
     buildInstaller(version);
+    // Opt-in: the Store package is a second artifact from the same build, and
+    // asking for it on every local build would mean needing the Windows SDK to
+    // produce an installer.
+    if (process.argv.includes("--msix")) buildMsix(version);
   } else {
     log("not Windows, skipping the installer step");
   }

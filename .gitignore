@@ -51,6 +51,10 @@ electron/dist/
 *.exe
 *.nupkg
 *.pdb
+# Store packages are build output too, and each one is ~110 MB.
+*.msix
+*.msixbundle
+*.appx
 
 # Environment files. Only .env.example is committed; keep real values local.
 .env

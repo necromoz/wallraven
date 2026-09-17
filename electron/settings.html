@@ -1147,6 +1147,7 @@
   <div class="row"><label>Startup</label><div>
     <label class="check"><input type="checkbox" id="autoStart"/> Run on startup</label>
     <label class="check"><input type="checkbox" id="startMinimized"/> Start minimized to tray</label>
+    <div class="help" id="startup-store-note" style="display:none; margin:4px 0 0;"></div>
   </div></div>
   <div class="row"><label>Notifications</label>
     <label class="check"><input type="checkbox" id="notifyOnChange"/> Notify when wallpaper changes</label>
@@ -2553,6 +2554,23 @@ function renderCachePlan(plan, applied = false) {
       `<li>${esc(f.name)} — ${mb(f.sizeMB)} · ${esc(f.reason)}</li>`).join('') + '</ul>');
   }
   return lines.join('');
+}
+
+// Things a Store build cannot do, explained where the control used to be.
+//
+// Windows owns start-up for a packaged app: it is a startup task the user
+// switches on under Settings > Apps > Startup, and nothing the app writes to
+// the registry changes it. A checkbox that silently did nothing would be worse
+// than none, so it is disabled and the real place to go is named.
+function applyStoreUi() {
+  if (!storeManaged) return;
+  const auto = $('#autoStart');
+  if (auto) { auto.checked = false; auto.disabled = true; }
+  const note = $('#startup-store-note');
+  if (note) {
+    note.style.display = '';
+    note.textContent = 'Windows controls start-up for Store apps: turn WallRaven on under Settings \u2192 Apps \u2192 Startup. "Start minimized to tray" still decides whether the window appears when it does.';
+  }
 }
 
 // ---------- Updates card ----------
@@ -4225,6 +4243,7 @@ api.onConfigChanged?.(async (cfg) => {
       storeMessage = meta.storeMessage || 'The Microsoft Store keeps this copy up to date.';
     }
   } catch {}
+  applyStoreUi();
   renderUpdatesCard();
   refreshUpdateBanner();
 
