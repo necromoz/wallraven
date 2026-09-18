@@ -1,9 +1,9 @@
 {
-  "version": "1.2.0",
-  "releasedAt": "2026-09-17",
-  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.2.0/Wallraven-Setup-v1.2.0.exe",
-  "sha256": "e1f57b15685499a8169be154f6ad77d5d69241d976da18ef5e2ce36ad1937632",
-  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.2.0",
-  "sizeBytes": 112564316,
-  "notes": "Back and Forward work again, Browse has its own search that leaves your settings alone, saving a filter change fetches a matching wallpaper straight away, and the timetable now explains itself. Plus the app can no longer report success for a wallpaper it did not set."
+  "version": "1.2.1",
+  "releasedAt": "2026-09-18",
+  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.2.1/Wallraven-Setup-v1.2.1.exe",
+  "sha256": "0e8928748f257960fc9c00f588c8721c02dc3d07fc989986373154b6c2f8d5f9",
+  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.2.1",
+  "sizeBytes": 112693496,
+  "notes": "One wallpaper per action when you apply a preset, themes stick as soon as you pick them, Fade no longer pins the window invisible, and the thumbnail in the title bar matches the buttons beside it."
 }
