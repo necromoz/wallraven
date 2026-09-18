@@ -14,6 +14,7 @@ import {
   WifiOff,
 } from "lucide-react";
 
+import { RELEASES_PAGE, useLatestRelease } from "@/lib/latest-release";
 import feat01 from "@/assets/feat-01.jpg";
 import feat02 from "@/assets/feat-02.jpg";
 import feat03 from "@/assets/feat-03.jpg";
@@ -138,6 +139,7 @@ const FEATURES = [
 ];
 
 function Index() {
+  const latest = useLatestRelease();
   return (
     <main className="min-w-0">
       {/* Hero panel */}
@@ -170,10 +172,10 @@ function Index() {
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <a
-              href="https://wallraven.app/__l5e/assets-v1/0f35ffb2-d4f9-4478-83c3-55bd09170b19/Wallraven-Setup-v0.8.13.exe"
+              href={latest?.url ?? RELEASES_PAGE}
               className="glow-ring prism-btn inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold transition-transform hover:-translate-y-0.5"
             >
-              Download for Windows — v0.8.13
+              Download for Windows{latest ? ` \u2014 v${latest.version}` : ""}
             </a>
             <Link
               to="/presets"

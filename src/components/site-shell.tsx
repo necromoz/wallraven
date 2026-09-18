@@ -1,3 +1,4 @@
+import { useLatestRelease } from "@/lib/latest-release";
 import { Link } from "@tanstack/react-router";
 import { History, Home, Image as ImageIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -12,6 +13,7 @@ const SIDE_NAV = [
 ] as const;
 
 export function SiteShell({ children }: { children: ReactNode }) {
+  const latest = useLatestRelease();
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
@@ -53,7 +55,9 @@ export function SiteShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <span className="mt-auto px-3 text-xs text-muted-foreground/70">v0.8.13</span>
+          <span className="mt-auto px-3 text-xs text-muted-foreground/70">
+            {latest ? `v${latest.version}` : ""}
+          </span>
         </aside>
 
         <div className="min-w-0 flex-1 pb-20">
