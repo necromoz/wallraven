@@ -14,9 +14,7 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const SRC = fs
-  .readFileSync(path.join(__dirname, "..", "cloud.cjs"), "utf8")
-  .replace(/\r\n/g, "\n");
+const SRC = fs.readFileSync(path.join(__dirname, "..", "cloud.cjs"), "utf8").replace(/\r\n/g, "\n");
 
 /** Pull a top-level function out of cloud.cjs by brace matching. */
 function extract(name) {
@@ -156,11 +154,13 @@ console.log("a pull cannot wipe a timetable");
 
 // Extracted rather than required: cloud.cjs pulls in Electron at load time on
 // some paths, and the rest of this file works the same way.
-const keepBetterSchedule = new Function(`${extract("keepBetterSchedule")}; return keepBetterSchedule;`)();
+const keepBetterSchedule = new Function(
+  `${extract("keepBetterSchedule")}; return keepBetterSchedule;`,
+)();
 
 check("a remote timetable with rules wins, because that is a real edit", () => {
-  const local = { enabled: true, rules: [{ id: 'a' }] };
-  const remote = { enabled: true, rules: [{ id: 'b' }, { id: 'c' }] };
+  const local = { enabled: true, rules: [{ id: "a" }] };
+  const remote = { enabled: true, rules: [{ id: "b" }, { id: "c" }] };
   assert.deepStrictEqual(keepBetterSchedule(local, remote), remote);
 });
 
@@ -169,30 +169,43 @@ check("an empty remote timetable does not delete a local one", () => {
   // section wholesale, so an account row written before the timetable existed
   // wiped it. An update restarts the app, which pulls seconds later, which is
   // when this was noticed.
-  const local = { enabled: true, rules: [{ id: 'a' }] };
+  const local = { enabled: true, rules: [{ id: "a" }] };
   for (const remote of [undefined, null, {}, { enabled: false, rules: [] }]) {
-    assert.deepStrictEqual(keepBetterSchedule(local, remote), local, `lost the schedule to ${JSON.stringify(remote)}`);
+    assert.deepStrictEqual(
+      keepBetterSchedule(local, remote),
+      local,
+      `lost the schedule to ${JSON.stringify(remote)}`,
+    );
   }
 });
 
 check("with nothing either side, the remote value passes through untouched", () => {
-  assert.deepStrictEqual(keepBetterSchedule(undefined, { enabled: false, rules: [] }), { enabled: false, rules: [] });
+  assert.deepStrictEqual(keepBetterSchedule(undefined, { enabled: false, rules: [] }), {
+    enabled: false,
+    rules: [],
+  });
   assert.strictEqual(keepBetterSchedule(null, null), null);
 });
 
 check("clearing a timetable on purpose still needs deleting the rules", () => {
   // Turning the timetable off keeps the rules, so switching it off on one
   // machine does sync: it is only the ruleless case that is refused.
-  const local = { enabled: true, rules: [{ id: 'a' }] };
-  const remote = { enabled: false, rules: [{ id: 'a' }] };
+  const local = { enabled: true, rules: [{ id: "a" }] };
+  const remote = { enabled: false, rules: [{ id: "a" }] };
   assert.deepStrictEqual(keepBetterSchedule(local, remote), remote);
 });
 
 check("the pull path uses it", () => {
-  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "cloud.cjs"), "utf8");
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "cloud.cjs"),
+    "utf8",
+  );
   const at = src.indexOf("async function pull(");
   const body = src.slice(at, src.indexOf("\n}", at));
-  assert.ok(/keepBetterSchedule\(config\.schedule, patch\.schedule\)/.test(body), "pull does not protect the schedule");
+  assert.ok(
+    /keepBetterSchedule\(config\.schedule, patch\.schedule\)/.test(body),
+    "pull does not protect the schedule",
+  );
 });
 
 console.log();

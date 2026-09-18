@@ -60,8 +60,16 @@ export function SiteShell({ children }: { children: ReactNode }) {
           <header className="py-5">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
               <Link to="/" className="flex min-w-0 items-center gap-2.5 lg:hidden">
-                <img src={iconUrl} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-[9px]" />
-                <span className="truncate font-display text-base font-semibold tracking-tight">WallRaven</span>
+                <img
+                  src={iconUrl}
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 shrink-0 rounded-[9px]"
+                />
+                <span className="truncate font-display text-base font-semibold tracking-tight">
+                  WallRaven
+                </span>
               </Link>
               <Link
                 to={signedIn ? "/account" : "/auth"}
@@ -70,7 +78,10 @@ export function SiteShell({ children }: { children: ReactNode }) {
                 {signedIn ? "Account" : "Sign in"}
               </Link>
             </div>
-            <nav className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-border bg-card/45 p-1 text-center text-xs lg:hidden" aria-label="Mobile navigation">
+            <nav
+              className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-border bg-card/45 p-1 text-center text-xs lg:hidden"
+              aria-label="Mobile navigation"
+            >
               {SIDE_NAV.map((item) => (
                 <Link
                   key={item.to}

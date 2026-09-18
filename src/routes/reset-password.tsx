@@ -92,7 +92,9 @@ function ResetPasswordPage() {
         <h1 className="text-center text-2xl font-semibold tracking-tight">Choose a new password</h1>
 
         {recoveryState === "checking" && !done && (
-          <p className="mt-6 text-center text-sm text-muted-foreground">Checking your reset link…</p>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Checking your reset link…
+          </p>
         )}
 
         {recoveryState === "invalid" && !done && (
@@ -107,9 +109,14 @@ function ResetPasswordPage() {
             Password updated. Taking you to your account…
           </p>
         ) : recoveryState === "ready" ? (
-          <form onSubmit={onSubmit} className="mt-8 space-y-4 rounded-xl border border-border bg-card p-6">
+          <form
+            onSubmit={onSubmit}
+            className="mt-8 space-y-4 rounded-xl border border-border bg-card p-6"
+          >
             <div className="space-y-1.5">
-              <label htmlFor="pw" className="text-sm font-medium">New password</label>
+              <label htmlFor="pw" className="text-sm font-medium">
+                New password
+              </label>
               <input
                 id="pw"
                 type="password"
@@ -122,7 +129,9 @@ function ResetPasswordPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="pw2" className="text-sm font-medium">Confirm password</label>
+              <label htmlFor="pw2" className="text-sm font-medium">
+                Confirm password
+              </label>
               <input
                 id="pw2"
                 type="password"
@@ -145,7 +154,9 @@ function ResetPasswordPage() {
           </form>
         ) : (
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            <a href="/auth" className="underline">Back to sign in</a>
+            <a href="/auth" className="underline">
+              Back to sign in
+            </a>
           </p>
         )}
       </main>

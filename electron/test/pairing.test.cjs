@@ -46,8 +46,13 @@ function loadTsModule(file) {
 }
 
 const codes = loadTsModule(SRC_PATH);
-const { USER_CODE_ALPHABET, USER_CODE_LENGTH, generateUserCode, formatUserCode, normaliseUserCode } =
-  codes;
+const {
+  USER_CODE_ALPHABET,
+  USER_CODE_LENGTH,
+  generateUserCode,
+  formatUserCode,
+  normaliseUserCode,
+} = codes;
 
 let passed = 0;
 let failed = 0;

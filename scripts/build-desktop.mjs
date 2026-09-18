@@ -160,7 +160,10 @@ function findMakeappx() {
   const probe = spawnSync("makeappx", ["/?"], { encoding: "utf8" });
   if (!probe.error) return "makeappx";
 
-  const roots = ["C:\\Program Files (x86)\\Windows Kits\\10\\bin", "C:\\Program Files\\Windows Kits\\10\\bin"];
+  const roots = [
+    "C:\\Program Files (x86)\\Windows Kits\\10\\bin",
+    "C:\\Program Files\\Windows Kits\\10\\bin",
+  ];
   const found = [];
   for (const root of roots) {
     if (!fs.existsSync(root)) continue;
@@ -182,13 +185,17 @@ function buildMsix(version) {
   // release and wrong as a reason to fail a beta build: the installer is the
   // point of a beta, and there is no Store channel to publish one to anyway.
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
-    log(`skipping the Store package: ${version} is a prerelease and the Store has nowhere to put the suffix`);
+    log(
+      `skipping the Store package: ${version} is a prerelease and the Store has nowhere to put the suffix`,
+    );
     return null;
   }
 
   const identity = identityFromEnv(process.env);
   if (isPlaceholderIdentity(identity)) {
-    log("MSIX identity not set, using placeholders: this package can be installed locally but not submitted");
+    log(
+      "MSIX identity not set, using placeholders: this package can be installed locally but not submitted",
+    );
   }
 
   const assetProblems = checkAssets(path.join(MSIX_DIR, "assets"));
@@ -209,7 +216,9 @@ function buildMsix(version) {
   const makeappx = findMakeappx();
   if (!makeappx) {
     log("makeappx not found, skipping the MSIX step");
-    log(`the staged package is at ${path.relative(ROOT, stage)}; install the Windows SDK to pack it`);
+    log(
+      `the staged package is at ${path.relative(ROOT, stage)}; install the Windows SDK to pack it`,
+    );
     return null;
   }
 
@@ -227,7 +236,9 @@ function buildMsix(version) {
 
   const mb = fs.statSync(outFile).size / (1024 * 1024);
   if (mb < 20) throw new Error(`the MSIX is only ${mb.toFixed(1)} MB, so it is missing the app`);
-  log(`msix: ${path.relative(ROOT, outFile)} (${mb.toFixed(1)} MB, version ${msixVersion(version)})`);
+  log(
+    `msix: ${path.relative(ROOT, outFile)} (${mb.toFixed(1)} MB, version ${msixVersion(version)})`,
+  );
   return outFile;
 }
 

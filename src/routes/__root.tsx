@@ -82,11 +82,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "WallRaven is an unofficial frontend for Wallhaven.cc." },
       { name: "author", content: "WallRaven" },
       { property: "og:title", content: "WallRaven" },
-      { property: "og:description", content: "WallRaven is an unofficial frontend for Wallhaven.cc." },
+      {
+        property: "og:description",
+        content: "WallRaven is an unofficial frontend for Wallhaven.cc.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "WallRaven" },
-      { name: "twitter:description", content: "WallRaven is an unofficial frontend for Wallhaven.cc." },
+      {
+        name: "twitter:description",
+        content: "WallRaven is an unofficial frontend for Wallhaven.cc.",
+      },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },

@@ -27,9 +27,15 @@ export const Route = createFileRoute("/link")({
   head: () => ({
     meta: [
       { title: "Link the app — WallRaven" },
-      { name: "description", content: "Connect the Wallraven desktop app to your WallRaven account." },
+      {
+        name: "description",
+        content: "Connect the Wallraven desktop app to your WallRaven account.",
+      },
       { property: "og:title", content: "Link the app — WallRaven" },
-      { property: "og:description", content: "Connect the Wallraven desktop app to your WallRaven account." },
+      {
+        property: "og:description",
+        content: "Connect the Wallraven desktop app to your WallRaven account.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -136,9 +142,7 @@ export function LinkPage() {
           </p>
         )}
 
-        {state === "checking" && (
-          <p className="mt-4 text-sm text-muted-foreground">Checking…</p>
-        )}
+        {state === "checking" && <p className="mt-4 text-sm text-muted-foreground">Checking…</p>}
 
         {state === "entry" && (
           <form onSubmit={onCheckCode} className="mt-6">
@@ -177,8 +181,8 @@ export function LinkPage() {
         {state === "confirm" && (
           <>
             <p className="mt-4 text-sm text-muted-foreground">
-              This will sign {deviceName ? `"${deviceName}"` : "the Wallraven desktop app"} in to your
-              account and let it sync your settings, presets and playlists.
+              This will sign {deviceName ? `"${deviceName}"` : "the Wallraven desktop app"} in to
+              your account and let it sync your settings, presets and playlists.
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               The device name is what the app calls itself and is not verified.

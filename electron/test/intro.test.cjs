@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const { JS, MAIN, read, extractFrom } = require("./sources.cjs");
+const { JS, MAIN, read, extractFrom, hasCode } = require("./sources.cjs");
 const CHANGELOG = read("CHANGELOG.md");
 
 const extract = (name) => extractFrom(JS, name);
@@ -26,8 +26,14 @@ const api = new Function(`
 let passed = 0;
 let failed = 0;
 function check(label, fn) {
-  try { fn(); passed++; }
-  catch (err) { failed++; console.error(`  FAIL  ${label}`); console.error(`        ${err.message}`); }
+  try {
+    fn();
+    passed++;
+  } catch (err) {
+    failed++;
+    console.error(`  FAIL  ${label}`);
+    console.error(`        ${err.message}`);
+  }
 }
 
 console.log("reading the changelog");
@@ -68,11 +74,17 @@ check("the real changelog parses, and the build being made is in it", () => {
   const out = api.parseChangelogVersions(CHANGELOG);
   assert.ok(out.length >= 3, `only found ${out.length} versions`);
   const version = fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim();
-  assert.ok(out.some((v) => v.version === version), `no changelog entry for ${version}`);
+  assert.ok(
+    out.some((v) => v.version === version),
+    `no changelog entry for ${version}`,
+  );
   // A release can be fixes only, and then the panel correctly shows nothing.
   // What must not happen is the sections being absent everywhere, which would
   // mean the convention had quietly been dropped.
-  assert.ok(out.some((v) => v.added.length > 0), "no version anywhere has a New section");
+  assert.ok(
+    out.some((v) => v.added.length > 0),
+    "no version anywhere has a New section",
+  );
 });
 
 check("junk does not throw", () => {
@@ -83,7 +95,10 @@ check("junk does not throw", () => {
 
 console.log("which panel, if any");
 
-const VERSIONS = [{ version: "1.2.0", added: ["a", "b"], fixed: ["c"] }, { version: "1.1.0", added: [], fixed: ["d"] }];
+const VERSIONS = [
+  { version: "1.2.0", added: ["a", "b"], fixed: ["c"] },
+  { version: "1.1.0", added: [], fixed: ["d"] },
+];
 
 check("a fresh install gets the welcome", () => {
   assert.deepStrictEqual(api.chooseIntro("1.2.0", "", VERSIONS), { kind: "welcome" });
@@ -110,22 +125,33 @@ console.log("the text itself");
 
 check("bold survives and markup does not", () => {
   assert.strictEqual(api.renderInline("**Bold.** plain"), "<strong>Bold.</strong> plain");
-  assert.strictEqual(api.renderInline("<img src=x onerror=alert(1)>"), "&lt;img src=x onerror=alert(1)&gt;");
+  assert.strictEqual(
+    api.renderInline("<img src=x onerror=alert(1)>"),
+    "&lt;img src=x onerror=alert(1)&gt;",
+  );
 });
 
 console.log("wiring");
 
 check("an existing config is marked as having seen nothing, not as new", () => {
-  assert.ok(/if \(saved\.lastSeenVersion === undefined\) merged\.lastSeenVersion = 'pre';/.test(MAIN));
-  assert.ok(/lastSeenVersion: '',/.test(MAIN), "the default is missing");
+  assert.ok(
+    hasCode(MAIN, "if (saved.lastSeenVersion === undefined) merged.lastSeenVersion = 'pre';"),
+  );
+  assert.ok(hasCode(MAIN, "lastSeenVersion: '',"), "the default is missing");
 });
 
 check("dismissing records the version so it stops coming back", () => {
   const body = extract("showIntroPanel");
-  assert.ok(/setConfig\(\{ lastSeenVersion: version \}\)/.test(body), "dismissing does not remember anything");
-  assert.ok(/panel\.style\.display = 'none'/.test(body));
+  assert.ok(
+    hasCode(body, "setConfig({ lastSeenVersion: version })"),
+    "dismissing does not remember anything",
+  );
+  assert.ok(hasCode(body, "panel.style.display = 'none'"));
 });
 
 console.log();
-if (failed) { console.error(`${failed} failed, ${passed} passed`); process.exit(1); }
+if (failed) {
+  console.error(`${failed} failed, ${passed} passed`);
+  process.exit(1);
+}
 console.log(`${passed} passed`);

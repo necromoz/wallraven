@@ -9,7 +9,7 @@
 // Order is preference. wallraven.app is the real address; the Lovable one is
 // kept only while the site is still served from there, and should be deleted
 // once it is not.
-const SITE_ORIGINS = ['https://wallraven.app', 'https://wallraven.lovable.app'];
+const SITE_ORIGINS = ["https://wallraven.app", "https://wallraven.lovable.app"];
 
 // The origin to use when there is only room for one.
 const SITE_ORIGIN = SITE_ORIGINS[0];
@@ -29,7 +29,7 @@ function siteUrls(path) {
 function isSiteUrl(value) {
   try {
     const u = new URL(String(value));
-    return u.protocol === 'https:' && SITE_HOSTS.has(u.hostname);
+    return u.protocol === "https:" && SITE_HOSTS.has(u.hostname);
   } catch {
     return false;
   }

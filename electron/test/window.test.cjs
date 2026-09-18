@@ -33,20 +33,44 @@ function check(label, fn) {
 
 const INFO = {
   current: { id: "abc123", file: "C:/cache/abc123.jpg", resolution: "3840x2160" },
-  cacheMB: 120, pinnedMB: 10, historyCount: 4, canBack: true, canForward: false, paused: false,
+  cacheMB: 120,
+  pinnedMB: 10,
+  historyCount: 4,
+  canBack: true,
+  canForward: false,
+  paused: false,
 };
 
 // A config with enough shape for the window to hydrate from.
 function baseConfig() {
   return {
-    theme: "glass", uiAccent: "#7c5cff", cycleMinutes: 30, cacheMaxMB: 1024,
+    theme: "glass",
+    uiAccent: "#7c5cff",
+    cycleMinutes: 30,
+    cacheMaxMB: 1024,
     categories: { general: true, anime: false, people: false },
     purity: { sfw: true, sketchy: false, nsfw: false },
-    sorting: "random", order: "desc", topRange: "1M", colors: [], ratios: "",
-    resolutions: "", atleastResolution: "", query: "", playlists: {}, presets: {},
-    likes: [], dislikes: [], hotkeys: {}, hotkeysEnabled: true,
-    schedule: { enabled: false, rules: [] }, collapsed: {}, sectionsOpen: {},
-    uiPage: "home", uiTabs: {}, sourceMode: "search", folderPaths: [],
+    sorting: "random",
+    order: "desc",
+    topRange: "1M",
+    colors: [],
+    ratios: "",
+    resolutions: "",
+    atleastResolution: "",
+    query: "",
+    playlists: {},
+    presets: {},
+    likes: [],
+    dislikes: [],
+    hotkeys: {},
+    hotkeysEnabled: true,
+    schedule: { enabled: false, rules: [] },
+    collapsed: {},
+    sectionsOpen: {},
+    uiPage: "home",
+    uiTabs: {},
+    sourceMode: "search",
+    folderPaths: [],
   };
 }
 
@@ -57,10 +81,12 @@ function loadWindow() {
   const calls = [];
   const config = baseConfig();
 
-  const record = (name, value) => (...args) => {
-    calls.push({ name, args });
-    return Promise.resolve(typeof value === "function" ? value(...args) : value);
-  };
+  const record =
+    (name, value) =>
+    (...args) => {
+      calls.push({ name, args });
+      return Promise.resolve(typeof value === "function" ? value(...args) : value);
+    };
 
   const known = {
     getConfig: record("getConfig", () => JSON.parse(JSON.stringify(config))),
@@ -86,7 +112,14 @@ function loadWindow() {
       prop in target
         ? target[prop]
         : typeof prop === "string"
-          ? record(prop, () => ({ ok: true, items: [], categories: [], presets: [], list: [], data: [] }))
+          ? record(prop, () => ({
+              ok: true,
+              items: [],
+              categories: [],
+              presets: [],
+              list: [],
+              data: [],
+            }))
           : undefined,
     has: () => true,
   });
@@ -95,7 +128,9 @@ function loadWindow() {
   // uses (scrolling, layout). Those are limits of the harness, not faults in
   // the page, and drowning the real errors in them helps nobody.
   const HARNESS_LIMITS = /Not implemented:|Could not parse CSS|Error: Not implemented/;
-  const note = (msg) => { if (!HARNESS_LIMITS.test(msg)) errors.push(msg); };
+  const note = (msg) => {
+    if (!HARNESS_LIMITS.test(msg)) errors.push(msg);
+  };
 
   const virtualConsole = new VirtualConsole();
   virtualConsole.on("jsdomError", (e) => note(String((e && e.message) || e)));
@@ -137,7 +172,11 @@ function settle(ms = 60) {
   const doc = w.dom.window.document;
 
   check("nothing throws while it starts", () => {
-    assert.deepStrictEqual(w.errors, [], `errors during startup:\n        ${w.errors.join("\n        ")}`);
+    assert.deepStrictEqual(
+      w.errors,
+      [],
+      `errors during startup:\n        ${w.errors.join("\n        ")}`,
+    );
   });
 
   check("the sidebar and the cards are built", () => {
@@ -203,7 +242,9 @@ function settle(ms = 60) {
 
   check("dismissing it records the version, so it does not come back", () => {
     assert.strictEqual(doc.getElementById("intro-panel").style.display, "none");
-    const saved = w.calls.filter((c) => c.name === "setConfig" && c.args[0] && c.args[0].lastSeenVersion);
+    const saved = w.calls.filter(
+      (c) => c.name === "setConfig" && c.args[0] && c.args[0].lastSeenVersion,
+    );
     assert.ok(saved.length > 0, "nothing was remembered, so it will greet them again");
   });
 
@@ -219,7 +260,11 @@ function settle(ms = 60) {
   });
 
   check("no errors accumulated while being used", () => {
-    assert.deepStrictEqual(w.errors, [], `errors after interaction:\n        ${w.errors.join("\n        ")}`);
+    assert.deepStrictEqual(
+      w.errors,
+      [],
+      `errors after interaction:\n        ${w.errors.join("\n        ")}`,
+    );
   });
 
   w.done();

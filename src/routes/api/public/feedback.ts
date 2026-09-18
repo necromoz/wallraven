@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { allow, clientKey, tooManyRequests } from "@/lib/rate-limit";
 
-
 const bodySchema = z.object({
   kind: z.enum(["bug", "feature", "feedback", "crash"]).default("feedback"),
   message: z.string().trim().min(5).max(4000),

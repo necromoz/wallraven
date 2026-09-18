@@ -45,23 +45,24 @@ function expand(d: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-export const OFFICIAL_PRESET_CATEGORIES: string[] = (raw as { categories?: string[] }).categories ?? [];
+export const OFFICIAL_PRESET_CATEGORIES: string[] =
+  (raw as { categories?: string[] }).categories ?? [];
 
-export const OFFICIAL_PRESETS: OfficialPreset[] = ((raw as { presets?: RawPreset[] }).presets ?? []).map(
-  (p) => ({
-    id: `official:${p.id}`,
-    name: p.name,
-    description: p.description ?? null,
-    category: p.category,
-    tags: [],
-    author_name: "Wallraven",
-    data: expand(p.data ?? {}),
-    like_count: 0,
-    copy_count: 0,
-    created_at: "",
-    official: true as const,
-  }),
-);
+export const OFFICIAL_PRESETS: OfficialPreset[] = (
+  (raw as { presets?: RawPreset[] }).presets ?? []
+).map((p) => ({
+  id: `official:${p.id}`,
+  name: p.name,
+  description: p.description ?? null,
+  category: p.category,
+  tags: [],
+  author_name: "Wallraven",
+  data: expand(p.data ?? {}),
+  like_count: 0,
+  copy_count: 0,
+  created_at: "",
+  official: true as const,
+}));
 
 export function filterOfficialPresets(category: string, search: string): OfficialPreset[] {
   const q = search.trim().toLowerCase();

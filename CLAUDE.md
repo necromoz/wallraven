@@ -40,7 +40,7 @@ caught before release.
   typecheck, so a type error will build cleanly and fail at runtime.
 - **`npm run lint` is noise.** ~1,638 errors, all Prettier formatting, none of them
   real. Ignore it until someone runs `npm run format` once as a standalone commit.
-- Commit in small, self-contained steps with a message saying *why*. The history is
+- Commit in small, self-contained steps with a message saying _why_. The history is
   Steve's undo button and he cannot debug his way out of a bad state.
 
 ## Running it locally
@@ -84,7 +84,7 @@ Two things that matter if it is done again:
   repo out (no `node_modules`, symlink it instead), build there, copy back only
   the installer.
 - NSIS is not installed in that VM and there is no root. `apt-get download nsis
-  nsis-common`, `dpkg-deb -x` each into a prefix, then run it with `NSISDIR`
+nsis-common`, `dpkg-deb -x` each into a prefix, then run it with `NSISDIR`
   pointing at `usr/share/nsis` and that `usr/bin` on PATH.
 
 A build made this way is unsigned, exactly like the CI one, and is not
@@ -254,4 +254,3 @@ Google sign-in still goes through `oauth.lovable.app` and will break when the
 database moves for real, because those tokens are only valid for Lovable's
 project. Email and password sign-in is unaffected. Fixing it needs a Google
 OAuth client configured against the new Supabase project.
-

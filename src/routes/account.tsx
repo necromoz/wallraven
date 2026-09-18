@@ -8,9 +8,15 @@ export const Route = createFileRoute("/account")({
   head: () => ({
     meta: [
       { title: "Your account — WallRaven" },
-      { name: "description", content: "Manage your WallRaven account, change your password and sign out." },
+      {
+        name: "description",
+        content: "Manage your WallRaven account, change your password and sign out.",
+      },
       { property: "og:title", content: "Your account — WallRaven" },
-      { property: "og:description", content: "Manage your WallRaven account, change your password and sign out." },
+      {
+        property: "og:description",
+        content: "Manage your WallRaven account, change your password and sign out.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -72,7 +78,9 @@ function AccountPage() {
     const { error } = await supabase.from("profiles").upsert({ id, username: wanted });
     setUBusy(false);
     if (error) {
-      setUErr(/duplicate|unique/i.test(error.message) ? "That username is already taken." : error.message);
+      setUErr(
+        /duplicate|unique/i.test(error.message) ? "That username is already taken." : error.message,
+      );
       return;
     }
     setSavedUsername(wanted);
@@ -111,14 +119,21 @@ function AccountPage() {
       <main className="w-full max-w-sm">
         <h1 className="text-center text-2xl font-semibold tracking-tight">Your account</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">
-          {savedUsername ? <span className="font-medium text-foreground">@{savedUsername}</span> : null}
+          {savedUsername ? (
+            <span className="font-medium text-foreground">@{savedUsername}</span>
+          ) : null}
           {savedUsername ? " · " : ""}
           {email}
         </p>
 
-        <form onSubmit={onSaveUsername} className="mt-8 space-y-4 rounded-xl border border-border bg-card p-6">
+        <form
+          onSubmit={onSaveUsername}
+          className="mt-8 space-y-4 rounded-xl border border-border bg-card p-6"
+        >
           <div className="space-y-1.5">
-            <label htmlFor="un" className="text-sm font-medium">Username</label>
+            <label htmlFor="un" className="text-sm font-medium">
+              Username
+            </label>
             <input
               id="un"
               type="text"
@@ -145,9 +160,14 @@ function AccountPage() {
           </button>
         </form>
 
-        <form onSubmit={onChangePassword} className="mt-4 space-y-4 rounded-xl border border-border bg-card p-6">
+        <form
+          onSubmit={onChangePassword}
+          className="mt-4 space-y-4 rounded-xl border border-border bg-card p-6"
+        >
           <div className="space-y-1.5">
-            <label htmlFor="np" className="text-sm font-medium">New password</label>
+            <label htmlFor="np" className="text-sm font-medium">
+              New password
+            </label>
             <input
               id="np"
               type="password"

@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const { MAIN: SRC, HTML, JS, extractFrom } = require("./sources.cjs");
+const { MAIN: SRC, HTML, JS, extractFrom, hasCode } = require("./sources.cjs");
 
 function extract(name) {
   const start = SRC.indexOf(`function ${name}(`);
@@ -20,7 +20,10 @@ function extract(name) {
   let depth = 0;
   for (let j = open; j < SRC.length; j++) {
     if (SRC[j] === "{") depth++;
-    else if (SRC[j] === "}") { depth--; if (depth === 0) return SRC.slice(start, j + 1); }
+    else if (SRC[j] === "}") {
+      depth--;
+      if (depth === 0) return SRC.slice(start, j + 1);
+    }
   }
   throw new Error(`unbalanced braces reading ${name}`);
 }
@@ -36,8 +39,14 @@ let passed = 0;
 let failed = 0;
 
 function check(label, fn) {
-  try { fn(); passed++; }
-  catch (err) { failed++; console.error(`  FAIL  ${label}`); console.error(`        ${err.message}`); }
+  try {
+    fn();
+    passed++;
+  } catch (err) {
+    failed++;
+    console.error(`  FAIL  ${label}`);
+    console.error(`        ${err.message}`);
+  }
 }
 
 const browseOverrides = new Function(
@@ -50,7 +59,10 @@ const browseOverrides = new Function(
 console.log("what a browse search is allowed to change");
 
 check("a known sort is accepted", () => {
-  assert.deepStrictEqual(browseOverrides({ sorting: "toplist", topRange: "1M" }), { sorting: "toplist", topRange: "1M" });
+  assert.deepStrictEqual(browseOverrides({ sorting: "toplist", topRange: "1M" }), {
+    sorting: "toplist",
+    topRange: "1M",
+  });
   assert.deepStrictEqual(browseOverrides({ sorting: "random" }), { sorting: "random" });
 });
 
@@ -81,19 +93,28 @@ check("junk input is an empty override, not a crash", () => {
 console.log("the handler uses them, and the query");
 
 check("search:run takes a query and overrides", () => {
-  const at = SRC.indexOf("ipcMain.handle('search:run'");
-  assert.ok(at !== -1);
-  const handler = SRC.slice(at, at + 900);
-  assert.ok(/query = null, overrides = null/.test(handler), "the handler still only takes a page");
-  assert.ok(/typeof query === 'string' \? query : config\.query/.test(handler), "an empty query does not fall back to the saved one");
-  assert.ok(/buildSearchUrl\(overs, page/.test(handler), "the overrides are not passed to the URL builder");
+  assert.ok(hasCode(SRC, "ipcMain.handle('search:run'"), "no search:run handler");
+  assert.ok(hasCode(SRC, "query = null, overrides = null"), "the handler still only takes a page");
+  assert.ok(
+    hasCode(SRC, "typeof query === 'string' ? query : config.query"),
+    "an empty query does not fall back to the saved one",
+  );
+  assert.ok(
+    hasCode(SRC, "buildSearchUrl(overs, page"),
+    "the overrides are not passed to the URL builder",
+  );
 });
 
 check("both the single and multi-group paths honour the overrides", () => {
-  const at = SRC.indexOf("ipcMain.handle('search:run'");
-  const handler = SRC.slice(at, SRC.indexOf("});", SRC.indexOf("return { items, meta }", at)));
+  // The whole handler: from where it starts to the next ipcMain.handle.
+  const at = SRC.indexOf('ipcMain.handle("search:run"');
+  const handler = SRC.slice(at, SRC.indexOf("ipcMain.handle(", at + 20));
   const uses = handler.match(/buildSearchUrl\(overs,/g) || [];
-  assert.strictEqual(uses.length, 2, `expected both search paths to use the overrides, found ${uses.length}`);
+  assert.strictEqual(
+    uses.length,
+    2,
+    `expected both search paths to use the overrides, found ${uses.length}`,
+  );
 });
 
 console.log("the card no longer writes your settings");
@@ -120,8 +141,14 @@ check("what was typed survives the card being rebuilt", () => {
 });
 
 check("opening Browse loads something instead of an empty grid", () => {
-  assert.ok(/if \(id === 'browse' && !browseState\.searched\)/.test(JS), "goPage does not run the first search");
-  assert.ok(/if \(uiPage === 'browse' && !browseState\.searched\)/.test(JS), "opening straight onto Browse shows nothing");
+  assert.ok(
+    hasCode(JS, "if (id === 'browse' && !browseState.searched)"),
+    "goPage does not run the first search",
+  );
+  assert.ok(
+    hasCode(JS, "if (uiPage === 'browse' && !browseState.searched)"),
+    "opening straight onto Browse shows nothing",
+  );
 });
 
 console.log("the AI art control is gone, and the filter is not");
@@ -131,9 +158,12 @@ check("no control, and the value is pinned to exclude", () => {
   assert.ok(/aiArtFilter: 1,/.test(JS), "the saved value is no longer forced to exclude");
   // The request must still carry it: Wallhaven's default is exclude, but
   // relying on someone else's default for this is not worth the risk.
-  assert.ok(/params\.set\('ai_art_filter', String\(cfg\.aiArtFilter\)\)/.test(SRC));
+  assert.ok(hasCode(SRC, "params.set('ai_art_filter', String(cfg.aiArtFilter))"));
 });
 
 console.log();
-if (failed) { console.error(`${failed} failed, ${passed} passed`); process.exit(1); }
+if (failed) {
+  console.error(`${failed} failed, ${passed} passed`);
+  process.exit(1);
+}
 console.log(`${passed} passed`);

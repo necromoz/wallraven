@@ -65,7 +65,7 @@ function summarise(data: unknown) {
   if (typeof d["sorting"] === "string") bits.push(String(d["sorting"]).replace("_", " "));
   const colors = d["colors"] as string[] | undefined;
   if (colors?.length) bits.push(`${colors.length} colour${colors.length > 1 ? "s" : ""}`);
-  
+
   return bits.join(" · ") || "No filters";
 }
 
@@ -146,11 +146,9 @@ function PresetThumb({ data, name }: { data: unknown; name: string }) {
           className="h-full w-full object-cover"
         />
       ) : null}
-
     </div>
   );
 }
-
 
 function PresetsPage() {
   const [sort, setSort] = useState<Sort>("popular");
@@ -258,111 +256,117 @@ function PresetsPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl pb-24 pt-7">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">Presets</h1>
-        </div>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          The presets that come with Wallraven, plus ones people have shared. Copying only brings
-          across searches, filters and colours — never your own timetable, screen resolution, aspect
-          ratio or API key. Publish your own from the app's Presets card.
-        </p>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Presets</h1>
+      </div>
+      <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+        The presets that come with Wallraven, plus ones people have shared. Copying only brings
+        across searches, filters and colours — never your own timetable, screen resolution, aspect
+        ratio or API key. Publish your own from the app's Presets card.
+      </p>
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          {(["popular", "new"] as Sort[]).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSort(s)}
-              className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                sort === s ? "border-primary bg-primary text-primary-foreground" : "border-input hover:bg-accent"
-              }`}
-            >
-              {s === "popular" ? "Most popular" : "Newest"}
-            </button>
-          ))}
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-1.5 text-xs"
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        {(["popular", "new"] as Sort[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setSort(s)}
+            className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+              sort === s
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-input hover:bg-accent"
+            }`}
           >
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search presets…"
-            className="min-w-40 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-xs"
-          />
-        </div>
+            {s === "popular" ? "Most popular" : "Newest"}
+          </button>
+        ))}
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="rounded-md border border-input bg-background px-3 py-1.5 text-xs"
+        >
+          <option value="">All categories</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search presets…"
+          className="min-w-40 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-xs"
+        />
+      </div>
 
-        {loading ? (
-          <p className="mt-8 text-sm text-muted-foreground">Loading presets…</p>
-        ) : error ? (
-          <p className="mt-8 text-sm text-destructive">{error}</p>
-        ) : items.length === 0 ? (
-          <p className="mt-8 text-sm text-muted-foreground">
-            No presets published yet. Be the first — share one from the desktop app.
-          </p>
-        ) : (
-          <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-            {items.map((p) => (
-              <li key={p.id} className="rounded-xl border border-border bg-card p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm font-medium">{p.name}</h2>
-                    <p className="text-xs text-muted-foreground">
-                      {p.category} · by {p.author_name}
-                    </p>
-                  </div>
-                  {p.official ? (
-                    <span className="rounded-md border border-primary/40 px-2 py-1 text-[10px] font-medium text-primary">
-                      Included
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => onLike(p)}
-                      disabled={!signedIn}
-                      title={signedIn ? "Like this preset" : "Sign in to like presets"}
-                      className={`rounded-md border px-2 py-1 text-xs transition-colors ${
-                        likes.includes(p.id) ? "border-primary text-primary" : "border-input hover:bg-accent"
-                      } disabled:opacity-50`}
-                    >
-                      ♥ {p.like_count}
-                    </button>
-                  )}
+      {loading ? (
+        <p className="mt-8 text-sm text-muted-foreground">Loading presets…</p>
+      ) : error ? (
+        <p className="mt-8 text-sm text-destructive">{error}</p>
+      ) : items.length === 0 ? (
+        <p className="mt-8 text-sm text-muted-foreground">
+          No presets published yet. Be the first — share one from the desktop app.
+        </p>
+      ) : (
+        <ul className="mt-8 grid gap-3 sm:grid-cols-2">
+          {items.map((p) => (
+            <li key={p.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-medium">{p.name}</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {p.category} · by {p.author_name}
+                  </p>
                 </div>
-
-                {p.description && <p className="mt-2 text-xs text-muted-foreground">{p.description}</p>}
-                <p className="mt-2 text-xs text-muted-foreground">{summarise(p.data)}</p>
-                <PresetThumb data={p.data} name={p.name} />
-
-                <div className="mt-3 flex items-center gap-2">
+                {p.official ? (
+                  <span className="rounded-md border border-primary/40 px-2 py-1 text-[10px] font-medium text-primary">
+                    Included
+                  </span>
+                ) : (
                   <button
-                    onClick={() => onCopy(p)}
-                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                    onClick={() => onLike(p)}
+                    disabled={!signedIn}
+                    title={signedIn ? "Like this preset" : "Sign in to like presets"}
+                    className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                      likes.includes(p.id)
+                        ? "border-primary text-primary"
+                        : "border-input hover:bg-accent"
+                    } disabled:opacity-50`}
                   >
-                    {copied === p.id ? "Copied!" : "Copy preset"}
+                    ♥ {p.like_count}
                   </button>
-                  {!p.official && (
-                    <span className="text-xs text-muted-foreground">{p.copy_count} copies</span>
-                  )}
-                  {mineIds.includes(p.id) && (
-                    <button
-                      onClick={() => onDelete(p)}
-                      className="ml-auto text-xs text-muted-foreground underline hover:text-destructive"
-                    >
-                      Delete mine
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                )}
+              </div>
+
+              {p.description && (
+                <p className="mt-2 text-xs text-muted-foreground">{p.description}</p>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">{summarise(p.data)}</p>
+              <PresetThumb data={p.data} name={p.name} />
+
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  onClick={() => onCopy(p)}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  {copied === p.id ? "Copied!" : "Copy preset"}
+                </button>
+                {!p.official && (
+                  <span className="text-xs text-muted-foreground">{p.copy_count} copies</span>
+                )}
+                {mineIds.includes(p.id) && (
+                  <button
+                    onClick={() => onDelete(p)}
+                    className="ml-auto text-xs text-muted-foreground underline hover:text-destructive"
+                  >
+                    Delete mine
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </main>
   );
 }

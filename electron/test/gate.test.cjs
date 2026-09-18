@@ -16,9 +16,7 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const SRC = fs
-  .readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8")
-  .replace(/\r\n/g, "\n");
+const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8").replace(/\r\n/g, "\n");
 
 function extract(name) {
   const start = SRC.indexOf(`function ${name}(`);
@@ -97,10 +95,23 @@ const withTimeout = (p, ms, what) =>
     const gate = makeGate();
     const done = [];
 
-    gate.whGate(async () => { await sleep(300); done.push("thumb1"); }, { priority: false });
-    gate.whGate(async () => { done.push("thumb2"); }, { priority: false });
+    gate.whGate(
+      async () => {
+        await sleep(300);
+        done.push("thumb1");
+      },
+      { priority: false },
+    );
+    gate.whGate(
+      async () => {
+        done.push("thumb2");
+      },
+      { priority: false },
+    );
     await sleep(60);
-    const wallpaper = gate.whGate(async () => { done.push("WALLPAPER"); });
+    const wallpaper = gate.whGate(async () => {
+      done.push("WALLPAPER");
+    });
 
     await withTimeout(wallpaper, 3000, "the wallpaper request");
     assert.ok(done.includes("WALLPAPER"), `wallpaper never ran; got ${done.join(", ")}`);
@@ -108,10 +119,23 @@ const withTimeout = (p, ms, what) =>
 
   await check("the queue keeps working afterwards", async () => {
     const gate = makeGate();
-    gate.whGate(async () => { await sleep(200); }, { priority: false });
+    gate.whGate(
+      async () => {
+        await sleep(200);
+      },
+      { priority: false },
+    );
     await sleep(40);
-    await withTimeout(gate.whGate(async () => "first"), 3000, "first");
-    const second = await withTimeout(gate.whGate(async () => "second"), 3000, "second");
+    await withTimeout(
+      gate.whGate(async () => "first"),
+      3000,
+      "first",
+    );
+    const second = await withTimeout(
+      gate.whGate(async () => "second"),
+      3000,
+      "second",
+    );
     assert.strictEqual(second, "second");
     assert.strictEqual(gate.highPending(), 0, "the pending counter leaked");
   });
@@ -121,9 +145,19 @@ const withTimeout = (p, ms, what) =>
   await check("wallpaper work goes before thumbnails that have not started", async () => {
     const gate = makeGate();
     const done = [];
-    const busy = gate.whGate(async () => { await sleep(150); done.push("busy"); });
-    const thumb = gate.whGate(async () => { done.push("thumb"); }, { priority: false });
-    const wall = gate.whGate(async () => { done.push("WALLPAPER"); });
+    const busy = gate.whGate(async () => {
+      await sleep(150);
+      done.push("busy");
+    });
+    const thumb = gate.whGate(
+      async () => {
+        done.push("thumb");
+      },
+      { priority: false },
+    );
+    const wall = gate.whGate(async () => {
+      done.push("WALLPAPER");
+    });
     await withTimeout(Promise.all([busy, thumb, wall]), 4000, "the queue");
     assert.ok(
       done.indexOf("WALLPAPER") < done.indexOf("thumb"),
@@ -137,10 +171,17 @@ const withTimeout = (p, ms, what) =>
     const gate = makeGate();
     // Keep wallpaper work outstanding for longer than the low-priority
     // deadline, then confirm the thumbnail rejects rather than hanging.
-    gate.whGate(async () => { await sleep(2000); });
+    gate.whGate(async () => {
+      await sleep(2000);
+    });
     await sleep(20);
     await assert.rejects(
-      () => withTimeout(gate.whGate(async () => "thumb", { priority: false }), 3000, "the thumbnail"),
+      () =>
+        withTimeout(
+          gate.whGate(async () => "thumb", { priority: false }),
+          3000,
+          "the thumbnail",
+        ),
       /busy/,
       "expected the thumbnail to give up with 'busy'",
     );
@@ -148,7 +189,13 @@ const withTimeout = (p, ms, what) =>
 
   await check("the counter returns to zero even when a request throws", async () => {
     const gate = makeGate();
-    await assert.rejects(() => gate.whGate(async () => { throw new Error("boom"); }), /boom/);
+    await assert.rejects(
+      () =>
+        gate.whGate(async () => {
+          throw new Error("boom");
+        }),
+      /boom/,
+    );
     assert.strictEqual(gate.highPending(), 0, "a failed request left the counter stuck");
   });
 
@@ -157,7 +204,11 @@ const withTimeout = (p, ms, what) =>
   await check("a cooldown does not wedge the queue", async () => {
     const gate = makeGate();
     gate.cooldownFor(200);
-    const wall = await withTimeout(gate.whGate(async () => "ok"), 3000, "the wallpaper request");
+    const wall = await withTimeout(
+      gate.whGate(async () => "ok"),
+      3000,
+      "the wallpaper request",
+    );
     assert.strictEqual(wall, "ok");
   });
 

@@ -112,7 +112,10 @@ check("an identity name with a space is caught", () => {
 
 console.log("manifest");
 
-const template = fs.readFileSync(path.join(ROOT, "electron", "msix", "AppxManifest.template.xml"), "utf8");
+const template = fs.readFileSync(
+  path.join(ROOT, "electron", "msix", "AppxManifest.template.xml"),
+  "utf8",
+);
 
 check("every placeholder in the template is one the build can fill", () => {
   const xml = renderManifest(template, {
@@ -167,7 +170,10 @@ check("the Store step is skipped rather than failing the build", () => {
   const build = fs.readFileSync(path.join(ROOT, "scripts", "build-desktop.mjs"), "utf8");
   const at = build.indexOf("function buildMsix(");
   const body = build.slice(at, at + 700);
-  assert.ok(/if \(!\/\^\\d\+\\\.\\d\+\\\.\\d\+\$\/\.test\(version\)\)/.test(body), "a prerelease still tries to build a Store package");
+  assert.ok(
+    /if \(!\/\^\\d\+\\\.\\d\+\\\.\\d\+\$\/\.test\(version\)\)/.test(body),
+    "a prerelease still tries to build a Store package",
+  );
   assert.ok(/return null;/.test(body));
 });
 

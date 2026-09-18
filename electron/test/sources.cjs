@@ -32,13 +32,22 @@ function extractFrom(src, name) {
   let parens = 0;
   for (; i < src.length; i++) {
     if (src[i] === "(") parens++;
-    else if (src[i] === ")") { parens--; if (parens === 0) { i++; break; } }
+    else if (src[i] === ")") {
+      parens--;
+      if (parens === 0) {
+        i++;
+        break;
+      }
+    }
   }
   const open = src.indexOf("{", i);
   let depth = 0;
   for (let j = open; j < src.length; j++) {
     if (src[j] === "{") depth++;
-    else if (src[j] === "}") { depth--; if (depth === 0) return src.slice(start, j + 1); }
+    else if (src[j] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(start, j + 1);
+    }
   }
   throw new Error(`unbalanced braces reading ${name}`);
 }
@@ -49,4 +58,42 @@ function extractConstFrom(src, name) {
   return `const ${name} = ${m[1]};`;
 }
 
-module.exports = { DIR, read, MAIN, PRELOAD, HTML, JS, CSS, extractFrom, extractConstFrom };
+// Whitespace-flattened copies.
+//
+// Several checks here pin down a specific line of code, and `npm run format`
+// then reflowed those lines and broke a dozen tests that were describing real
+// behaviour perfectly well. Matching against a flattened copy keeps the check
+// and drops the dependency on where the line breaks fall.
+const flat = (src) => src.replace(/\s+/g, " ");
+
+// "Is this code in that file", without caring how it is laid out or which
+// quotes it uses. Prettier changed both across the whole repo in one commit and
+// broke a dozen checks that were describing real behaviour correctly.
+// Quotes, whitespace, and the line breaks Prettier puts in the middle of a
+// method chain are all noise when the question is "does this code exist".
+const normalise = (src) =>
+  src
+    .replace(/['"]/g, '"')
+    .replace(/\s+/g, " ")
+    .replace(/\s*\.\s*/g, ".");
+function hasCode(src, snippet) {
+  return normalise(src).includes(normalise(snippet));
+}
+
+module.exports = {
+  DIR,
+  read,
+  MAIN,
+  PRELOAD,
+  HTML,
+  JS,
+  CSS,
+  MAIN_FLAT: flat(MAIN),
+  HTML_FLAT: flat(HTML),
+  JS_FLAT: flat(JS),
+  CSS_FLAT: flat(CSS),
+  flat,
+  hasCode,
+  extractFrom,
+  extractConstFrom,
+};

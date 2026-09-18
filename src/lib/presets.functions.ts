@@ -23,7 +23,10 @@ const listSchema = z.object({
 // Strip the characters that carry meaning in the filter grammar. `*` goes too,
 // since the wildcards are supplied by the query itself.
 function sanitiseSearchTerm(term: string) {
-  return term.replace(/[,()*"\\]/g, " ").replace(/\s+/g, " ").trim();
+  return term
+    .replace(/[,()*"\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function publicClient() {
@@ -33,7 +36,8 @@ function publicClient() {
     global: {
       fetch: (input, init) => {
         const h = new Headers(init?.headers);
-        if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization");
+        if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`)
+          h.delete("Authorization");
         h.set("apikey", key);
         return fetch(input, { ...init, headers: h });
       },
@@ -86,13 +90,17 @@ export const listMyLikes = createServerFn({ method: "GET" })
 
 export const toggleLikePreset = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), liked: z.boolean() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), liked: z.boolean() }).parse(input),
+  )
   .handler(async ({ data, context }) => {
     // The result was discarded and ok:true returned regardless, so a like
     // rejected by RLS or lost to a unique-constraint collision still rendered
     // as though it had worked until the next refresh.
     const { error } = data.liked
-      ? await context.supabase.from("preset_likes").insert({ preset_id: data.id, user_id: context.userId })
+      ? await context.supabase
+          .from("preset_likes")
+          .insert({ preset_id: data.id, user_id: context.userId })
       : await context.supabase
           .from("preset_likes")
           .delete()

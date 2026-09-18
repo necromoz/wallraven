@@ -14,9 +14,7 @@ const assert = require("assert");
 
 // Normalised to LF: Windows checks the repo out with CRLF, and the
 // extractors below match on line ends.
-const SRC = fs
-  .readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8")
-  .replace(/\r\n/g, "\n");
+const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8").replace(/\r\n/g, "\n");
 
 /** Pull a top-level `function name(...) { ... }` out of the source by brace matching. */
 function extract(name) {
@@ -343,7 +341,9 @@ console.log("update download guards");
 
 check("allows the hosts that actually serve releases", () => {
   assert.ok(guards.isAllowedUpdateUrl("https://wallraven.app/updates/x.exe"));
-  assert.ok(guards.isAllowedUpdateUrl("https://github.com/necromoz/wallraven/releases/download/v1/x.exe"));
+  assert.ok(
+    guards.isAllowedUpdateUrl("https://github.com/necromoz/wallraven/releases/download/v1/x.exe"),
+  );
   // GitHub redirects release downloads here, so the hop has to be allowed too.
   assert.ok(guards.isAllowedUpdateUrl("https://release-assets.githubusercontent.com/whatever"));
   assert.ok(guards.isAllowedUpdateUrl("https://objects.githubusercontent.com/whatever"));
@@ -528,10 +528,18 @@ check("taking the lock away retires whoever had it", () => {
   // but it cannot stop that fetch. When it finally comes back it must not set
   // its wallpaper over the top of the one the user asked for.
   const hung = fetches.startFetchGeneration();
-  fetches.startFetchGeneration();            // the takeover
+  fetches.startFetchGeneration(); // the takeover
   const replacement = fetches.startFetchGeneration();
-  assert.strictEqual(fetches.fetchSuperseded(hung), true, "the hung fetch would still apply its result");
-  assert.strictEqual(fetches.fetchSuperseded(replacement), false, "the replacement thinks it is stale");
+  assert.strictEqual(
+    fetches.fetchSuperseded(hung),
+    true,
+    "the hung fetch would still apply its result",
+  );
+  assert.strictEqual(
+    fetches.fetchSuperseded(replacement),
+    false,
+    "the replacement thinks it is stale",
+  );
 });
 
 check("a retired fetch stays retired", () => {
@@ -544,7 +552,10 @@ check("a retired fetch stays retired", () => {
 check("the rotation checks before it changes anything, and before freeing the lock", () => {
   const at = SRC.indexOf("async function fetchAndSetWallpaper(");
   const body = SRC.slice(at, SRC.indexOf("\n}", SRC.indexOf("} finally {", at)));
-  assert.ok(/const generation = startFetchGeneration\(\)/.test(body), "the fetch does not take a generation");
+  assert.ok(
+    /const generation = startFetchGeneration\(\)/.test(body),
+    "the fetch does not take a generation",
+  );
   assert.ok(
     /if \(fetchSuperseded\(generation\)\) \{/.test(body),
     "a superseded fetch still applies its wallpaper",

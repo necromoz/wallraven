@@ -16,9 +16,7 @@ const os = require("os");
 const path = require("path");
 const assert = require("assert");
 
-const SRC = fs
-  .readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8")
-  .replace(/\r\n/g, "\n");
+const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8").replace(/\r\n/g, "\n");
 
 function extract(name) {
   const start = SRC.indexOf(`function ${name}(`);
@@ -112,7 +110,10 @@ check("it steps over dead local entries instead of stopping on one", () => {
 
 check("a dead local entry is still reachable while its file is there", () => {
   const items = [{ id: "aaaaaa" }, { id: "local:here", file: "/here.jpg" }, { id: "cccccc" }];
-  assert.strictEqual(findReachableHistoryIndex(items, 2, -1, (f) => f === "/here.jpg"), 1);
+  assert.strictEqual(
+    findReachableHistoryIndex(items, 2, -1, (f) => f === "/here.jpg"),
+    1,
+  );
 });
 
 check("nothing reachable behind gives -1, not index 0", () => {
@@ -143,7 +144,10 @@ check("searching never revisits where it started", () => {
       const got = findReachableHistoryIndex(items, from, step, all);
       assert.notStrictEqual(got, from, `step ${step} from ${from} returned itself`);
       if (got !== -1) {
-        assert.ok(step === -1 ? got < from : got > from, `step ${step} from ${from} went backwards`);
+        assert.ok(
+          step === -1 ? got < from : got > from,
+          `step ${step} from ${from} went backwards`,
+        );
       }
     }
   }

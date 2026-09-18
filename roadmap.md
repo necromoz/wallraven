@@ -20,4 +20,5 @@
 - [x] Raven theme quality: restored the original scene at 4K and removed “(mascot)” from its name.
 
 ## Packaging note
+
 - Always package with `--icon=electron/icon.ico` so the exe embeds the WR icon; without it Windows pins the default Electron logo. `app.setAppUserModelId("com.wallraven.app")` keeps taskbar grouping stable.

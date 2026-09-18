@@ -48,34 +48,66 @@ let chromium;
 try {
   ({ chromium } = await import("playwright"));
 } catch {
-  console.error("playwright is not installed. npm i -D playwright, then npx playwright install chromium");
+  console.error(
+    "playwright is not installed. npm i -D playwright, then npx playwright install chromium",
+  );
   process.exit(1);
 }
 
 // Enough config for the window to hydrate from, with a timetable in it because
 // that is the card most worth looking at.
 const CONFIG = {
-  theme, uiAccent: "#7c5cff", cycleMinutes: 30, cacheMaxMB: 20480,
+  theme,
+  uiAccent: "#7c5cff",
+  cycleMinutes: 30,
+  cacheMaxMB: 20480,
   categories: { general: true, anime: true, people: false },
   purity: { sfw: true, sketchy: false, nsfw: false },
-  sorting: "random", order: "desc", topRange: "1M", colors: [], ratios: "",
-  resolutions: "", atleastResolution: "", query: "", presets: {},
+  sorting: "random",
+  order: "desc",
+  topRange: "1M",
+  colors: [],
+  ratios: "",
+  resolutions: "",
+  atleastResolution: "",
+  query: "",
+  presets: {},
   playlists: { Evening: { items: [], createdAt: Date.now() } },
-  likes: [], dislikes: [], hotkeys: {}, hotkeysEnabled: true,
+  likes: [],
+  dislikes: [],
+  hotkeys: {},
+  hotkeysEnabled: true,
   schedule: {
     enabled: true,
     rules: [
       { id: "a", startHHMM: "08:00", sourceType: "search", days: [1, 2, 3, 4, 5] },
-      { id: "b", startHHMM: "18:00", sourceType: "playlist", sourceRef: "Evening", intervalMin: 10, days: [] },
+      {
+        id: "b",
+        startHHMM: "18:00",
+        sourceType: "playlist",
+        sourceRef: "Evening",
+        intervalMin: 10,
+        days: [],
+      },
     ],
   },
-  collapsed: {}, sectionsOpen: {}, uiPage: page, uiTabs: {},
-  sourceMode: "search", folderPaths: [], lastSeenVersion: lastSeen,
+  collapsed: {},
+  sectionsOpen: {},
+  uiPage: page,
+  uiTabs: {},
+  sourceMode: "search",
+  folderPaths: [],
+  lastSeenVersion: lastSeen,
 };
 
 const INFO = {
   current: { id: "gwq6me", file: path.join(ELECTRON_DIR, "icon.png"), resolution: "5126x2883" },
-  cacheMB: 5058, pinnedMB: 33, historyCount: 200, canBack: true, canForward: false, paused: false,
+  cacheMB: 5058,
+  pinnedMB: 33,
+  historyCount: 200,
+  canBack: true,
+  canForward: false,
+  paused: false,
 };
 
 const changelog = fs.readFileSync(path.join(ELECTRON_DIR, "CHANGELOG.md"), "utf8");
@@ -85,36 +117,41 @@ const browser = await chromium.launch(
 );
 const tab = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 
-await tab.addInitScript(({ config, info, changelogText }) => {
-  const reply = (value) => (...args) =>
-    Promise.resolve(typeof value === "function" ? value(...args) : value);
-  const known = {
-    getConfig: reply(() => JSON.parse(JSON.stringify(config))),
-    setConfig: reply((patch) => Object.assign(config, patch)),
-    info: reply(info),
-    history: reply([]),
-    appVersion: reply("0.0.0-shot"),
-    updateInfo: reply({ current: "0.0.0-shot", info: {}, storeManaged: false }),
-    hotkeysStatus: reply({ ok: true, registered: [], failed: [] }),
-    accountStatus: reply({ signedIn: false }),
-    setWindowOpacity: reply(true),
-    searchRun: reply({ items: [], meta: {} }),
-    changelog: reply(changelogText),
-    portableInfo: reply({ portable: false, dir: "C:/Program Files/WallRaven" }),
-    likes: reply([]),
-    schedulePreview: reply({ activeRuleId: "a", effectiveIntervalMin: 30, enabled: true }),
-  };
-  // Anything not modelled answers with something harmlessly shaped like data.
-  window.api = new Proxy(known, {
-    get: (t, p) =>
-      p in t
-        ? t[p]
-        : typeof p === "string"
-          ? reply({ ok: true, items: [], categories: [], presets: [], list: [], data: [] })
-          : undefined,
-    has: () => true,
-  });
-}, { config: CONFIG, info: INFO, changelogText: changelog });
+await tab.addInitScript(
+  ({ config, info, changelogText }) => {
+    const reply =
+      (value) =>
+      (...args) =>
+        Promise.resolve(typeof value === "function" ? value(...args) : value);
+    const known = {
+      getConfig: reply(() => JSON.parse(JSON.stringify(config))),
+      setConfig: reply((patch) => Object.assign(config, patch)),
+      info: reply(info),
+      history: reply([]),
+      appVersion: reply("0.0.0-shot"),
+      updateInfo: reply({ current: "0.0.0-shot", info: {}, storeManaged: false }),
+      hotkeysStatus: reply({ ok: true, registered: [], failed: [] }),
+      accountStatus: reply({ signedIn: false }),
+      setWindowOpacity: reply(true),
+      searchRun: reply({ items: [], meta: {} }),
+      changelog: reply(changelogText),
+      portableInfo: reply({ portable: false, dir: "C:/Program Files/WallRaven" }),
+      likes: reply([]),
+      schedulePreview: reply({ activeRuleId: "a", effectiveIntervalMin: 30, enabled: true }),
+    };
+    // Anything not modelled answers with something harmlessly shaped like data.
+    window.api = new Proxy(known, {
+      get: (t, p) =>
+        p in t
+          ? t[p]
+          : typeof p === "string"
+            ? reply({ ok: true, items: [], categories: [], presets: [], list: [], data: [] })
+            : undefined,
+      has: () => true,
+    });
+  },
+  { config: CONFIG, info: INFO, changelogText: changelog },
+);
 
 await tab.goto(`file://${path.join(ELECTRON_DIR, "settings.html")}`);
 await tab.waitForTimeout(1200);

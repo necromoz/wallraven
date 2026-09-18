@@ -21,9 +21,17 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Sign in — WallRaven" },
-      { name: "description", content: "Sign in to your WallRaven account to sync settings, presets and playlists across machines." },
+      {
+        name: "description",
+        content:
+          "Sign in to your WallRaven account to sync settings, presets and playlists across machines.",
+      },
       { property: "og:title", content: "Sign in — WallRaven" },
-      { property: "og:description", content: "Sign in to your WallRaven account to sync settings, presets and playlists across machines." },
+      {
+        property: "og:description",
+        content:
+          "Sign in to your WallRaven account to sync settings, presets and playlists across machines.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -118,10 +126,14 @@ function AuthPage() {
             : "Sync your settings, presets and playlists."}
         </p>
 
-        <form onSubmit={onSubmit} className="mt-4 space-y-4 rounded-xl border border-border bg-card p-6">
-
+        <form
+          onSubmit={onSubmit}
+          className="mt-4 space-y-4 rounded-xl border border-border bg-card p-6"
+        >
           <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium">Email</label>
+            <label htmlFor="email" className="text-sm font-medium">
+              Email
+            </label>
             <input
               id="email"
               type="email"
@@ -135,7 +147,9 @@ function AuthPage() {
 
           {mode !== "forgot" && (
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-sm font-medium">Password</label>
+              <label htmlFor="password" className="text-sm font-medium">
+                Password
+              </label>
               <input
                 id="password"
                 type="password"
@@ -185,7 +199,9 @@ function AuthPage() {
         </form>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          <Link to="/" className="underline">Back to wallraven.app</Link>
+          <Link to="/" className="underline">
+            Back to wallraven.app
+          </Link>
         </p>
       </main>
     </div>

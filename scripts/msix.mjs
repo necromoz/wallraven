@@ -85,18 +85,23 @@ export function validateIdentity(identity) {
 // XML escaping for the three values that come from outside. A publisher
 // display name is free text and people do have ampersands in their names.
 function xmlEscape(value) {
-  return String(value).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&apos;",
-  })[c]);
+  return String(value).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&apos;",
+      })[c],
+  );
 }
 
 export function renderManifest(template, { identity, version }) {
   const problems = validateIdentity(identity);
-  if (problems.length) throw new Error(`MSIX identity is not usable:\n  - ${problems.join("\n  - ")}`);
+  if (problems.length)
+    throw new Error(`MSIX identity is not usable:\n  - ${problems.join("\n  - ")}`);
 
   const values = {
     IDENTITY_NAME: identity.identityName,
@@ -106,7 +111,8 @@ export function renderManifest(template, { identity, version }) {
   };
 
   const out = template.replace(/\{\{([A-Z_]+)\}\}/g, (whole, key) => {
-    if (!(key in values)) throw new Error(`the manifest template asks for ${key}, which the build does not have`);
+    if (!(key in values))
+      throw new Error(`the manifest template asks for ${key}, which the build does not have`);
     return xmlEscape(values[key]);
   });
 
@@ -133,7 +139,8 @@ export function pngSize(file) {
   try {
     const head = Buffer.alloc(24);
     fs.readSync(fd, head, 0, 24, 0);
-    if (head.toString("ascii", 1, 4) !== "PNG") throw new Error(`${path.basename(file)} is not a PNG`);
+    if (head.toString("ascii", 1, 4) !== "PNG")
+      throw new Error(`${path.basename(file)} is not a PNG`);
     return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
   } finally {
     fs.closeSync(fd);

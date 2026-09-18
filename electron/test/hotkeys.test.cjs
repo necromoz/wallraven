@@ -11,10 +11,9 @@
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
+const { hasCode } = require("./sources.cjs");
 
-const SRC = fs
-  .readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8")
-  .replace(/\r\n/g, "\n");
+const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8").replace(/\r\n/g, "\n");
 
 function extract(name) {
   const start = SRC.indexOf(`function ${name}(`);
@@ -26,7 +25,13 @@ function extract(name) {
   let parens = 0;
   for (; i < SRC.length; i++) {
     if (SRC[i] === "(") parens++;
-    else if (SRC[i] === ")") { parens--; if (parens === 0) { i++; break; } }
+    else if (SRC[i] === ")") {
+      parens--;
+      if (parens === 0) {
+        i++;
+        break;
+      }
+    }
   }
   i = SRC.indexOf("{", i);
   let depth = 0;
@@ -91,7 +96,14 @@ function build({ config, accept }) {
     config,
     (kind, payload) => sent.push({ kind, payload }),
     { warn: noop, log: noop, error: noop },
-    noop, noop, noop, noop, noop, noop, noop, noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
   );
   return { ...api, sent };
 }
@@ -108,7 +120,10 @@ check("accepted shortcuts are reported as active", () => {
   const st = registerHotkeysAndReport();
   assert.strictEqual(st.registered.length, 2);
   assert.strictEqual(st.failed.length, 0);
-  assert.ok(sent.some((m) => m.kind === "hotkeys-status"), "the card was never told");
+  assert.ok(
+    sent.some((m) => m.kind === "hotkeys-status"),
+    "the card was never told",
+  );
   assert.ok(!sent.some((m) => m.kind === "app-toast"), "it complained about nothing");
 });
 
@@ -126,7 +141,10 @@ check("a shortcut another program owns is reported, by name", () => {
     accept: (accel) => accel !== "CmdOrCtrl+Alt+N",
   });
   const st = registerHotkeysAndReport();
-  assert.deepStrictEqual(st.failed.map((f) => f.accel), ["CmdOrCtrl+Alt+N"]);
+  assert.deepStrictEqual(
+    st.failed.map((f) => f.accel),
+    ["CmdOrCtrl+Alt+N"],
+  );
   const toast = sent.find((m) => m.kind === "app-toast");
   assert.ok(toast, "no toast was raised");
   assert.ok(/CmdOrCtrl\+Alt\+N/.test(toast.payload.msg), "the toast does not name the shortcut");
@@ -139,7 +157,10 @@ check("an accelerator Electron rejects outright is a failure, not a crash", () =
   const { registerHotkeysAndReport, sent } = build({ config: HOTKEYS, accept: "throw" });
   const st = registerHotkeysAndReport();
   assert.strictEqual(st.failed.length, 2);
-  assert.ok(st.failed.every((f) => f.error), "the reason was lost");
+  assert.ok(
+    st.failed.every((f) => f.error),
+    "the reason was lost",
+  );
   assert.ok(sent.some((m) => m.kind === "app-toast"));
 });
 
@@ -171,7 +192,10 @@ check("the last status is kept for the card to ask for later", () => {
     accept: (accel) => accel !== "CmdOrCtrl+Alt+L",
   });
   registerHotkeysAndReport();
-  assert.deepStrictEqual(status().failed.map((f) => f.accel), ["CmdOrCtrl+Alt+L"]);
+  assert.deepStrictEqual(
+    status().failed.map((f) => f.accel),
+    ["CmdOrCtrl+Alt+L"],
+  );
 });
 
 console.log("the call sites use the reporting version");
@@ -186,8 +210,8 @@ check("no caller throws the result away any more", () => {
 });
 
 check("there is an IPC handler for the card to ask", () => {
-  assert.ok(/ipcMain\.handle\('hotkeys:status'/.test(SRC));
-  assert.ok(/ipcMain\.handle\('hotkeys:reregister', \(\) => registerHotkeysAndReport\(\)\)/.test(SRC));
+  assert.ok(hasCode(SRC, "ipcMain.handle('hotkeys:status'"));
+  assert.ok(hasCode(SRC, "ipcMain.handle('hotkeys:reregister', () => registerHotkeysAndReport())"));
 });
 
 check("the settings window shows it", () => {

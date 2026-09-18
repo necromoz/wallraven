@@ -10,7 +10,7 @@
 // Run with: node electron/test/schedule-ui.test.cjs
 
 const assert = require("assert");
-const { JS, extractFrom, extractConstFrom } = require("./sources.cjs");
+const { JS, extractFrom, extractConstFrom, hasCode } = require("./sources.cjs");
 
 const extract = (name) => extractFrom(JS, name);
 const extractConst = (name) => extractConstFrom(JS, name);
@@ -33,8 +33,14 @@ const api = new Function(`
 let passed = 0;
 let failed = 0;
 function check(label, fn) {
-  try { fn(); passed++; }
-  catch (err) { failed++; console.error(`  FAIL  ${label}`); console.error(`        ${err.message}`); }
+  try {
+    fn();
+    passed++;
+  } catch (err) {
+    failed++;
+    console.error(`  FAIL  ${label}`);
+    console.error(`        ${err.message}`);
+  }
 }
 
 const plain = (html) => String(html).replace(/<[^>]+>/g, "");
@@ -69,12 +75,18 @@ check("a time becomes minutes, and nonsense becomes null", () => {
 
 check("entries are shown in the order they take effect", () => {
   const rules = [{ startHHMM: "18:00" }, { startHHMM: "07:30" }, { startHHMM: "12:00" }];
-  assert.deepStrictEqual(api.sortRules(rules).map((r) => r.startHHMM), ["07:30", "12:00", "18:00"]);
+  assert.deepStrictEqual(
+    api.sortRules(rules).map((r) => r.startHHMM),
+    ["07:30", "12:00", "18:00"],
+  );
 });
 
 check("an unreadable time sinks rather than disappearing", () => {
   const rules = [{ startHHMM: "bad" }, { startHHMM: "07:30" }];
-  assert.deepStrictEqual(api.sortRules(rules).map((r) => r.startHHMM), ["07:30", "bad"]);
+  assert.deepStrictEqual(
+    api.sortRules(rules).map((r) => r.startHHMM),
+    ["07:30", "bad"],
+  );
 });
 
 console.log("what an entry adds up to");
@@ -97,12 +109,16 @@ check("the last entry of the day runs until the first one comes round again", ()
 
 check("a lone entry is in force from then on, with nothing to hand over to", () => {
   const only = { id: "a", startHHMM: "22:00", sourceType: "search" };
-  assert.ok(/for the rest of the day and overnight/.test(plain(api.describeRule(only, [only], CFG, 30))));
+  assert.ok(
+    /for the rest of the day and overnight/.test(plain(api.describeRule(only, [only], CFG, 30))),
+  );
 });
 
 check("a blank interval is spelled out, not left as an empty box", () => {
   const a = { id: "a", startHHMM: "08:00", sourceType: "search" };
-  assert.ok(/every 30 minutes \(the usual interval\)/.test(plain(api.describeRule(a, [a], CFG, 30))));
+  assert.ok(
+    /every 30 minutes \(the usual interval\)/.test(plain(api.describeRule(a, [a], CFG, 30))),
+  );
   const b = { id: "b", startHHMM: "08:00", sourceType: "search", intervalMin: 5 };
   assert.ok(/every 5 minutes/.test(plain(api.describeRule(b, [b], CFG, 30))));
 });
@@ -163,9 +179,12 @@ check("each entry is rendered with its sentence and its day chips", () => {
 
 check("collectSchedule reads the chips it now renders", () => {
   const body = extract("collectSchedule");
-  assert.ok(/classList\.contains\('on'\)/.test(body), "it still looks for checked checkboxes");
+  assert.ok(hasCode(body, "classList.contains('on')"), "it still looks for checked checkboxes");
 });
 
 console.log();
-if (failed) { console.error(`${failed} failed, ${passed} passed`); process.exit(1); }
+if (failed) {
+  console.error(`${failed} failed, ${passed} passed`);
+  process.exit(1);
+}
 console.log(`${passed} passed`);

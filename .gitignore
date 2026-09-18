@@ -46,6 +46,9 @@ out/
 # 100 MB. Keep binaries out of the repo; ship them as release assets.
 electron/app/
 electron/_pkg/
+# Anything parked for deletion: this sandbox cannot delete files on the user's
+# machine, so build leftovers get moved here instead of removed.
+electron/_to_delete/
 electron/out/
 electron/dist/
 *.exe

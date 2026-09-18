@@ -23,12 +23,13 @@ function remember(key: string, value: { url: string | null; at: number }) {
   cache.set(key, value);
 }
 
-
 function firstGroup(query: string) {
-  return String(query || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)[0] ?? "";
+  return (
+    String(query || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)[0] ?? ""
+  );
 }
 
 function bits(raw: string | null, fallback: string) {
@@ -49,16 +50,24 @@ export const Route = createFileRoute("/api/public/presets/thumb")({
         const categories = bits(url.searchParams.get("categories"), "111");
         // Never surface anything beyond SFW on the public website.
         const purity = "100";
-        const sorting = ["toplist", "relevance", "random", "date_added", "views", "favorites"].includes(
-          url.searchParams.get("sorting") ?? "",
-        )
+        const sorting = [
+          "toplist",
+          "relevance",
+          "random",
+          "date_added",
+          "views",
+          "favorites",
+        ].includes(url.searchParams.get("sorting") ?? "")
           ? url.searchParams.get("sorting")!
           : "toplist";
 
         const key = `${q}|${categories}|${sorting}`;
         const hit = cache.get(key);
         if (hit && Date.now() - hit.at < TTL) {
-          return Response.json({ url: hit.url }, { headers: { ...cors, "cache-control": "public, max-age=21600" } });
+          return Response.json(
+            { url: hit.url },
+            { headers: { ...cors, "cache-control": "public, max-age=21600" } },
+          );
         }
 
         const params = new URLSearchParams({ categories, purity, sorting, page: "1" });

@@ -1,744 +1,1427 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>WallRaven - Settings</title>
-<link rel="stylesheet" href="settings.css" />
-</head>
-<body>
-<header>
-  <div class="brand" style="display:flex; align-items:center; gap:10px;">
-    <img src="icon.png" alt="" width="26" height="26" style="border-radius:7px; display:block;" />
-    <h1>WallRaven</h1><span id="app-version" hidden>v?</span>
-  </div>
-  <div id="toast-stack" aria-live="polite"></div>
-  <div class="right">
-    <button id="hdr-thumb" type="button" title="The wallpaper on screen now. Click to open Now playing." aria-label="Current wallpaper"></button>
-    <button class="btn secondary icon-btn" id="hdr-like" title="Like this wallpaper">👍</button>
-    <button class="btn secondary icon-btn" id="hdr-dislike" title="Dislike and skip">👎</button>
-    <button class="btn secondary icon-btn" id="hdr-prev" title="Previous wallpaper">◄</button>
-    <button class="btn secondary icon-btn" id="btn-next" title="Next wallpaper">►</button>
-    <button class="btn secondary" id="hdr-playpause" title="Pause automatic changes">Playing</button>
-    <button class="btn" id="btn-save">Save</button>
-    <button class="btn secondary" id="btn-fade" hidden title="Hover to fade the window and peek at the wallpaper">👁</button>
-  </div>
-</header>
-
-<div id="update-banner" style="display:none; padding:10px 20px; background:var(--panel-2); border-bottom:1px solid var(--border); color:var(--fg); font-size:12px;">
-  <span id="update-banner-text"></span>
-  <a href="#" id="update-banner-link" style="margin-left:8px;">Download</a>
-  <a href="#" id="update-banner-dismiss" style="margin-left:12px; color:var(--muted);">Dismiss</a>
-</div>
-<div id="intro-panel" style="display:none;">
-  <div class="intro-inner">
-    <div style="flex:1;">
-      <div class="intro-title" id="intro-title"></div>
-      <div class="intro-body" id="intro-body"></div>
-    </div>
-    <button class="btn" id="intro-dismiss" type="button">Got it</button>
-  </div>
-</div>
-
-<div id="shell">
-<nav id="sidebar" aria-label="Sections"></nav>
-<main>
-  <div id="page-head"><h2></h2><p></p></div>
-  <div id="quick-actions"></div>
-  <div id="subnav"></div>
-  <div id="cards"></div>
-
-
-  <footer>
-    Thanks to <a href="#" data-ext="https://wallhaven.cc/">wallhaven.cc</a> for the wallpaper API and community. All wallpapers, tags, thumbnails and previews are the property of their respective copyright holders and are hosted by Wallhaven; WallRaven is an unofficial, independent desktop client that only retrieves and displays content through Wallhaven's public API and does not claim any ownership, endorsement, or affiliation. Please respect the original artists - favourite, follow and credit them on Wallhaven. Use of this app is subject to Wallhaven's terms of service.
-  </footer>
-</main>
-</div>
-
-
-
-<!-- ============================ Card templates ============================ -->
-<template id="tpl-current">
-  <div class="preview">
-    <div class="thumb" id="thumb"></div>
-    <div class="meta" id="meta">No wallpaper yet - press <strong>►</strong> in the top bar.</div>
-  </div>
-  <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; align-items:center;">
-    <button class="btn secondary" id="btn-back" title="Previous wallpaper (Back)">◄</button>
-    <button class="btn secondary" id="btn-forward" title="Next in history (Forward)">►</button>
-    <button class="btn secondary" id="btn-open">Open page</button>
-    <button class="btn secondary" id="btn-folder">Show file</button>
-    <button class="btn secondary" id="btn-like" title="Add to Liked playlist">👍 Like</button>
-    <button class="btn secondary" id="btn-dislike" title="Never show again; pick next now">👎 Dislike &amp; skip</button>
-  </div>
-  
-</template>
-
-<template id="tpl-history">
-  <div id="historyGrid" class="wp-grid">
-    <span style="color:var(--muted); font-size:12px;">Loading…</span>
-  </div>
-  <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-    <button class="btn secondary" id="btn-history-more" type="button" style="display:none;">Show more</button>
-    <div class="help">Click a thumbnail to set it as your wallpaper. Use 👍 or 👎 to change how WallRaven treats it.</div>
-  </div>
-</template>
-
-<template id="tpl-favourites">
-  <div class="help" style="margin-bottom:10px;">
-    Liked wallpapers are added to this list and saved in cache forever. Disliked wallpapers are never shown again.
-  </div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-    <button class="btn" id="btn-fav-use" type="button">▶ Only shuffle Liked</button>
-    <button class="btn secondary" id="btn-fav-refresh" type="button">Refresh</button>
-  </div>
-  <details class="reaction-list" open>
-    <summary>Liked 👍 <span id="likedCount" class="sub"></span></summary>
-    <div id="likedGrid" class="wp-grid reaction-grid"><span class="help">No liked wallpapers yet.</span></div>
-  </details>
-  <details class="reaction-list" open>
-    <summary>Disliked 👎 <span id="dislikedCount" class="sub"></span></summary>
-    <div id="dislikedGrid" class="wp-grid reaction-grid"><span class="help">No disliked wallpapers yet.</span></div>
-  </details>
-</template>
-
-
-<template id="tpl-favorites">
-  <div class="row"><label>Wallhaven username</label><input id="whUsername" type="text" placeholder="your wallhaven username" /></div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-    <button class="btn secondary" id="btn-load-collections">Load my collections</button>
-    <select id="collectionSelect" style="flex:1; min-width:160px;"><option value="">- pick a collection -</option></select>
-  </div>
-  <div class="row"><label>Cycle source</label>
-    <select id="sourceMode">
-      <option value="search">Use search & filters</option>
-      <option value="collection">Only from selected Wallhaven collection</option>
-      <option value="playlist">Only from active local playlist</option>
-      <option value="folder">Only from my local folders</option>
-
-    </select>
-  </div>
-  <div id="collectionItems" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px; max-height:320px; overflow-y:auto; margin-top:8px;"></div>
-  <div class="help" style="margin-top:8px;">Requires your Wallhaven API key. Wallhaven's public API doesn't let apps add favourites - use the "Open page" icon to favourite on wallhaven.cc while signed in.</div>
-</template>
-
-<template id="tpl-search">
-  <div class="row"><label>Search term</label><input id="query" type="text" placeholder="e.g. zzz, wuthering waves +girls" /></div>
-  <div class="row full">
-    <div id="queryBuilder" style="border:1px solid var(--border); border-radius:8px; background:var(--panel-2); padding:8px 10px;">
-      <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
-        <input id="qbTerm" type="text" placeholder="Add a term (e.g. cars, id:65, -id:412)" style="flex:1; min-width:140px;" />
-        <button class="btn secondary" id="qbAddAnd" type="button" title="Add to the current group (must match all)">+ AND</button>
-        <button class="btn secondary" id="qbAddOr"  type="button" title="Start a new group (any group can match)">+ OR</button>
-        <button class="btn secondary" id="qbClear"  type="button" title="Clear query">Clear</button>
+  <head>
+    <meta charset="utf-8" />
+    <title>WallRaven - Settings</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand" style="display: flex; align-items: center; gap: 10px">
+        <img
+          src="icon.png"
+          alt=""
+          width="26"
+          height="26"
+          style="border-radius: 7px; display: block"
+        />
+        <h1>WallRaven</h1>
+        <span id="app-version" hidden>v?</span>
       </div>
-      <div id="qbChips" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; min-height:22px;"></div>
-      <div class="help" style="margin-top:6px; font-size:11px;">
-        <strong>AND</strong> (space or <code>+</code>) narrows within a group — every term must match. <strong>OR</strong> (<code>,</code>) creates a new group — any group can match. Example: <code>wuthering waves +girls, cars, zenless zone zero</code>.
+      <div id="toast-stack" aria-live="polite"></div>
+      <div class="right">
+        <button
+          id="hdr-thumb"
+          type="button"
+          title="The wallpaper on screen now. Click to open Now playing."
+          aria-label="Current wallpaper"
+        ></button>
+        <button class="btn secondary icon-btn" id="hdr-like" title="Like this wallpaper">👍</button>
+        <button class="btn secondary icon-btn" id="hdr-dislike" title="Dislike and skip">👎</button>
+        <button class="btn secondary icon-btn" id="hdr-prev" title="Previous wallpaper">◄</button>
+        <button class="btn secondary icon-btn" id="btn-next" title="Next wallpaper">►</button>
+        <button class="btn secondary" id="hdr-playpause" title="Pause automatic changes">
+          Playing
+        </button>
+        <button class="btn" id="btn-save">Save</button>
+        <button
+          class="btn secondary"
+          id="btn-fade"
+          hidden
+          title="Hover to fade the window and peek at the wallpaper"
+        >
+          👁
+        </button>
+      </div>
+    </header>
+
+    <div
+      id="update-banner"
+      style="
+        display: none;
+        padding: 10px 20px;
+        background: var(--panel-2);
+        border-bottom: 1px solid var(--border);
+        color: var(--fg);
+        font-size: 12px;
+      "
+    >
+      <span id="update-banner-text"></span>
+      <a href="#" id="update-banner-link" style="margin-left: 8px">Download</a>
+      <a href="#" id="update-banner-dismiss" style="margin-left: 12px; color: var(--muted)"
+        >Dismiss</a
+      >
+    </div>
+    <div id="intro-panel" style="display: none">
+      <div class="intro-inner">
+        <div style="flex: 1">
+          <div class="intro-title" id="intro-title"></div>
+          <div class="intro-body" id="intro-body"></div>
+        </div>
+        <button class="btn" id="intro-dismiss" type="button">Got it</button>
       </div>
     </div>
-  </div>
 
-  <div class="row full">
-    <details id="tagBrowser" style="border:1px solid var(--border); border-radius:8px; background:var(--panel-2); padding:8px 10px;">
-      <summary style="cursor:pointer; color:var(--muted); font-size:12px;">Browse popular tags &mdash; click to add/remove from search</summary>
-      <div style="display:flex; gap:6px; align-items:center; margin:10px 0;">
-        <input id="tagFilter" type="text" placeholder="Filter loaded tags…" style="flex:1;" />
-        <select id="tagPurity" style="width:auto;">
-          <option value="sfw">SFW</option><option value="sketchy">+ Sketchy</option><option value="nsfw">+ NSFW</option>
+    <div id="shell">
+      <nav id="sidebar" aria-label="Sections"></nav>
+      <main>
+        <div id="page-head">
+          <h2></h2>
+          <p></p>
+        </div>
+        <div id="quick-actions"></div>
+        <div id="subnav"></div>
+        <div id="cards"></div>
+
+        <footer>
+          Thanks to <a href="#" data-ext="https://wallhaven.cc/">wallhaven.cc</a> for the wallpaper
+          API and community. All wallpapers, tags, thumbnails and previews are the property of their
+          respective copyright holders and are hosted by Wallhaven; WallRaven is an unofficial,
+          independent desktop client that only retrieves and displays content through Wallhaven's
+          public API and does not claim any ownership, endorsement, or affiliation. Please respect
+          the original artists - favourite, follow and credit them on Wallhaven. Use of this app is
+          subject to Wallhaven's terms of service.
+        </footer>
+      </main>
+    </div>
+
+    <!-- ============================ Card templates ============================ -->
+    <template id="tpl-current">
+      <div class="preview">
+        <div class="thumb" id="thumb"></div>
+        <div class="meta" id="meta">
+          No wallpaper yet - press <strong>►</strong> in the top bar.
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center">
+        <button class="btn secondary" id="btn-back" title="Previous wallpaper (Back)">◄</button>
+        <button class="btn secondary" id="btn-forward" title="Next in history (Forward)">►</button>
+        <button class="btn secondary" id="btn-open">Open page</button>
+        <button class="btn secondary" id="btn-folder">Show file</button>
+        <button class="btn secondary" id="btn-like" title="Add to Liked playlist">👍 Like</button>
+        <button class="btn secondary" id="btn-dislike" title="Never show again; pick next now">
+          👎 Dislike &amp; skip
+        </button>
+      </div>
+    </template>
+
+    <template id="tpl-history">
+      <div id="historyGrid" class="wp-grid">
+        <span style="color: var(--muted); font-size: 12px">Loading…</span>
+      </div>
+      <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <button class="btn secondary" id="btn-history-more" type="button" style="display: none">
+          Show more
+        </button>
+        <div class="help">
+          Click a thumbnail to set it as your wallpaper. Use 👍 or 👎 to change how WallRaven treats
+          it.
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-favourites">
+      <div class="help" style="margin-bottom: 10px">
+        Liked wallpapers are added to this list and saved in cache forever. Disliked wallpapers are
+        never shown again.
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
+        <button class="btn" id="btn-fav-use" type="button">▶ Only shuffle Liked</button>
+        <button class="btn secondary" id="btn-fav-refresh" type="button">Refresh</button>
+      </div>
+      <details class="reaction-list" open>
+        <summary>Liked 👍 <span id="likedCount" class="sub"></span></summary>
+        <div id="likedGrid" class="wp-grid reaction-grid">
+          <span class="help">No liked wallpapers yet.</span>
+        </div>
+      </details>
+      <details class="reaction-list" open>
+        <summary>Disliked 👎 <span id="dislikedCount" class="sub"></span></summary>
+        <div id="dislikedGrid" class="wp-grid reaction-grid">
+          <span class="help">No disliked wallpapers yet.</span>
+        </div>
+      </details>
+    </template>
+
+    <template id="tpl-favorites">
+      <div class="row">
+        <label>Wallhaven username</label
+        ><input id="whUsername" type="text" placeholder="your wallhaven username" />
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
+        <button class="btn secondary" id="btn-load-collections">Load my collections</button>
+        <select id="collectionSelect" style="flex: 1; min-width: 160px">
+          <option value="">- pick a collection -</option>
         </select>
-        <button class="btn secondary" id="tagPrev" type="button">‹</button>
-        <span id="tagPageLabel" style="color:var(--muted); font-size:12px; min-width:60px; text-align:center;">page 1</span>
-        <button class="btn secondary" id="tagNext" type="button">›</button>
       </div>
-      <div id="tagList" class="chips" style="max-height:220px; overflow-y:auto;">
-        <span style="color:var(--muted); font-size:12px;">Loading…</span>
+      <div class="row">
+        <label>Cycle source</label>
+        <select id="sourceMode">
+          <option value="search">Use search & filters</option>
+          <option value="collection">Only from selected Wallhaven collection</option>
+          <option value="playlist">Only from active local playlist</option>
+          <option value="folder">Only from my local folders</option>
+        </select>
       </div>
-      <div style="margin-top:8px; color:var(--muted); font-size:11px;">
-        Selected tags are stored as <code>id:NNN</code>. Prefix with <code>-</code> to exclude.
+      <div
+        id="collectionItems"
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+          gap: 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          margin-top: 8px;
+        "
+      ></div>
+      <div class="help" style="margin-top: 8px">
+        Requires your Wallhaven API key. Wallhaven's public API doesn't let apps add favourites -
+        use the "Open page" icon to favourite on wallhaven.cc while signed in.
       </div>
-    </details>
-  </div>
-  <div class="row"><label>Categories</label><div>
-    <label class="check"><input type="checkbox" id="cat-general"/> General</label>
-    <label class="check"><input type="checkbox" id="cat-anime"/> Anime</label>
-    <label class="check"><input type="checkbox" id="cat-people"/> People</label>
-  </div></div>
-  <div class="row"><label>Purity</label><div>
-    <label class="check"><input type="checkbox" id="pur-sfw"/> SFW</label>
-    <label class="check"><input type="checkbox" id="pur-sketchy"/> Sketchy</label>
-    <label class="check"><input type="checkbox" id="pur-nsfw"/> NSFW <span class="help">(requires API key)</span></label>
-  </div></div>
-  <div class="row"><label>Sort by</label>
-    <select id="sorting">
-      <option value="random">Random</option><option value="date_added">Date added</option>
-      <option value="relevance">Relevance</option><option value="views">Views</option>
-      <option value="favorites">Most favourited on Wallhaven</option><option value="toplist">Toplist</option>
-    </select>
-  </div>
-  <div class="row" id="toprange-row" style="display:none"><label>Top range</label>
-    <select id="topRange">
-      <option value="1d">Last day</option><option value="3d">Last 3 days</option>
-      <option value="1w">Last week</option><option value="1M" selected>Last month</option>
-      <option value="3M">Last 3 months</option><option value="6M">Last 6 months</option>
-      <option value="1y">Last year</option>
-    </select>
-  </div>
-  <div class="row"><label>Blacklist tag IDs</label>
-    <input id="blacklistTagIds" type="text" placeholder="e.g. 65,412,890 — excluded from every search" />
-  </div>
-  <div class="help help-indent">Comma-separated Wallhaven tag IDs. Appended as <code>-id:N</code> to every search so the API skips them at the source.</div>
-</template>
+    </template>
 
-
-<template id="tpl-browse">
-  <div class="card-intro">Look through Wallhaven without touching your own settings. What you type here is used for this search only: the search your wallpapers rotate on is the one in Search &amp; filters, and it stays exactly as you left it.</div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
-    <input id="browseQuery" type="text" placeholder="Search for anything, or leave empty for your saved search" style="flex:1; min-width:200px;" />
-    <select id="browseSort" style="min-width:150px;" title="How to order the results">
-      <option value="">My saved sort order</option>
-      <option value="toplist:1M">Top this month</option>
-      <option value="toplist:1w">Top this week</option>
-      <option value="date_added">Newest first</option>
-      <option value="relevance">Best match</option>
-      <option value="random">Random</option>
-    </select>
-    <button class="btn" id="btn-browse-run" type="button">Search</button>
-  </div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
-    <button class="btn secondary" id="btn-browse-prev" type="button">‹ Previous page</button>
-    <span id="browsePageLabel" style="color:var(--muted); font-size:12px; min-width:90px; text-align:center;">page 1</span>
-    <button class="btn secondary" id="btn-browse-next" type="button">Next page ›</button>
-    <span style="flex:1;"></span>
-    <span style="color:var(--muted); font-size:11px;">Your resolution, colour and purity filters still apply</span>
-  </div>
-  <div class="row"><label>When I press <strong>+</strong></label>
-    <select id="browseAddTarget"><option value="">Just set it as my wallpaper</option></select>
-  </div>
-  <div id="browseGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:8px; max-height:560px; overflow-y:auto;">
-    <span style="color:var(--muted); font-size:12px;">Loading the top wallpapers of the month…</span>
-  </div>
-  <div class="help" style="margin-top:8px;">Click a picture to use it now, which pauses the automatic changes. <strong>+</strong> also saves it to the playlist chosen above.</div>
-</template>
-
-<template id="tpl-resolution">
-  <div class="row"><label>Minimum resolution</label>
-    <select id="atleastResolution">
-      <option value="">Any</option>
-      <option value="__current__" id="opt-current-res">Current screen</option>
-      <option value="1920x1080">1920×1080 (FHD)</option>
-      <option value="2560x1440">2560×1440 (QHD)</option>
-      <option value="3840x2160">3840×2160 (4K)</option>
-      <option value="5120x2880">5120×2880 (5K)</option>
-      <option value="7680x4320">7680×4320 (8K)</option>
-    </select>
-  </div>
-  <div class="row"><label>Aspect ratios</label>
-    <div class="chips" id="ratios">
-      <span class="chip" data-v="__current__" id="chip-current-ratio">Current</span>
-      <span class="chip" data-v="16x9">16:9</span>
-      <span class="chip" data-v="16x10">16:10</span>
-      <span class="chip" data-v="21x9">21:9 ultrawide</span>
-      <span class="chip" data-v="32x9">32:9 super ultrawide</span>
-      <span class="chip" data-v="4x3">4:3</span>
-      <span class="chip" data-v="5x4">5:4</span>
-      <span class="chip" data-v="9x16">9:16 portrait</span>
-      <span class="chip" data-v="10x16">10:16 portrait</span>
-    </div>
-  </div>
-  <div class="row"><label>Exact resolutions <span class="help">(optional)</span></label>
-    <input id="resolutions" type="text" placeholder="e.g. 1920x1080,2560x1440" /></div>
-</template>
-
-<template id="tpl-colors">
-  <div class="row full"><label>Filter by dominant color (Wallhaven palette)</label>
-    <div class="palette" id="palette"></div>
-  </div>
-</template>
-
-<template id="tpl-cycle">
-  <div>
-    <label>Cycle every</label>
-    <div class="slider-row">
-      <input type="range" id="cycleMinutes" min="1" max="1440" step="1" />
-      <input type="number" id="cycleMinutesNum" min="1" max="1440" />
-    </div>
-    <div class="help">Minutes between wallpaper changes (overridden by an active schedule rule)</div>
-  </div>
-
-
-</template>
-
-<template id="tpl-display">
-  <div class="row"><label>Fit mode</label>
-    <select id="fitMode">
-      <option value="fill">Fill (crop to screen)</option>
-      <option value="fit">Fit (letterbox)</option>
-      <option value="stretch">Stretch</option>
-      <option value="tile">Tile</option>
-      <option value="center">Center</option>
-      <option value="span">Span (across monitors)</option>
-    </select>
-  </div>
-  <div class="row"><label>Multi-monitor</label>
-    <select id="monitorMode">
-      <option value="same">Same image on every monitor</option>
-      <option value="span">Span single image across monitors</option>
-      <option value="different">Different image per monitor (from active playlist)</option>
-    </select>
-  </div>
-  <div class="help help-indent">"Different" needs an active playlist with 2+ items; consecutive playlist items are placed on each monitor.</div>
-</template>
-
-<template id="tpl-cache">
-  <div>
-    <label>Cache limit</label>
-    <div class="slider-row">
-      <input type="range" id="cacheMaxMB" min="100" max="20480" step="100" />
-      <input type="number" id="cacheMaxMBNum" min="100" max="20480" />
-    </div>
-    <div class="help" id="cacheLimitHelp">Megabytes. Once downloads pass this size the oldest are deleted to make room. Anything in a playlist or liked is kept whatever happens, and so is the wallpaper on screen.</div>
-  </div>
-  <div class="status" id="cacheStats" style="margin-top:8px;">&nbsp;</div>
-  <hr/>
-  <div class="row"><label>Cache location</label>
-    <div style="display:flex; gap:6px; flex-wrap:wrap;">
-      <input id="cacheDirPath" type="text" readonly style="flex:1; min-width:180px;" />
-      <button class="btn secondary" id="btn-cache-change" type="button">Change…</button>
-      <button class="btn secondary" id="btn-cache-open" type="button" title="Open the cache folder in Explorer">Open folder</button>
-      <button class="btn secondary" id="btn-cache-default" type="button" title="Move back to the default location">Use default</button>
-    </div>
-  </div>
-  <div class="help help-indent">Downloaded wallpapers live here. Both the downloads and your history survive updates. Changing the folder asks whether to move what is already there.</div>
-  <hr/>
-
-  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <button class="btn secondary" id="btn-clear" title="Deletes every downloaded wallpaper except the one on screen and anything kept">Delete all downloads</button>
-    <button class="btn secondary" id="btn-cache-test" title="Shows what the size limit would delete, without deleting anything">What would the limit delete?</button>
-    <button class="btn secondary" id="btn-clear-dislikes" title="Allow disliked wallpapers to appear again">Clear dislikes (<span id="dislikeCount">0</span>)</button>
-  </div>
-  <div id="cacheTestOut" style="display:none; margin-top:8px; font-size:12px; color:var(--muted); max-height:220px; overflow:auto;"></div>
-  <div id="cacheTestActions" style="display:none; margin-top:8px;">
-    <button class="btn danger" id="btn-cache-apply" type="button">Delete these now</button>
-  </div>
-</template>
-
-<template id="tpl-schedule">
-  <div class="card-intro">A timetable switches what WallRaven pulls from at set times of day. Each entry says "from this time, use this", and it stays in force until the next one starts. With nothing due yet today, the last entry from the day before carries over.</div>
-  <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-    <label class="check"><input type="checkbox" id="scheduleEnabled"/> Use the timetable</label>
-    <span id="scheduleStatus" style="color:var(--muted); font-size:12px;"></span>
-  </div>
-  <div id="scheduleRules"></div>
-  <button class="btn secondary" id="btn-add-rule" type="button" style="margin-top:8px;">＋ Add a time</button>
-  <div class="help" style="margin-top:8px;">Pressing ► yourself always works and takes the picture from whichever entry is in force.</div>
-</template>
-
-<template id="tpl-presets">
-  <div class="card-intro">A preset is a saved set of search settings: what to look for, resolution, colours and the rest. Load one and WallRaven keeps fetching new wallpapers that match it. For a fixed set of pictures that never changes, use a playlist instead.</div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-    <select id="presetSelect" style="flex:1; min-width:160px;"><option value="">- saved presets -</option></select>
-    <button class="btn secondary" id="btn-preset-apply" type="button">Apply</button>
-    <button class="btn secondary" id="btn-preset-overwrite" type="button" title="Save the current settings into the selected preset">Overwrite</button>
-    <button class="btn secondary" id="btn-preset-delete" type="button">Delete</button>
-  </div>
-  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <input id="presetName" type="text" placeholder="New preset name…" style="flex:1; min-width:160px;" />
-    <button class="btn" id="btn-preset-save" type="button">Save as new</button>
-  </div>
-  <div class="help" style="margin-top:8px;">
-    Built-in presets (Default, General, Anime, People, Nature, Toplist, Latest) are always available and use your current screen resolution and aspect ratio. "Default" resets everything back to the app defaults. <strong>Overwrite</strong> updates the selected preset with your current settings without retyping the name. Presets capture module order, collapsed state, search query, tags, categories, purity, sort, resolution, aspect ratios, colours, cycle interval and Wallhaven source. API key, theme and startup options are left alone.
-  </div>
-</template>
-
-<template id="tpl-community">
-  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-    <select id="libCategory" style="min-width:150px;"><option value="">All categories</option></select>
-    <select id="libSort" style="min-width:130px;">
-      <option value="copied">Most popular</option>
-      <option value="new">Newest</option>
-    </select>
-    <input id="libSearch" type="text" placeholder="Search presets…" style="flex:1; min-width:140px;" />
-  </div>
-  <div id="libList" style="max-height:320px; overflow:auto; display:flex; flex-direction:column; gap:6px;"></div>
-  <div class="help" style="margin-top:10px;">
-    Presets that come with WallRaven are listed first, then presets shared by other people.
-    Applying one only changes the search, tags, categories, purity, sort and colours.
-    Your own timetable, cycle interval, resolution, aspect ratio, monitor setup, API key, theme and
-    layout are never touched.
-  </div>
-  <div style="border-top:1px solid var(--border, #2a2a35); margin-top:14px; padding-top:14px;">
-    <strong style="display:block; font-size:13px; margin-bottom:2px;">Share a preset</strong>
-    <div class="help" style="margin:0 0 10px;">Publish one of your own presets (or your current settings) so other people can use it.</div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <select id="shareSource" style="min-width:170px;"><option value="__current__">Current settings</option></select>
-      <input id="shareName" type="text" placeholder="Share as name…" style="flex:1; min-width:150px;" />
-      <select id="shareCategory" style="min-width:150px;"></select>
-    </div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-      <input id="shareDesc" type="text" placeholder="Short description (optional)" style="flex:1; min-width:200px;" />
-      <button class="btn" id="btn-share-preset" type="button">Share preset</button>
-      <button class="btn secondary" id="btn-open-gallery" type="button" title="Open presets on the website">Presets on the web</button>
-    </div>
-    <div class="help" style="margin-top:8px;">
-      Sharing needs you to be signed in, and your username is set under <strong>Account &amp; cloud sync</strong>.
-      Screen-specific values and your cycle interval are stripped before upload.
-    </div>
-  </div>
-
-</template>
-
-
-<template id="tpl-playlists">
-  <div class="card-intro">A playlist is a fixed set of pictures you have chosen, cycled in order. It does not search for anything and it does not change on its own. A preset is the opposite: saved search settings that fetch something new every time.</div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
-    <select id="playlistSelect" style="flex:1; min-width:160px;"><option value="">- pick a playlist -</option></select>
-    <button class="btn secondary" id="btn-playlist-rename" type="button">Rename</button>
-    <button class="btn secondary" id="btn-playlist-delete" type="button">Delete</button>
-  </div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-    <input id="playlistNewName" type="text" placeholder="New playlist name…" style="flex:1; min-width:160px;" />
-    <button class="btn" id="btn-playlist-create" type="button">Create</button>
-  </div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-    <button class="btn secondary" id="btn-playlist-add-current" type="button">＋ Add current wallpaper</button>
-    <button class="btn secondary" id="btn-playlist-use" type="button">▶ Use this playlist for cycling</button>
-  </div>
-  <div id="playlistStatus" class="status"></div>
-  <div id="playlistGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; max-height:400px; overflow-y:auto; margin-top:8px;">
-    <span style="color:var(--muted); font-size:12px;">Create a playlist and add wallpapers from Browse, History, or your Current wallpaper.</span>
-  </div>
-  <div class="help" style="margin-top:8px;">Files in any playlist are <strong>kept</strong> &mdash; they're exempt from the cache-size limit and never pruned. Storage used by kept files shows separately in <em>Cycle &amp; cache</em>.</div>
-</template>
-
-<template id="tpl-library">
-  <div style="font-weight:600; margin-bottom:6px;">Rotate a folder (no playlist needed)</div>
-  <div class="help" style="margin-bottom:10px;">
-    Point WallRaven at one or more folders and it cycles through those images the way Windows does, but with your interval, fit mode, timetable, shortcuts and multi-monitor settings.
-    Dropbox, Google Drive and OneDrive all sync into ordinary folders, so pointing it at one of those works too. A picture kept online only is downloaded by Windows when it is needed, which is occasionally slow.
-  </div>
-  <div id="folderSourceList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;"></div>
-  <div id="folderQuickAdd" style="display:none; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:10px;"></div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-    <button class="btn secondary" id="btn-folder-add" type="button">＋ Add folder…</button>
-    <button class="btn" id="btn-folder-use" type="button">▶ Use folders for cycling</button>
-    <button class="btn secondary" id="btn-folder-rescan" type="button">Rescan</button>
-  </div>
-  <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
-    <label class="check"><input type="checkbox" id="folderRecursive"/> Include sub-folders</label>
-    <label style="display:flex; gap:6px; align-items:center; font-size:13px;">Order
-      <select id="folderOrder" style="min-width:120px;">
-        <option value="random">Shuffle</option>
-        <option value="sequential">In order</option>
-      </select>
-    </label>
-  </div>
-  <div id="folderStatus" class="status" style="margin-bottom:4px;">&nbsp;</div>
-  <hr/>
-  <div class="help" style="margin-bottom:10px;">
-    Import a local folder as a playlist (files stay in place, no copy) or bulk-export any playlist to a folder.
-  </div>
-
-  <div class="row"><label>Folder</label>
-    <div style="display:flex; gap:6px;">
-      <input id="libFolderPath" type="text" placeholder="Click Browse to pick a folder…" readonly style="flex:1;" />
-      <button class="btn secondary" id="btn-lib-browse" type="button">Browse…</button>
-    </div>
-  </div>
-  <div class="row"><label>Playlist name</label>
-    <input id="libPlaylistName" type="text" placeholder="Leave blank to use folder name" />
-  </div>
-  <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-    <button class="btn" id="btn-lib-import" type="button">Import folder as playlist</button>
-  </div>
-  <hr/>
-  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-    <select id="libExportSelect" style="flex:1; min-width:160px;"><option value="">- pick a playlist to export -</option></select>
-    <button class="btn secondary" id="btn-lib-export" type="button">Export to folder…</button>
-  </div>
-  <div id="libStatus" class="status" style="margin-top:8px;">&nbsp;</div>
-</template>
-
-<template id="tpl-apikey">
-  <div class="row"><label for="apiKey">Enter API key</label>
-    <div style="display:flex; gap:6px; flex:1;">
-      <input id="apiKey" type="password" placeholder="paste your 32-character Wallhaven key" style="flex:1;" />
-      <button class="btn secondary" id="btn-apikey-validate" type="button">Validate</button>
-    </div>
-  </div>
-  <div class="help" style="margin: -4px 0 6px 174px;">Get one at <a href="#" data-ext="https://wallhaven.cc/settings/account">wallhaven.cc/settings/account</a> — required for NSFW purity and your collections. Validating uses only the key; your Wallhaven username is not needed (that field is only for browsing your collections).</div>
-  <div class="row"><label>Key status</label>
-    <div style="flex:1; display:flex; align-items:center;">
-      <span id="apikeyStatus" class="status" style="margin:0;">Missing — no key entered</span>
-    </div>
-  </div>
-</template>
-
-<template id="tpl-app">
-  <div class="card-intro">How WallRaven looks and how it behaves on this PC. Nothing here changes which wallpapers you get.</div>
-  <div class="row"><label>Theme</label>
-    <select id="theme">
-      <option value="midnight">Midnight</option>
-      <option value="graphite">Graphite</option>
-      <option value="nord">Nord</option>
-      <option value="dracula">Dracula</option>
-      <option value="solar">Solarized Dark</option>
-      <option value="forest">Forest</option>
-      <option value="ocean">Ocean</option>
-      <option value="paper">Paper (light)</option>
-      <option value="light">Light</option>
-      <option value="glass">Glass ✨ (default)</option>
-      <option value="raven">Raven 🐦‍⬛</option>
-      <option value="raven-beach">Raven Summer 🌶️ (sketchy)</option>
-      <option value="raven-fire">Raven Fyra 🔥 (sketchy)</option>
-    </select>
-  </div>
-  <div class="help help-indent">The two marked sketchy have a cheekier raven in the background. Everything else is a plain colour scheme.</div>
-  <div class="row"><label>Accent colour</label><input id="uiAccent" type="color" /></div>
-</template>
-
-<template id="tpl-startup">
-  <div class="row"><label>Starting up</label><div>
-    <label class="check"><input type="checkbox" id="autoStart"/> Start WallRaven when I sign in to Windows</label>
-    <label class="check"><input type="checkbox" id="startMinimized"/> Start in the tray, without opening this window</label>
-    <div class="help" id="startup-store-note" style="display:none; margin:4px 0 0;"></div>
-  </div></div>
-  <div class="row"><label>Notifications</label>
-    <label class="check"><input type="checkbox" id="notifyOnChange"/> Tell me each time the wallpaper changes</label>
-  </div>
-  <div class="row"><label>Lock screen</label>
-    <label class="check"><input type="checkbox" id="matchLockScreen"/> Put the wallpaper on the Windows lock screen too</label>
-  </div>
-  <div class="help help-indent">Each new wallpaper is applied to the lock screen as well, so the two stay in step. Uses the built-in Windows lock-screen API, no admin rights needed.</div>
-</template>
-
-<template id="tpl-gaming">
-  <div class="row"><label>While gaming</label>
-    <label class="check"><input type="checkbox" id="pauseOnFullscreen"/> Don’t change the wallpaper while a fullscreen app is running</label>
-  </div>
-  <div class="row"><label>Applies to</label>
-    <select id="pauseFullscreenMode">
-      <option value="all">Any fullscreen window</option>
-      <option value="list">Only the apps I list below</option>
-    </select>
-  </div>
-  <div class="row"><label>Apps</label>
-    <div style="flex:1;">
-      <input id="pauseFullscreenApps" type="text" placeholder="cs2, vlc, mpc-hc64" style="width:100%;" />
-      <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; align-items:center;">
-        <button class="btn secondary" id="btn-list-apps" type="button">Choose from running apps</button>
-        <select id="runningApps" style="display:none; flex:1; min-width:180px;"></select>
+    <template id="tpl-search">
+      <div class="row">
+        <label>Search term</label
+        ><input id="query" type="text" placeholder="e.g. zzz, wuthering waves +girls" />
       </div>
-      <div class="status" id="detectStatus" style="margin-top:6px;">&nbsp;</div>
-    </div>
-  </div>
-  <div class="help help-indent">Separate names with commas. The <code>.exe</code> is optional and capitals do not matter. Pressing Next yourself always works, game or no game.</div>
-</template>
-
-<template id="tpl-network">
-  <div class="row"><label>Offline</label>
-    <label class="check"><input type="checkbox" id="offlineCachedOnlyManual"/> Only use wallpapers already downloaded</label>
-  </div>
-  <div class="help help-indent">Skips Wallhaven entirely and cycles what is already in your cache. Useful on a metered connection, or when the internet is having a day.</div>
-  <div class="row"><label>Prefetch</label>
-    <label class="check"><input type="checkbox" id="prefetchEnabled"/> Download the next wallpaper in advance</label>
-  </div>
-  <div class="help help-indent">The next candidate is fetched quietly in the background, so the change itself is instant instead of waiting on a download.</div>
-</template>
-
-<template id="tpl-portable">
-  <div class="row"><label>Status</label>
-    <span id="portableStatus" style="color:var(--muted); font-size:12px;">Checking…</span>
-  </div>
-  <div class="help help-indent">Portable mode keeps your settings, cache and history in a <code>data</code> folder next to <code>WallRaven.exe</code> instead of in AppData, so the whole thing can live on a USB stick. To switch it on, put an empty file called <code>portable.flag</code> beside <code>WallRaven.exe</code> and restart WallRaven.</div>
-</template>
-
-<template id="tpl-hotkeys">
-  <div class="row full"><label class="check"><input type="checkbox" id="hotkeysEnabled"/> Enable global hotkeys</label></div>
-  <div class="help" style="margin: -4px 0 8px 0;">Electron accelerator format. Save to apply. Blank field = unregistered.</div>
-  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
-    <div><label class="hk-l" for="hk-next">Next wallpaper</label><input id="hk-next" type="text" placeholder="CmdOrCtrl+Alt+N" /></div>
-    <div><label class="hk-l" for="hk-like">Like current</label><input id="hk-like" type="text" /></div>
-    <div><label class="hk-l" for="hk-dislike">Dislike current</label><input id="hk-dislike" type="text" /></div>
-    <div><label class="hk-l" for="hk-pauseSchedule">Pause schedule</label><input id="hk-pauseSchedule" type="text" /></div>
-    <div><label class="hk-l" for="hk-randomFav">Random from Liked</label><input id="hk-randomFav" type="text" /></div>
-    <div><label class="hk-l" for="hk-back">Back in history</label><input id="hk-back" type="text" placeholder="CmdOrCtrl+Alt+Left" /></div>
-    <div><label class="hk-l" for="hk-forward">Forward in history</label><input id="hk-forward" type="text" placeholder="CmdOrCtrl+Alt+Right" /></div>
-  </div>
-  <div class="status" id="hk-status" style="margin-top:8px;">&nbsp;</div>
-</template>
-
-<template id="tpl-account">
-  <div class="row"><label>Status</label>
-    <span id="acctStatus" style="color:var(--muted); font-size:12px;">Checking…</span>
-  </div>
-  <div class="row"><label></label>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn" id="btn-acct-signin">Sign in / create account</button>
-      <button class="btn secondary" id="btn-acct-cancel" style="display:none;">Cancel</button>
-      <button class="btn secondary" id="btn-acct-signout" style="display:none;">Sign out</button>
-      <button class="btn secondary" id="btn-acct-web" style="display:none;">Manage account</button>
-    </div>
-  </div>
-  <div class="help" style="margin: -4px 0 8px 174px;">Signing in opens wallraven.app in your browser. It will ask for the code shown below, which only appears here. No password is ever typed into the desktop app.</div>
-  <div id="pairCodeBox" style="display:none; margin: 0 0 10px 174px; padding:12px 14px; border:1px solid var(--line, #2a2d3a); border-radius:8px; background:rgba(255,255,255,0.03);">
-    <div class="help" style="margin:0 0 6px 0;">Type this code on the website:</div>
-    <div id="pairCode" style="font-family:ui-monospace,Consolas,monospace; font-size:26px; font-weight:600; letter-spacing:4px; user-select:all;"></div>
-    <div class="help" style="margin:8px 0 0 0;">It expires in a few minutes. If a website asks you for this code and you did not just press Sign in here, close it.</div>
-  </div>
-  <hr/>
-  <div class="row"><label>Username</label>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; flex:1; min-width:0;">
-      <input id="shareAuthor" type="text" placeholder="Username (shown as “by …”)" maxlength="24" autocapitalize="off" spellcheck="false" style="flex:1; min-width:160px;" />
-      <button class="btn secondary" id="btn-save-author" type="button" title="Save your username — it lives on your account and applies on every machine">Save username</button>
-    </div>
-  </div>
-  <div class="help" id="usernameHint" style="margin: -4px 0 8px 174px;">
-    3–24 characters: letters, numbers, dot, dash or underscore. Stored on your account, not your email address — it's the name shown on presets you share.
-  </div>
-  <hr/>
-
-  <div class="row"><label>Cloud sync</label>
-    <label class="check"><input type="checkbox" id="cloudSyncEnabled"/> Keep this machine in sync automatically</label>
-  </div>
-  <div class="row"><label>Last synced</label>
-    <span id="acctLastSync" style="color:var(--muted); font-size:12px;">Never</span>
-  </div>
-  <div class="row"><label></label>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn secondary" id="btn-sync-push">Upload this machine</button>
-      <button class="btn secondary" id="btn-sync-pull">Download from cloud</button>
-    </div>
-  </div>
-  <div class="help help-indent">Synced: search &amp; filters, resolution, colours, cycle settings, presets, playlists (metadata only — image files stay local), likes and dislikes. Machine-specific things like hotkeys, portable mode and window position stay local.</div>
-</template>
-
-<template id="tpl-statistics">
-  <div id="statsGrid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px;">
-    <div class="stat"><div class="stat-n" id="stat-shownTotal">0</div><div class="stat-l">Wallpapers shown (all-time)</div></div>
-    <div class="stat"><div class="stat-n" id="stat-shownMonth">0</div><div class="stat-l">Shown this month</div></div>
-    <div class="stat"><div class="stat-n" id="stat-cacheHitRate">0%</div><div class="stat-l">Cache hit rate</div></div>
-    <div class="stat"><div class="stat-n" id="stat-fallbackRate">0%</div><div class="stat-l">Offline fallback rate</div></div>
-    <div class="stat"><div class="stat-n" id="stat-likes">0</div><div class="stat-l">Liked</div></div>
-    <div class="stat"><div class="stat-n" id="stat-dislikes">0</div><div class="stat-l">Disliked</div></div>
-    <div class="stat"><div class="stat-n" id="stat-fileCount">0</div><div class="stat-l">Cached files</div></div>
-    <div class="stat"><div class="stat-n" id="stat-cacheMB">0</div><div class="stat-l">Cache size (MB)</div></div>
-    <div class="stat" id="stat-card-gamePlays" style="display:none;"><div class="stat-n" id="stat-gamePlays">0</div><div class="stat-l">🥣 Games played</div></div>
-    <div class="stat" id="stat-card-gameBest" style="display:none;"><div class="stat-n" id="stat-gameBest">0</div><div class="stat-l">🥣 Top score</div></div>
-  </div>
-  <div id="stat-sources" style="margin-top:10px; font-size:13px; color:var(--muted);"></div>
-  <div style="margin-top:10px; display:flex; gap:8px;">
-    <button class="btn secondary" id="btn-stats-refresh" type="button">Refresh</button>
-    <button class="btn secondary" id="btn-stats-reset" type="button">Reset statistics</button>
-  </div>
-</template>
-
-<template id="tpl-feedback">
-  <div class="help" style="margin-bottom:10px;">Found a bug, or want something added? Send it straight to the developer from here — no account needed.</div>
-  <div class="row"><label for="feedbackKind">Type</label>
-    <select id="feedbackKind" style="flex:1;">
-      <option value="bug">Bug report</option>
-      <option value="feature">Feature request</option>
-      <option value="feedback" selected>General feedback</option>
-      <option value="crash">Crash report</option>
-    </select>
-  </div>
-  <div id="crashBox" style="display:none; margin:0 0 10px 0; padding:12px 14px; border:1px solid var(--line, #2a2d3a); border-radius:8px; background:rgba(255,255,255,0.03);">
-    <div id="crashSummary" style="font-weight:600;"></div>
-    <div class="help" style="margin:6px 0 0 0;">
-      Nothing is sent automatically. Read what would go, then decide. It is attached to the
-      message below when you send it.
-    </div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-      <button class="btn secondary" id="btn-crash-view" type="button">Show details</button>
-      <button class="btn secondary" id="btn-crash-attach" type="button">Attach to report</button>
-      <button class="btn secondary" id="btn-crash-clear" type="button">Discard</button>
-    </div>
-    <pre id="crashDetail" style="display:none; margin-top:10px; max-height:220px; overflow:auto; white-space:pre-wrap; word-break:break-word; font-size:11px; opacity:0.85;"></pre>
-  </div>
-  <div class="row"><label for="feedbackEmail">Your email</label>
-    <input id="feedbackEmail" type="email" placeholder="optional - only if you want a reply" style="flex:1;" />
-  </div>
-  <textarea id="feedbackMessage" rows="5" placeholder="What happened, or what would you like to see?" style="width:100%; margin-top:4px;"></textarea>
-  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-    <button class="btn" id="btn-feedback-send" type="button">Send</button>
-  </div>
-  <div class="status" id="feedbackStatus" style="margin-top:8px;">&nbsp;</div>
-</template>
-
-<template id="tpl-donate">
-  <div class="help" style="margin-bottom:10px;">
-    WallRaven is free and made in spare time. If it brightens your desktop, you can buy me a coffee &mdash; it all goes back into the app.
-  </div>
-  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <button class="btn" id="btn-donate" type="button" data-ext="https://ko-fi.com/wallraven">☕ Support WallRaven on Ko-fi</button>
-  </div>
-</template>
-
-
-<template id="tpl-cereal">
-  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-    <button class="btn" id="btn-cereal" type="button">🥣</button>
-    <span class="status" id="cerealScore">&nbsp;</span>
-  </div>
-  <div id="cerealStage">
-  <div id="cerealBowl">
-    <div id="cerealOver" role="dialog" aria-modal="true" aria-labelledby="cerealGameOverTitle">
-      <span class="go" id="cerealGameOverTitle">GAME OVER</span>
-      <span class="final-score" id="cerealFinal"></span>
-      <button class="btn" id="btn-cereal-again" type="button">Play again</button>
-    </div>
-  </div>
-  </div>
-</template>
-
-
-<template id="tpl-updates">
-  <div class="row"><label>Installed</label>
-    <span id="upd-current" style="color:var(--muted); font-size:12px;">…</span>
-  </div>
-  <div class="row"><label>Latest available</label>
-    <span id="upd-latest" style="color:var(--muted); font-size:12px;">Not checked yet</span>
-  </div>
-  <div class="row"><label></label>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <button class="btn secondary" id="btn-upd-check" type="button">Check now</button>
-      <button class="btn" id="btn-upd-download" type="button" style="display:none;">Download update</button>
-      <button class="btn" id="btn-upd-install" type="button" style="display:none;">Install &amp; restart</button>
-      <button class="btn secondary" id="btn-upd-page" type="button" style="display:none;">Open release page</button>
-    </div>
-  </div>
-  <div class="row" id="upd-store-note" style="display:none;"><label></label>
-    <div class="help" style="margin:0; flex:1;" id="upd-store-text"></div>
-  </div>
-  <div class="row"><label></label>
-    <div style="flex:1;">
-      <div id="upd-progress-wrap" style="display:none; height:8px; background:rgba(255,255,255,.12); border-radius:6px; overflow:hidden; max-width:420px;">
-        <div id="upd-progress" style="height:100%; width:0%; background:var(--accent); transition:width .2s;"></div>
+      <div class="row full">
+        <div
+          id="queryBuilder"
+          style="
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--panel-2);
+            padding: 8px 10px;
+          "
+        >
+          <div
+            style="
+              display: flex;
+              gap: 6px;
+              align-items: center;
+              margin-bottom: 6px;
+              flex-wrap: wrap;
+            "
+          >
+            <input
+              id="qbTerm"
+              type="text"
+              placeholder="Add a term (e.g. cars, id:65, -id:412)"
+              style="flex: 1; min-width: 140px"
+            />
+            <button
+              class="btn secondary"
+              id="qbAddAnd"
+              type="button"
+              title="Add to the current group (must match all)"
+            >
+              + AND
+            </button>
+            <button
+              class="btn secondary"
+              id="qbAddOr"
+              type="button"
+              title="Start a new group (any group can match)"
+            >
+              + OR
+            </button>
+            <button class="btn secondary" id="qbClear" type="button" title="Clear query">
+              Clear
+            </button>
+          </div>
+          <div
+            id="qbChips"
+            style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 22px"
+          ></div>
+          <div class="help" style="margin-top: 6px; font-size: 11px">
+            <strong>AND</strong> (space or <code>+</code>) narrows within a group — every term must
+            match. <strong>OR</strong> (<code>,</code>) creates a new group — any group can match.
+            Example: <code>wuthering waves +girls, cars, zenless zone zero</code>.
+          </div>
+        </div>
       </div>
-      <div class="status" id="upd-status" style="margin-top:6px;">&nbsp;</div>
-    </div>
-  </div>
-  <div class="row"><label>Automatic</label>
-    <div class="check-stack">
-      <label class="check"><input type="checkbox" id="autoInstallUpdates"/> <span>Update automatically on launch (installs silently and restarts WallRaven)</span></label>
-      <label class="check"><input type="checkbox" id="autoDownloadUpdates"/> <span>Download new installers in the background as soon as they appear</span></label>
-    </div>
-  </div>
-  <div class="help" id="upd-help-auto" style="margin: -4px 0 8px 174px;">WallRaven checks for updates at startup and every 6 hours. Installing launches the signed-in-place installer and restarts the app — your settings, cache and playlists are kept.</div>
-  <hr/>
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-    <button class="btn secondary" id="btn-changelog-toggle" type="button" style="flex:1; text-align:left;">
-      <span id="changelogCaret">▸</span> Changelog
-    </button>
-    <button class="btn secondary" id="btn-changelog-refresh" type="button">Reload</button>
-  </div>
-  <div id="changelogWrap" style="display:none;">
-    <div id="changelog" style="max-height:340px; overflow:auto; margin-top:8px; font-size:12.5px; line-height:1.55; color:var(--muted);">Loading…</div>
-  </div>
-</template>
 
+      <div class="row full">
+        <details
+          id="tagBrowser"
+          style="
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--panel-2);
+            padding: 8px 10px;
+          "
+        >
+          <summary style="cursor: pointer; color: var(--muted); font-size: 12px">
+            Browse popular tags &mdash; click to add/remove from search
+          </summary>
+          <div style="display: flex; gap: 6px; align-items: center; margin: 10px 0">
+            <input id="tagFilter" type="text" placeholder="Filter loaded tags…" style="flex: 1" />
+            <select id="tagPurity" style="width: auto">
+              <option value="sfw">SFW</option>
+              <option value="sketchy">+ Sketchy</option>
+              <option value="nsfw">+ NSFW</option>
+            </select>
+            <button class="btn secondary" id="tagPrev" type="button">‹</button>
+            <span
+              id="tagPageLabel"
+              style="color: var(--muted); font-size: 12px; min-width: 60px; text-align: center"
+              >page 1</span
+            >
+            <button class="btn secondary" id="tagNext" type="button">›</button>
+          </div>
+          <div id="tagList" class="chips" style="max-height: 220px; overflow-y: auto">
+            <span style="color: var(--muted); font-size: 12px">Loading…</span>
+          </div>
+          <div style="margin-top: 8px; color: var(--muted); font-size: 11px">
+            Selected tags are stored as <code>id:NNN</code>. Prefix with <code>-</code> to exclude.
+          </div>
+        </details>
+      </div>
+      <div class="row">
+        <label>Categories</label>
+        <div>
+          <label class="check"><input type="checkbox" id="cat-general" /> General</label>
+          <label class="check"><input type="checkbox" id="cat-anime" /> Anime</label>
+          <label class="check"><input type="checkbox" id="cat-people" /> People</label>
+        </div>
+      </div>
+      <div class="row">
+        <label>Purity</label>
+        <div>
+          <label class="check"><input type="checkbox" id="pur-sfw" /> SFW</label>
+          <label class="check"><input type="checkbox" id="pur-sketchy" /> Sketchy</label>
+          <label class="check"
+            ><input type="checkbox" id="pur-nsfw" /> NSFW
+            <span class="help">(requires API key)</span></label
+          >
+        </div>
+      </div>
+      <div class="row">
+        <label>Sort by</label>
+        <select id="sorting">
+          <option value="random">Random</option>
+          <option value="date_added">Date added</option>
+          <option value="relevance">Relevance</option>
+          <option value="views">Views</option>
+          <option value="favorites">Most favourited on Wallhaven</option>
+          <option value="toplist">Toplist</option>
+        </select>
+      </div>
+      <div class="row" id="toprange-row" style="display: none">
+        <label>Top range</label>
+        <select id="topRange">
+          <option value="1d">Last day</option>
+          <option value="3d">Last 3 days</option>
+          <option value="1w">Last week</option>
+          <option value="1M" selected>Last month</option>
+          <option value="3M">Last 3 months</option>
+          <option value="6M">Last 6 months</option>
+          <option value="1y">Last year</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Blacklist tag IDs</label>
+        <input
+          id="blacklistTagIds"
+          type="text"
+          placeholder="e.g. 65,412,890 — excluded from every search"
+        />
+      </div>
+      <div class="help help-indent">
+        Comma-separated Wallhaven tag IDs. Appended as <code>-id:N</code> to every search so the API
+        skips them at the source.
+      </div>
+    </template>
 
+    <template id="tpl-browse">
+      <div class="card-intro">
+        Look through Wallhaven without touching your own settings. What you type here is used for
+        this search only: the search your wallpapers rotate on is the one in Search &amp; filters,
+        and it stays exactly as you left it.
+      </div>
+      <div
+        style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center"
+      >
+        <input
+          id="browseQuery"
+          type="text"
+          placeholder="Search for anything, or leave empty for your saved search"
+          style="flex: 1; min-width: 200px"
+        />
+        <select id="browseSort" style="min-width: 150px" title="How to order the results">
+          <option value="">My saved sort order</option>
+          <option value="toplist:1M">Top this month</option>
+          <option value="toplist:1w">Top this week</option>
+          <option value="date_added">Newest first</option>
+          <option value="relevance">Best match</option>
+          <option value="random">Random</option>
+        </select>
+        <button class="btn" id="btn-browse-run" type="button">Search</button>
+      </div>
+      <div
+        style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center"
+      >
+        <button class="btn secondary" id="btn-browse-prev" type="button">‹ Previous page</button>
+        <span
+          id="browsePageLabel"
+          style="color: var(--muted); font-size: 12px; min-width: 90px; text-align: center"
+          >page 1</span
+        >
+        <button class="btn secondary" id="btn-browse-next" type="button">Next page ›</button>
+        <span style="flex: 1"></span>
+        <span style="color: var(--muted); font-size: 11px"
+          >Your resolution, colour and purity filters still apply</span
+        >
+      </div>
+      <div class="row">
+        <label>When I press <strong>+</strong></label>
+        <select id="browseAddTarget">
+          <option value="">Just set it as my wallpaper</option>
+        </select>
+      </div>
+      <div
+        id="browseGrid"
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+          gap: 8px;
+          max-height: 560px;
+          overflow-y: auto;
+        "
+      >
+        <span style="color: var(--muted); font-size: 12px"
+          >Loading the top wallpapers of the month…</span
+        >
+      </div>
+      <div class="help" style="margin-top: 8px">
+        Click a picture to use it now, which pauses the automatic changes. <strong>+</strong> also
+        saves it to the playlist chosen above.
+      </div>
+    </template>
 
-<script src="settings.js"></script>
-</body>
+    <template id="tpl-resolution">
+      <div class="row">
+        <label>Minimum resolution</label>
+        <select id="atleastResolution">
+          <option value="">Any</option>
+          <option value="__current__" id="opt-current-res">Current screen</option>
+          <option value="1920x1080">1920×1080 (FHD)</option>
+          <option value="2560x1440">2560×1440 (QHD)</option>
+          <option value="3840x2160">3840×2160 (4K)</option>
+          <option value="5120x2880">5120×2880 (5K)</option>
+          <option value="7680x4320">7680×4320 (8K)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Aspect ratios</label>
+        <div class="chips" id="ratios">
+          <span class="chip" data-v="__current__" id="chip-current-ratio">Current</span>
+          <span class="chip" data-v="16x9">16:9</span>
+          <span class="chip" data-v="16x10">16:10</span>
+          <span class="chip" data-v="21x9">21:9 ultrawide</span>
+          <span class="chip" data-v="32x9">32:9 super ultrawide</span>
+          <span class="chip" data-v="4x3">4:3</span>
+          <span class="chip" data-v="5x4">5:4</span>
+          <span class="chip" data-v="9x16">9:16 portrait</span>
+          <span class="chip" data-v="10x16">10:16 portrait</span>
+        </div>
+      </div>
+      <div class="row">
+        <label>Exact resolutions <span class="help">(optional)</span></label>
+        <input id="resolutions" type="text" placeholder="e.g. 1920x1080,2560x1440" />
+      </div>
+    </template>
+
+    <template id="tpl-colors">
+      <div class="row full">
+        <label>Filter by dominant color (Wallhaven palette)</label>
+        <div class="palette" id="palette"></div>
+      </div>
+    </template>
+
+    <template id="tpl-cycle">
+      <div>
+        <label>Cycle every</label>
+        <div class="slider-row">
+          <input type="range" id="cycleMinutes" min="1" max="1440" step="1" />
+          <input type="number" id="cycleMinutesNum" min="1" max="1440" />
+        </div>
+        <div class="help">
+          Minutes between wallpaper changes (overridden by an active schedule rule)
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-display">
+      <div class="row">
+        <label>Fit mode</label>
+        <select id="fitMode">
+          <option value="fill">Fill (crop to screen)</option>
+          <option value="fit">Fit (letterbox)</option>
+          <option value="stretch">Stretch</option>
+          <option value="tile">Tile</option>
+          <option value="center">Center</option>
+          <option value="span">Span (across monitors)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Multi-monitor</label>
+        <select id="monitorMode">
+          <option value="same">Same image on every monitor</option>
+          <option value="span">Span single image across monitors</option>
+          <option value="different">Different image per monitor (from active playlist)</option>
+        </select>
+      </div>
+      <div class="help help-indent">
+        "Different" needs an active playlist with 2+ items; consecutive playlist items are placed on
+        each monitor.
+      </div>
+    </template>
+
+    <template id="tpl-cache">
+      <div>
+        <label>Cache limit</label>
+        <div class="slider-row">
+          <input type="range" id="cacheMaxMB" min="100" max="20480" step="100" />
+          <input type="number" id="cacheMaxMBNum" min="100" max="20480" />
+        </div>
+        <div class="help" id="cacheLimitHelp">
+          Megabytes. Once downloads pass this size the oldest are deleted to make room. Anything in
+          a playlist or liked is kept whatever happens, and so is the wallpaper on screen.
+        </div>
+      </div>
+      <div class="status" id="cacheStats" style="margin-top: 8px">&nbsp;</div>
+      <hr />
+      <div class="row">
+        <label>Cache location</label>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap">
+          <input id="cacheDirPath" type="text" readonly style="flex: 1; min-width: 180px" />
+          <button class="btn secondary" id="btn-cache-change" type="button">Change…</button>
+          <button
+            class="btn secondary"
+            id="btn-cache-open"
+            type="button"
+            title="Open the cache folder in Explorer"
+          >
+            Open folder
+          </button>
+          <button
+            class="btn secondary"
+            id="btn-cache-default"
+            type="button"
+            title="Move back to the default location"
+          >
+            Use default
+          </button>
+        </div>
+      </div>
+      <div class="help help-indent">
+        Downloaded wallpapers live here. Both the downloads and your history survive updates.
+        Changing the folder asks whether to move what is already there.
+      </div>
+      <hr />
+
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <button
+          class="btn secondary"
+          id="btn-clear"
+          title="Deletes every downloaded wallpaper except the one on screen and anything kept"
+        >
+          Delete all downloads
+        </button>
+        <button
+          class="btn secondary"
+          id="btn-cache-test"
+          title="Shows what the size limit would delete, without deleting anything"
+        >
+          What would the limit delete?
+        </button>
+        <button
+          class="btn secondary"
+          id="btn-clear-dislikes"
+          title="Allow disliked wallpapers to appear again"
+        >
+          Clear dislikes (<span id="dislikeCount">0</span>)
+        </button>
+      </div>
+      <div
+        id="cacheTestOut"
+        style="
+          display: none;
+          margin-top: 8px;
+          font-size: 12px;
+          color: var(--muted);
+          max-height: 220px;
+          overflow: auto;
+        "
+      ></div>
+      <div id="cacheTestActions" style="display: none; margin-top: 8px">
+        <button class="btn danger" id="btn-cache-apply" type="button">Delete these now</button>
+      </div>
+    </template>
+
+    <template id="tpl-schedule">
+      <div class="card-intro">
+        A timetable switches what WallRaven pulls from at set times of day. Each entry says "from
+        this time, use this", and it stays in force until the next one starts. With nothing due yet
+        today, the last entry from the day before carries over.
+      </div>
+      <div
+        style="display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap"
+      >
+        <label class="check"
+          ><input type="checkbox" id="scheduleEnabled" /> Use the timetable</label
+        >
+        <span id="scheduleStatus" style="color: var(--muted); font-size: 12px"></span>
+      </div>
+      <div id="scheduleRules"></div>
+      <button class="btn secondary" id="btn-add-rule" type="button" style="margin-top: 8px">
+        ＋ Add a time
+      </button>
+      <div class="help" style="margin-top: 8px">
+        Pressing ► yourself always works and takes the picture from whichever entry is in force.
+      </div>
+    </template>
+
+    <template id="tpl-presets">
+      <div class="card-intro">
+        A preset is a saved set of search settings: what to look for, resolution, colours and the
+        rest. Load one and WallRaven keeps fetching new wallpapers that match it. For a fixed set of
+        pictures that never changes, use a playlist instead.
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
+        <select id="presetSelect" style="flex: 1; min-width: 160px">
+          <option value="">- saved presets -</option>
+        </select>
+        <button class="btn secondary" id="btn-preset-apply" type="button">Apply</button>
+        <button
+          class="btn secondary"
+          id="btn-preset-overwrite"
+          type="button"
+          title="Save the current settings into the selected preset"
+        >
+          Overwrite
+        </button>
+        <button class="btn secondary" id="btn-preset-delete" type="button">Delete</button>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <input
+          id="presetName"
+          type="text"
+          placeholder="New preset name…"
+          style="flex: 1; min-width: 160px"
+        />
+        <button class="btn" id="btn-preset-save" type="button">Save as new</button>
+      </div>
+      <div class="help" style="margin-top: 8px">
+        Built-in presets (Default, General, Anime, People, Nature, Toplist, Latest) are always
+        available and use your current screen resolution and aspect ratio. "Default" resets
+        everything back to the app defaults. <strong>Overwrite</strong> updates the selected preset
+        with your current settings without retyping the name. Presets capture module order,
+        collapsed state, search query, tags, categories, purity, sort, resolution, aspect ratios,
+        colours, cycle interval and Wallhaven source. API key, theme and startup options are left
+        alone.
+      </div>
+    </template>
+
+    <template id="tpl-community">
+      <div
+        style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px"
+      >
+        <select id="libCategory" style="min-width: 150px">
+          <option value="">All categories</option>
+        </select>
+        <select id="libSort" style="min-width: 130px">
+          <option value="copied">Most popular</option>
+          <option value="new">Newest</option>
+        </select>
+        <input
+          id="libSearch"
+          type="text"
+          placeholder="Search presets…"
+          style="flex: 1; min-width: 140px"
+        />
+      </div>
+      <div
+        id="libList"
+        style="max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 6px"
+      ></div>
+      <div class="help" style="margin-top: 10px">
+        Presets that come with WallRaven are listed first, then presets shared by other people.
+        Applying one only changes the search, tags, categories, purity, sort and colours. Your own
+        timetable, cycle interval, resolution, aspect ratio, monitor setup, API key, theme and
+        layout are never touched.
+      </div>
+      <div
+        style="border-top: 1px solid var(--border, #2a2a35); margin-top: 14px; padding-top: 14px"
+      >
+        <strong style="display: block; font-size: 13px; margin-bottom: 2px">Share a preset</strong>
+        <div class="help" style="margin: 0 0 10px">
+          Publish one of your own presets (or your current settings) so other people can use it.
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+          <select id="shareSource" style="min-width: 170px">
+            <option value="__current__">Current settings</option>
+          </select>
+          <input
+            id="shareName"
+            type="text"
+            placeholder="Share as name…"
+            style="flex: 1; min-width: 150px"
+          />
+          <select id="shareCategory" style="min-width: 150px"></select>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px">
+          <input
+            id="shareDesc"
+            type="text"
+            placeholder="Short description (optional)"
+            style="flex: 1; min-width: 200px"
+          />
+          <button class="btn" id="btn-share-preset" type="button">Share preset</button>
+          <button
+            class="btn secondary"
+            id="btn-open-gallery"
+            type="button"
+            title="Open presets on the website"
+          >
+            Presets on the web
+          </button>
+        </div>
+        <div class="help" style="margin-top: 8px">
+          Sharing needs you to be signed in, and your username is set under
+          <strong>Account &amp; cloud sync</strong>. Screen-specific values and your cycle interval
+          are stripped before upload.
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-playlists">
+      <div class="card-intro">
+        A playlist is a fixed set of pictures you have chosen, cycled in order. It does not search
+        for anything and it does not change on its own. A preset is the opposite: saved search
+        settings that fetch something new every time.
+      </div>
+      <div
+        style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center"
+      >
+        <select id="playlistSelect" style="flex: 1; min-width: 160px">
+          <option value="">- pick a playlist -</option>
+        </select>
+        <button class="btn secondary" id="btn-playlist-rename" type="button">Rename</button>
+        <button class="btn secondary" id="btn-playlist-delete" type="button">Delete</button>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
+        <input
+          id="playlistNewName"
+          type="text"
+          placeholder="New playlist name…"
+          style="flex: 1; min-width: 160px"
+        />
+        <button class="btn" id="btn-playlist-create" type="button">Create</button>
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
+        <button class="btn secondary" id="btn-playlist-add-current" type="button">
+          ＋ Add current wallpaper
+        </button>
+        <button class="btn secondary" id="btn-playlist-use" type="button">
+          ▶ Use this playlist for cycling
+        </button>
+      </div>
+      <div id="playlistStatus" class="status"></div>
+      <div
+        id="playlistGrid"
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          gap: 8px;
+          max-height: 400px;
+          overflow-y: auto;
+          margin-top: 8px;
+        "
+      >
+        <span style="color: var(--muted); font-size: 12px"
+          >Create a playlist and add wallpapers from Browse, History, or your Current
+          wallpaper.</span
+        >
+      </div>
+      <div class="help" style="margin-top: 8px">
+        Files in any playlist are <strong>kept</strong> &mdash; they're exempt from the cache-size
+        limit and never pruned. Storage used by kept files shows separately in
+        <em>Cycle &amp; cache</em>.
+      </div>
+    </template>
+
+    <template id="tpl-library">
+      <div style="font-weight: 600; margin-bottom: 6px">Rotate a folder (no playlist needed)</div>
+      <div class="help" style="margin-bottom: 10px">
+        Point WallRaven at one or more folders and it cycles through those images the way Windows
+        does, but with your interval, fit mode, timetable, shortcuts and multi-monitor settings.
+        Dropbox, Google Drive and OneDrive all sync into ordinary folders, so pointing it at one of
+        those works too. A picture kept online only is downloaded by Windows when it is needed,
+        which is occasionally slow.
+      </div>
+      <div
+        id="folderSourceList"
+        style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px"
+      ></div>
+      <div
+        id="folderQuickAdd"
+        style="display: none; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px"
+      ></div>
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
+        <button class="btn secondary" id="btn-folder-add" type="button">＋ Add folder…</button>
+        <button class="btn" id="btn-folder-use" type="button">▶ Use folders for cycling</button>
+        <button class="btn secondary" id="btn-folder-rescan" type="button">Rescan</button>
+      </div>
+      <div
+        style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 6px"
+      >
+        <label class="check"
+          ><input type="checkbox" id="folderRecursive" /> Include sub-folders</label
+        >
+        <label style="display: flex; gap: 6px; align-items: center; font-size: 13px"
+          >Order
+          <select id="folderOrder" style="min-width: 120px">
+            <option value="random">Shuffle</option>
+            <option value="sequential">In order</option>
+          </select>
+        </label>
+      </div>
+      <div id="folderStatus" class="status" style="margin-bottom: 4px">&nbsp;</div>
+      <hr />
+      <div class="help" style="margin-bottom: 10px">
+        Import a local folder as a playlist (files stay in place, no copy) or bulk-export any
+        playlist to a folder.
+      </div>
+
+      <div class="row">
+        <label>Folder</label>
+        <div style="display: flex; gap: 6px">
+          <input
+            id="libFolderPath"
+            type="text"
+            placeholder="Click Browse to pick a folder…"
+            readonly
+            style="flex: 1"
+          />
+          <button class="btn secondary" id="btn-lib-browse" type="button">Browse…</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Playlist name</label>
+        <input id="libPlaylistName" type="text" placeholder="Leave blank to use folder name" />
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap">
+        <button class="btn" id="btn-lib-import" type="button">Import folder as playlist</button>
+      </div>
+      <hr />
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+        <select id="libExportSelect" style="flex: 1; min-width: 160px">
+          <option value="">- pick a playlist to export -</option>
+        </select>
+        <button class="btn secondary" id="btn-lib-export" type="button">Export to folder…</button>
+      </div>
+      <div id="libStatus" class="status" style="margin-top: 8px">&nbsp;</div>
+    </template>
+
+    <template id="tpl-apikey">
+      <div class="row">
+        <label for="apiKey">Enter API key</label>
+        <div style="display: flex; gap: 6px; flex: 1">
+          <input
+            id="apiKey"
+            type="password"
+            placeholder="paste your 32-character Wallhaven key"
+            style="flex: 1"
+          />
+          <button class="btn secondary" id="btn-apikey-validate" type="button">Validate</button>
+        </div>
+      </div>
+      <div class="help" style="margin: -4px 0 6px 174px">
+        Get one at
+        <a href="#" data-ext="https://wallhaven.cc/settings/account"
+          >wallhaven.cc/settings/account</a
+        >
+        — required for NSFW purity and your collections. Validating uses only the key; your
+        Wallhaven username is not needed (that field is only for browsing your collections).
+      </div>
+      <div class="row">
+        <label>Key status</label>
+        <div style="flex: 1; display: flex; align-items: center">
+          <span id="apikeyStatus" class="status" style="margin: 0">Missing — no key entered</span>
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-app">
+      <div class="card-intro">
+        How WallRaven looks and how it behaves on this PC. Nothing here changes which wallpapers you
+        get.
+      </div>
+      <div class="row">
+        <label>Theme</label>
+        <select id="theme">
+          <option value="midnight">Midnight</option>
+          <option value="graphite">Graphite</option>
+          <option value="nord">Nord</option>
+          <option value="dracula">Dracula</option>
+          <option value="solar">Solarized Dark</option>
+          <option value="forest">Forest</option>
+          <option value="ocean">Ocean</option>
+          <option value="paper">Paper (light)</option>
+          <option value="light">Light</option>
+          <option value="glass">Glass ✨ (default)</option>
+          <option value="raven">Raven 🐦‍⬛</option>
+          <option value="raven-beach">Raven Summer 🌶️ (sketchy)</option>
+          <option value="raven-fire">Raven Fyra 🔥 (sketchy)</option>
+        </select>
+      </div>
+      <div class="help help-indent">
+        The two marked sketchy have a cheekier raven in the background. Everything else is a plain
+        colour scheme.
+      </div>
+      <div class="row"><label>Accent colour</label><input id="uiAccent" type="color" /></div>
+    </template>
+
+    <template id="tpl-startup">
+      <div class="row">
+        <label>Starting up</label>
+        <div>
+          <label class="check"
+            ><input type="checkbox" id="autoStart" /> Start WallRaven when I sign in to
+            Windows</label
+          >
+          <label class="check"
+            ><input type="checkbox" id="startMinimized" /> Start in the tray, without opening this
+            window</label
+          >
+          <div class="help" id="startup-store-note" style="display: none; margin: 4px 0 0"></div>
+        </div>
+      </div>
+      <div class="row">
+        <label>Notifications</label>
+        <label class="check"
+          ><input type="checkbox" id="notifyOnChange" /> Tell me each time the wallpaper
+          changes</label
+        >
+      </div>
+      <div class="row">
+        <label>Lock screen</label>
+        <label class="check"
+          ><input type="checkbox" id="matchLockScreen" /> Put the wallpaper on the Windows lock
+          screen too</label
+        >
+      </div>
+      <div class="help help-indent">
+        Each new wallpaper is applied to the lock screen as well, so the two stay in step. Uses the
+        built-in Windows lock-screen API, no admin rights needed.
+      </div>
+    </template>
+
+    <template id="tpl-gaming">
+      <div class="row">
+        <label>While gaming</label>
+        <label class="check"
+          ><input type="checkbox" id="pauseOnFullscreen" /> Don’t change the wallpaper while a
+          fullscreen app is running</label
+        >
+      </div>
+      <div class="row">
+        <label>Applies to</label>
+        <select id="pauseFullscreenMode">
+          <option value="all">Any fullscreen window</option>
+          <option value="list">Only the apps I list below</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Apps</label>
+        <div style="flex: 1">
+          <input
+            id="pauseFullscreenApps"
+            type="text"
+            placeholder="cs2, vlc, mpc-hc64"
+            style="width: 100%"
+          />
+          <div
+            style="display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; align-items: center"
+          >
+            <button class="btn secondary" id="btn-list-apps" type="button">
+              Choose from running apps
+            </button>
+            <select id="runningApps" style="display: none; flex: 1; min-width: 180px"></select>
+          </div>
+          <div class="status" id="detectStatus" style="margin-top: 6px">&nbsp;</div>
+        </div>
+      </div>
+      <div class="help help-indent">
+        Separate names with commas. The <code>.exe</code> is optional and capitals do not matter.
+        Pressing Next yourself always works, game or no game.
+      </div>
+    </template>
+
+    <template id="tpl-network">
+      <div class="row">
+        <label>Offline</label>
+        <label class="check"
+          ><input type="checkbox" id="offlineCachedOnlyManual" /> Only use wallpapers already
+          downloaded</label
+        >
+      </div>
+      <div class="help help-indent">
+        Skips Wallhaven entirely and cycles what is already in your cache. Useful on a metered
+        connection, or when the internet is having a day.
+      </div>
+      <div class="row">
+        <label>Prefetch</label>
+        <label class="check"
+          ><input type="checkbox" id="prefetchEnabled" /> Download the next wallpaper in
+          advance</label
+        >
+      </div>
+      <div class="help help-indent">
+        The next candidate is fetched quietly in the background, so the change itself is instant
+        instead of waiting on a download.
+      </div>
+    </template>
+
+    <template id="tpl-portable">
+      <div class="row">
+        <label>Status</label>
+        <span id="portableStatus" style="color: var(--muted); font-size: 12px">Checking…</span>
+      </div>
+      <div class="help help-indent">
+        Portable mode keeps your settings, cache and history in a <code>data</code> folder next to
+        <code>WallRaven.exe</code> instead of in AppData, so the whole thing can live on a USB
+        stick. To switch it on, put an empty file called <code>portable.flag</code> beside
+        <code>WallRaven.exe</code> and restart WallRaven.
+      </div>
+    </template>
+
+    <template id="tpl-hotkeys">
+      <div class="row full">
+        <label class="check"
+          ><input type="checkbox" id="hotkeysEnabled" /> Enable global hotkeys</label
+        >
+      </div>
+      <div class="help" style="margin: -4px 0 8px 0">
+        Electron accelerator format. Save to apply. Blank field = unregistered.
+      </div>
+      <div
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 10px;
+        "
+      >
+        <div>
+          <label class="hk-l" for="hk-next">Next wallpaper</label
+          ><input id="hk-next" type="text" placeholder="CmdOrCtrl+Alt+N" />
+        </div>
+        <div>
+          <label class="hk-l" for="hk-like">Like current</label><input id="hk-like" type="text" />
+        </div>
+        <div>
+          <label class="hk-l" for="hk-dislike">Dislike current</label
+          ><input id="hk-dislike" type="text" />
+        </div>
+        <div>
+          <label class="hk-l" for="hk-pauseSchedule">Pause schedule</label
+          ><input id="hk-pauseSchedule" type="text" />
+        </div>
+        <div>
+          <label class="hk-l" for="hk-randomFav">Random from Liked</label
+          ><input id="hk-randomFav" type="text" />
+        </div>
+        <div>
+          <label class="hk-l" for="hk-back">Back in history</label
+          ><input id="hk-back" type="text" placeholder="CmdOrCtrl+Alt+Left" />
+        </div>
+        <div>
+          <label class="hk-l" for="hk-forward">Forward in history</label
+          ><input id="hk-forward" type="text" placeholder="CmdOrCtrl+Alt+Right" />
+        </div>
+      </div>
+      <div class="status" id="hk-status" style="margin-top: 8px">&nbsp;</div>
+    </template>
+
+    <template id="tpl-account">
+      <div class="row">
+        <label>Status</label>
+        <span id="acctStatus" style="color: var(--muted); font-size: 12px">Checking…</span>
+      </div>
+      <div class="row">
+        <label></label>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <button class="btn" id="btn-acct-signin">Sign in / create account</button>
+          <button class="btn secondary" id="btn-acct-cancel" style="display: none">Cancel</button>
+          <button class="btn secondary" id="btn-acct-signout" style="display: none">
+            Sign out
+          </button>
+          <button class="btn secondary" id="btn-acct-web" style="display: none">
+            Manage account
+          </button>
+        </div>
+      </div>
+      <div class="help" style="margin: -4px 0 8px 174px">
+        Signing in opens wallraven.app in your browser. It will ask for the code shown below, which
+        only appears here. No password is ever typed into the desktop app.
+      </div>
+      <div
+        id="pairCodeBox"
+        style="
+          display: none;
+          margin: 0 0 10px 174px;
+          padding: 12px 14px;
+          border: 1px solid var(--line, #2a2d3a);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.03);
+        "
+      >
+        <div class="help" style="margin: 0 0 6px 0">Type this code on the website:</div>
+        <div
+          id="pairCode"
+          style="
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 26px;
+            font-weight: 600;
+            letter-spacing: 4px;
+            user-select: all;
+          "
+        ></div>
+        <div class="help" style="margin: 8px 0 0 0">
+          It expires in a few minutes. If a website asks you for this code and you did not just
+          press Sign in here, close it.
+        </div>
+      </div>
+      <hr />
+      <div class="row">
+        <label>Username</label>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0">
+          <input
+            id="shareAuthor"
+            type="text"
+            placeholder="Username (shown as “by …”)"
+            maxlength="24"
+            autocapitalize="off"
+            spellcheck="false"
+            style="flex: 1; min-width: 160px"
+          />
+          <button
+            class="btn secondary"
+            id="btn-save-author"
+            type="button"
+            title="Save your username — it lives on your account and applies on every machine"
+          >
+            Save username
+          </button>
+        </div>
+      </div>
+      <div class="help" id="usernameHint" style="margin: -4px 0 8px 174px">
+        3–24 characters: letters, numbers, dot, dash or underscore. Stored on your account, not your
+        email address — it's the name shown on presets you share.
+      </div>
+      <hr />
+
+      <div class="row">
+        <label>Cloud sync</label>
+        <label class="check"
+          ><input type="checkbox" id="cloudSyncEnabled" /> Keep this machine in sync
+          automatically</label
+        >
+      </div>
+      <div class="row">
+        <label>Last synced</label>
+        <span id="acctLastSync" style="color: var(--muted); font-size: 12px">Never</span>
+      </div>
+      <div class="row">
+        <label></label>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <button class="btn secondary" id="btn-sync-push">Upload this machine</button>
+          <button class="btn secondary" id="btn-sync-pull">Download from cloud</button>
+        </div>
+      </div>
+      <div class="help help-indent">
+        Synced: search &amp; filters, resolution, colours, cycle settings, presets, playlists
+        (metadata only — image files stay local), likes and dislikes. Machine-specific things like
+        hotkeys, portable mode and window position stay local.
+      </div>
+    </template>
+
+    <template id="tpl-statistics">
+      <div
+        id="statsGrid"
+        style="
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 10px;
+        "
+      >
+        <div class="stat">
+          <div class="stat-n" id="stat-shownTotal">0</div>
+          <div class="stat-l">Wallpapers shown (all-time)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" id="stat-shownMonth">0</div>
+          <div class="stat-l">Shown this month</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" id="stat-cacheHitRate">0%</div>
+          <div class="stat-l">Cache hit rate</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" id="stat-fallbackRate">0%</div>
+          <div class="stat-l">Offline fallback rate</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" id="stat-likes">0</div>
+          <div class="stat-l">Liked</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" id="stat-dislikes">0</div>
+          <div class="stat-l">Disliked</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" id="stat-fileCount">0</div>
+          <div class="stat-l">Cached files</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" id="stat-cacheMB">0</div>
+          <div class="stat-l">Cache size (MB)</div>
+        </div>
+        <div class="stat" id="stat-card-gamePlays" style="display: none">
+          <div class="stat-n" id="stat-gamePlays">0</div>
+          <div class="stat-l">🥣 Games played</div>
+        </div>
+        <div class="stat" id="stat-card-gameBest" style="display: none">
+          <div class="stat-n" id="stat-gameBest">0</div>
+          <div class="stat-l">🥣 Top score</div>
+        </div>
+      </div>
+      <div id="stat-sources" style="margin-top: 10px; font-size: 13px; color: var(--muted)"></div>
+      <div style="margin-top: 10px; display: flex; gap: 8px">
+        <button class="btn secondary" id="btn-stats-refresh" type="button">Refresh</button>
+        <button class="btn secondary" id="btn-stats-reset" type="button">Reset statistics</button>
+      </div>
+    </template>
+
+    <template id="tpl-feedback">
+      <div class="help" style="margin-bottom: 10px">
+        Found a bug, or want something added? Send it straight to the developer from here — no
+        account needed.
+      </div>
+      <div class="row">
+        <label for="feedbackKind">Type</label>
+        <select id="feedbackKind" style="flex: 1">
+          <option value="bug">Bug report</option>
+          <option value="feature">Feature request</option>
+          <option value="feedback" selected>General feedback</option>
+          <option value="crash">Crash report</option>
+        </select>
+      </div>
+      <div
+        id="crashBox"
+        style="
+          display: none;
+          margin: 0 0 10px 0;
+          padding: 12px 14px;
+          border: 1px solid var(--line, #2a2d3a);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.03);
+        "
+      >
+        <div id="crashSummary" style="font-weight: 600"></div>
+        <div class="help" style="margin: 6px 0 0 0">
+          Nothing is sent automatically. Read what would go, then decide. It is attached to the
+          message below when you send it.
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px">
+          <button class="btn secondary" id="btn-crash-view" type="button">Show details</button>
+          <button class="btn secondary" id="btn-crash-attach" type="button">
+            Attach to report
+          </button>
+          <button class="btn secondary" id="btn-crash-clear" type="button">Discard</button>
+        </div>
+        <pre
+          id="crashDetail"
+          style="
+            display: none;
+            margin-top: 10px;
+            max-height: 220px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 11px;
+            opacity: 0.85;
+          "
+        ></pre>
+      </div>
+      <div class="row">
+        <label for="feedbackEmail">Your email</label>
+        <input
+          id="feedbackEmail"
+          type="email"
+          placeholder="optional - only if you want a reply"
+          style="flex: 1"
+        />
+      </div>
+      <textarea
+        id="feedbackMessage"
+        rows="5"
+        placeholder="What happened, or what would you like to see?"
+        style="width: 100%; margin-top: 4px"
+      ></textarea>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px">
+        <button class="btn" id="btn-feedback-send" type="button">Send</button>
+      </div>
+      <div class="status" id="feedbackStatus" style="margin-top: 8px">&nbsp;</div>
+    </template>
+
+    <template id="tpl-donate">
+      <div class="help" style="margin-bottom: 10px">
+        WallRaven is free and made in spare time. If it brightens your desktop, you can buy me a
+        coffee &mdash; it all goes back into the app.
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <button class="btn" id="btn-donate" type="button" data-ext="https://ko-fi.com/wallraven">
+          ☕ Support WallRaven on Ko-fi
+        </button>
+      </div>
+    </template>
+
+    <template id="tpl-cereal">
+      <div
+        style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px"
+      >
+        <button class="btn" id="btn-cereal" type="button">🥣</button>
+        <span class="status" id="cerealScore">&nbsp;</span>
+      </div>
+      <div id="cerealStage">
+        <div id="cerealBowl">
+          <div
+            id="cerealOver"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cerealGameOverTitle"
+          >
+            <span class="go" id="cerealGameOverTitle">GAME OVER</span>
+            <span class="final-score" id="cerealFinal"></span>
+            <button class="btn" id="btn-cereal-again" type="button">Play again</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="tpl-updates">
+      <div class="row">
+        <label>Installed</label>
+        <span id="upd-current" style="color: var(--muted); font-size: 12px">…</span>
+      </div>
+      <div class="row">
+        <label>Latest available</label>
+        <span id="upd-latest" style="color: var(--muted); font-size: 12px">Not checked yet</span>
+      </div>
+      <div class="row">
+        <label></label>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+          <button class="btn secondary" id="btn-upd-check" type="button">Check now</button>
+          <button class="btn" id="btn-upd-download" type="button" style="display: none">
+            Download update
+          </button>
+          <button class="btn" id="btn-upd-install" type="button" style="display: none">
+            Install &amp; restart
+          </button>
+          <button class="btn secondary" id="btn-upd-page" type="button" style="display: none">
+            Open release page
+          </button>
+        </div>
+      </div>
+      <div class="row" id="upd-store-note" style="display: none">
+        <label></label>
+        <div class="help" style="margin: 0; flex: 1" id="upd-store-text"></div>
+      </div>
+      <div class="row">
+        <label></label>
+        <div style="flex: 1">
+          <div
+            id="upd-progress-wrap"
+            style="
+              display: none;
+              height: 8px;
+              background: rgba(255, 255, 255, 0.12);
+              border-radius: 6px;
+              overflow: hidden;
+              max-width: 420px;
+            "
+          >
+            <div
+              id="upd-progress"
+              style="height: 100%; width: 0%; background: var(--accent); transition: width 0.2s"
+            ></div>
+          </div>
+          <div class="status" id="upd-status" style="margin-top: 6px">&nbsp;</div>
+        </div>
+      </div>
+      <div class="row">
+        <label>Automatic</label>
+        <div class="check-stack">
+          <label class="check"
+            ><input type="checkbox" id="autoInstallUpdates" />
+            <span
+              >Update automatically on launch (installs silently and restarts WallRaven)</span
+            ></label
+          >
+          <label class="check"
+            ><input type="checkbox" id="autoDownloadUpdates" />
+            <span>Download new installers in the background as soon as they appear</span></label
+          >
+        </div>
+      </div>
+      <div class="help" id="upd-help-auto" style="margin: -4px 0 8px 174px">
+        WallRaven checks for updates at startup and every 6 hours. Installing launches the
+        signed-in-place installer and restarts the app — your settings, cache and playlists are
+        kept.
+      </div>
+      <hr />
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+        <button
+          class="btn secondary"
+          id="btn-changelog-toggle"
+          type="button"
+          style="flex: 1; text-align: left"
+        >
+          <span id="changelogCaret">▸</span> Changelog
+        </button>
+        <button class="btn secondary" id="btn-changelog-refresh" type="button">Reload</button>
+      </div>
+      <div id="changelogWrap" style="display: none">
+        <div
+          id="changelog"
+          style="
+            max-height: 340px;
+            overflow: auto;
+            margin-top: 8px;
+            font-size: 12.5px;
+            line-height: 1.55;
+            color: var(--muted);
+          "
+        >
+          Loading…
+        </div>
+      </div>
+    </template>
+
+    <script src="settings.js"></script>
+  </body>
 </html>

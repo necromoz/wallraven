@@ -26,9 +26,11 @@ function isStoreBuild(proc) {
   const p = proc || process;
   if (p.windowsStore === true) return true;
   const env = p.env || {};
-  const flag = String(env.WALLRAVEN_STORE_BUILD || '').trim().toLowerCase();
-  if (flag === '1' || flag === 'true' || flag === 'yes') return true;
-  const exe = String(p.execPath || '');
+  const flag = String(env.WALLRAVEN_STORE_BUILD || "")
+    .trim()
+    .toLowerCase();
+  if (flag === "1" || flag === "true" || flag === "yes") return true;
+  const exe = String(p.execPath || "");
   if (/[\\/]WindowsApps[\\/]/i.test(exe)) return true;
   return false;
 }
@@ -36,7 +38,7 @@ function isStoreBuild(proc) {
 // What the Updates card says instead of the update controls. Kept here so the
 // main process and the renderer cannot drift into saying different things.
 const STORE_UPDATE_MESSAGE =
-  'This copy came from the Microsoft Store, so the Store keeps it up to date. ' +
-  'WallRaven will not download or install updates itself.';
+  "This copy came from the Microsoft Store, so the Store keeps it up to date. " +
+  "WallRaven will not download or install updates itself.";
 
 module.exports = { isStoreBuild, STORE_UPDATE_MESSAGE };
