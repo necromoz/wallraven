@@ -72,3 +72,6 @@ electron/dist/
 # Database export from Lovable. Contains a real Wallhaven API key and
 # account data. Never commit it: this repo is public.
 /From Lovable/
+
+# Lovable leftovers: plan files from the tool this started in.
+.lovable/
