@@ -70,6 +70,35 @@ Edits to `electron/` take effect on restart; there is no build step for the app
 itself. `npm test` after every change -- it is a few seconds and covers the
 logic that is awkward to reach by hand.
 
+## Where the work happens (18 Sep)
+
+The Linux workspace on Steve's PC stopped starting: a Windows update from
+8 September blocks it, and `device_bash` now fails outright. Until that is
+fixed, nothing can be run on his machine. What still works:
+
+- `device_stage_files` to read his files, `device_commit_files` to write them
+  back, 20 MB per file.
+- A clone of this repo in the cloud container, which is where edits, tests and
+  builds now happen.
+
+Two things that does not cover:
+
+1. **Pushing.** The container's git proxy refuses to carry credentials for
+   `necromoz/wallraven` because it is not in the session's authorised
+   repository set, so commits pile up locally. Either Steve adds the repo to
+   this session's sources, or the work waits for his workspace to come back.
+2. **Delivering an installer.** 107 MB, against a 30 MB chat limit and a 20 MB
+   per-file write limit. Running from source is the way to test until CI can
+   publish again.
+
+Building in the container needs two workarounds, both proven:
+
+- NSIS: `apt-get download nsis nsis-common`, `dpkg-deb -x` into a prefix, then
+  `NSISDIR=<prefix>/usr/share/nsis` with that `usr/bin` on PATH.
+- Electron: the packager's own download dies on this proxy with an assertion
+  inside undici. Fetch `electron-v<version>-win32-x64.zip` from GitHub with
+  curl, unzip it, and point `ELECTRON_OVERRIDE_DIST_PATH` at the directory.
+
 ## Building without a Windows machine
 
 The installer can be built from Linux: NSIS cross-compiles, and
