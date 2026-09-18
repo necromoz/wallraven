@@ -115,6 +115,39 @@ check("there is a thumbnail of the current wallpaper beside the buttons", () => 
   );
 });
 
+console.log("controls that used to trap you");
+
+check("Fade has no click action", () => {
+  // Clicking pinned the whole window at 6% opacity, including the button, so
+  // there was nothing left to aim at and no obvious way back.
+  const at = JS.indexOf("Fade-to-peek");
+  assert.ok(at !== -1, "the fade wiring is gone");
+  const wiring = JS.slice(at, at + 3000);
+  assert.ok(!/pinned = !pinned/.test(wiring), "clicking still pins the window invisible");
+  assert.ok(!/classList\.toggle\("on", pinned\)/.test(wiring), "clicking still latches the button");
+});
+
+check("the appearance controls save themselves", () => {
+  // They used to be a preview that only became real on Save, so any other
+  // write -- applying a preset, saving one -- brought the stored theme back.
+  assert.ok(/function persistAppearance\(/.test(JS), "nothing persists an appearance change");
+  assert.ok(hasCode(JS, "persistAppearance({ theme: value })"), "the theme is still preview-only");
+  assert.ok(
+    hasCode(JS, "persistAppearance({ uiAccent: value })"),
+    "the accent is still preview-only",
+  );
+});
+
+check("the title bar thumbnail is sized from the buttons beside it", () => {
+  // Fixed at 46x26 it sat short next to 35px buttons. Stretching means it
+  // tracks whatever the theme does to their padding.
+  const at = CSS.indexOf("#hdr-thumb {");
+  assert.ok(at !== -1);
+  const rule = CSS.slice(at, CSS.indexOf("}", at));
+  assert.ok(/align-self: stretch/.test(rule), "it has a height of its own again");
+  assert.ok(!/height:/.test(rule), "a fixed height will drift from the buttons");
+});
+
 console.log("no control is lost when templates are moved around");
 
 check("every id the form reads or writes exists in the markup", () => {

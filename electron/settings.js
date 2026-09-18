@@ -255,6 +255,27 @@ function isSectionOpen(cardId, sectionId, index) {
   return index === 0 && (CARD_META[cardId] || {}).openFirst !== false;
 }
 
+// Save an appearance change on its own, without dragging the whole form with
+// it: pressing Save is for the settings, and these are not settings anybody
+// waits to commit. The colour picker fires continuously while it is dragged,
+// so writes are coalesced.
+let appearanceTimer = null;
+let appearancePending = {};
+function persistAppearance(patch) {
+  appearancePending = { ...appearancePending, ...patch };
+  if (appearanceTimer) clearTimeout(appearanceTimer);
+  appearanceTimer = setTimeout(async () => {
+    const send = appearancePending;
+    appearancePending = {};
+    appearanceTimer = null;
+    try {
+      config = await api.setConfig(send);
+    } catch {
+      /* the next save will carry it */
+    }
+  }, 300);
+}
+
 function applyAccent(c) {
   document.documentElement.style.setProperty("--accent", c);
 }
@@ -855,8 +876,23 @@ function wireAllCards() {
     const tr = $("#toprange-row");
     if (tr) tr.style.display = $("#sorting").value === "toplist" ? "" : "none";
   });
-  $("#uiAccent")?.addEventListener("input", () => applyAccent($("#uiAccent").value));
-  $("#theme")?.addEventListener("change", () => applyTheme($("#theme").value));
+  // How the app looks is saved the moment it changes, not when Save is pressed.
+  //
+  // It used to be a preview that only became real on Save, so anything else
+  // that wrote settings -- applying a preset, saving a new one -- came back
+  // with the stored theme and put it back on screen. Picking Raven Fyra and
+  // then saving a preset visibly undid the theme, which reads as the app
+  // refusing to keep it.
+  $("#uiAccent")?.addEventListener("input", () => {
+    const value = $("#uiAccent").value;
+    applyAccent(value);
+    persistAppearance({ uiAccent: value });
+  });
+  $("#theme")?.addEventListener("change", () => {
+    const value = $("#theme").value;
+    applyTheme(value);
+    persistAppearance({ theme: value });
+  });
 
   $("#btn-clear") &&
     ($("#btn-clear").onclick = async () => {
@@ -4650,7 +4686,9 @@ api.onConfigChanged?.(async (cfg) => {
   const fadeBtn = fadeBtnEl || document.getElementById("btn-fade");
   if (fadeBtn && api.setWindowOpacity) {
     let restoreTimer = null;
-    let pinned = false;
+    // Kept so the guards below read the same as before. Nothing sets it now
+    // that clicking does not pin.
+    const pinned = false;
     let faded = false;
     let fadedAt = 0;
     // Windows makes a layered window click-through once its alpha gets close
@@ -4704,20 +4742,12 @@ api.onConfigChanged?.(async (cfg) => {
       if (e.target === fadeBtn || fadeBtn.contains(e.target)) return;
       restore(true);
     });
+    // Clicking used to pin the window invisible. With the whole window at 6%
+    // opacity there is nothing left to aim at, including the button itself, so
+    // the only ways back were Escape or blurring the window, neither of which
+    // is discoverable. Hovering is the whole feature; a click does nothing.
     fadeBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      disarm();
-      pinned = !pinned;
-      fadeBtn.classList.toggle("on", pinned);
-      if (pinned) fade();
-      else restore(true);
-    });
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && pinned) {
-        pinned = false;
-        fadeBtn.classList.remove("on");
-        restore(true);
-      }
     });
     // Safety: never leave the window stuck invisible.
     window.addEventListener("blur", () => {

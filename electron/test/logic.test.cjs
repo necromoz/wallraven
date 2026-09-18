@@ -570,6 +570,118 @@ check("the rotation checks before it changes anything, and before freeing the lo
   );
 });
 
+// ---------------------------------------------------------------- save-triggered fetch
+
+// Fake timers: queueSaveFetch is a debounce, so the thing worth testing is what
+// happens between the call and the timer firing.
+function fakeTimers() {
+  let next = 1;
+  const pending = new Map();
+  return {
+    setTimeout: (fn, ms) => {
+      const id = next++;
+      pending.set(id, { fn, ms });
+      return id;
+    },
+    clearTimeout: (id) => pending.delete(id),
+    runAll: () => {
+      const jobs = [...pending.values()];
+      pending.clear();
+      for (const j of jobs) j.fn();
+    },
+    count: () => pending.size,
+  };
+}
+
+function saveFetch() {
+  const timers = fakeTimers();
+  const fetches = [];
+  const toasts = [];
+  const mod = new Function(
+    "setTimeout",
+    "clearTimeout",
+    "notifySettings",
+    "fetchAndSetWallpaper",
+    "console",
+    `let saveFetchTimer = null;
+     const SAVE_FETCH_DELAY_MS = 900;
+     ${extract("queueSaveFetch")}
+     ${extract("cancelSaveFetch")}
+     return { queueSaveFetch, cancelSaveFetch };`,
+  )(
+    timers.setTimeout,
+    timers.clearTimeout,
+    (kind, payload) => toasts.push({ kind, payload }),
+    () => {
+      fetches.push(Date.now());
+      return Promise.resolve();
+    },
+    { warn() {}, log() {}, error() {} },
+  );
+  return { ...mod, timers, fetches, toasts };
+}
+
+console.log("the fetch a save asks for");
+
+check("saving a filter change asks for one wallpaper", () => {
+  const s = saveFetch();
+  s.queueSaveFetch();
+  s.timers.runAll();
+  assert.strictEqual(s.fetches.length, 1);
+});
+
+check("a burst of saves still only asks for one", () => {
+  // Applying a preset writes the settings and then asks for a wallpaper.
+  // Without this the write alone started a second one, and anything else
+  // saving in between made a third: the wallpaper changed two or three times
+  // in a row on its own.
+  const s = saveFetch();
+  s.queueSaveFetch();
+  s.queueSaveFetch();
+  s.queueSaveFetch();
+  assert.strictEqual(s.timers.count(), 1, "more than one fetch is queued");
+  s.timers.runAll();
+  assert.strictEqual(s.fetches.length, 1);
+});
+
+check("changing the wallpaper on purpose cancels the queued one", () => {
+  const s = saveFetch();
+  s.queueSaveFetch();
+  s.cancelSaveFetch();
+  s.timers.runAll();
+  assert.strictEqual(s.fetches.length, 0, "the save-triggered fetch ran anyway");
+});
+
+check("cancelling when nothing is queued is harmless", () => {
+  const s = saveFetch();
+  assert.doesNotThrow(() => s.cancelSaveFetch());
+  s.timers.runAll();
+  assert.strictEqual(s.fetches.length, 0);
+});
+
+check("it says what it is doing, but only when it actually does it", () => {
+  const s = saveFetch();
+  s.queueSaveFetch();
+  assert.strictEqual(s.toasts.length, 0, "it announced a fetch before starting one");
+  s.timers.runAll();
+  assert.strictEqual(s.toasts.length, 1);
+});
+
+check("everything that changes the wallpaper on purpose cancels it", () => {
+  for (const site of [
+    'ipcMain.handle("wp:next"',
+    'ipcMain.handle("wp:setFromRemote"',
+    "async function navigateHistory(",
+  ]) {
+    const at = SRC.indexOf(site);
+    assert.ok(at !== -1, `${site} is gone`);
+    assert.ok(
+      SRC.slice(at, at + 400).includes("cancelSaveFetch()"),
+      `${site} does not cancel a queued save fetch`,
+    );
+  }
+});
+
 // ---------------------------------------------------------------- summary
 
 console.log();

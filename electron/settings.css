@@ -1660,13 +1660,17 @@ html[data-mascot="raven-fire"] #view-bar {
    which you cannot see while looking at this window. A thumbnail of it sits
    next to them so there is no guessing. */
 #hdr-thumb {
-  width: 46px;
-  height: 26px;
+  /* No height of its own: it stretches to whatever the buttons beside it are,
+     so the row stays level whatever the theme does to their padding. Wider
+     than tall, because a wallpaper is not square. */
+  align-self: stretch;
+  width: 48px;
   padding: 0;
   flex: none;
-  border-radius: 5px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--panel-2) center/cover no-repeat;
+  background-clip: padding-box;
   cursor: pointer;
   display: none;
 }

@@ -1630,6 +1630,8 @@ async function restoreHistoryFile(item) {
 // stepped over.
 async function navigateHistory(dir) {
   if (!history.items.length) return;
+  // Going back is a deliberate choice; do not let a queued save undo it.
+  cancelSaveFetch();
   const step = dir === "back" ? -1 : 1;
   const from = navPos >= 0 && navPos < history.items.length ? navPos : history.items.length - 1;
 
@@ -3015,16 +3017,38 @@ ipcMain.handle("config:set", (_e, next) => {
   // hour later, so the app looked like it had ignored you. Only when the search
   // itself moved, and not while cycling is paused, since a pause is a deliberate
   // "leave my wallpaper alone".
-  if (filtersMoved && !paused) {
-    notifySettings("app-toast", {
-      msg: "Saved. Finding a wallpaper that matches\u2026",
-      kind: "ok",
-    });
-    fetchAndSetWallpaper(true).catch((e) => console.warn("save-triggered fetch", e && e.message));
-  }
+  if (filtersMoved && !paused) queueSaveFetch();
   return config;
 });
-ipcMain.handle("wp:next", () => fetchAndSetWallpaper(true));
+// One change per action.
+//
+// Applying a preset writes the settings and then asks for a wallpaper, and the
+// write alone was enough to start one: two changes in quick succession, and
+// three if anything else saved in between. The save-triggered fetch now waits a
+// moment and is cancelled outright by anything that changes the wallpaper on
+// purpose, so a preset gives you exactly one new wallpaper.
+const SAVE_FETCH_DELAY_MS = 900;
+let saveFetchTimer = null;
+
+function queueSaveFetch() {
+  if (saveFetchTimer) clearTimeout(saveFetchTimer);
+  saveFetchTimer = setTimeout(() => {
+    saveFetchTimer = null;
+    notifySettings("app-toast", { msg: "Finding a wallpaper that matches\u2026", kind: "ok" });
+    fetchAndSetWallpaper(true).catch((e) => console.warn("save-triggered fetch", e && e.message));
+  }, SAVE_FETCH_DELAY_MS);
+}
+
+function cancelSaveFetch() {
+  if (!saveFetchTimer) return;
+  clearTimeout(saveFetchTimer);
+  saveFetchTimer = null;
+}
+
+ipcMain.handle("wp:next", () => {
+  cancelSaveFetch();
+  return fetchAndSetWallpaper(true);
+});
 ipcMain.handle("wp:info", () => currentInfo());
 ipcMain.handle("wp:back", async () => {
   await setPreviousWallpaper();
@@ -3490,6 +3514,7 @@ ipcMain.handle("search:run", async (_e, { page = 1, query = null, overrides = nu
 // Download a specific wallpaper (from browse grid) and set it as wallpaper.
 // Pauses cycling to feel like "static mode".
 ipcMain.handle("wp:setFromRemote", async (_e, w) => {
+  cancelSaveFetch();
   if (!w || !w.id || !w.path) throw new Error("Bad wallpaper");
   const ext = w.file_type && w.file_type.includes("png") ? "png" : "jpg";
   const dest = path.join(CACHE_DIR, `${w.id}.${ext}`);
