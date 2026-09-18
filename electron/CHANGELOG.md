@@ -1,5 +1,14 @@
 # Wallraven changelog
 
+## v1.2.1 — 18 Sep 2026
+
+### Fixed
+
+- **One wallpaper per action.** Applying a preset changed the wallpaper two or three times in quick succession, because saving the settings and asking for a wallpaper each started one of their own.
+- **The theme sticks.** Picking a theme only took effect properly when you pressed Save, so applying or saving a preset brought the old one back. Themes and the accent colour now save themselves as soon as you pick them.
+- **Fade does nothing when clicked.** It used to pin the window invisible, which also hides the button, leaving no obvious way back. Hovering over it still works as before.
+- **The thumbnail in the title bar** is the same height as the buttons next to it.
+
 ## v1.2.0 — 17 Sep 2026
 
 ### New
