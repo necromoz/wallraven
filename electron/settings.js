@@ -3030,6 +3030,7 @@ function renderHeaderThumb() {
   const el = document.getElementById("hdr-thumb");
   if (!el) return;
   const file = currentWp && currentWp.file;
+  renderHeaderReactions();
   if (!file) {
     el.classList.remove("has-image");
     el.style.backgroundImage = "";
@@ -3038,6 +3039,36 @@ function renderHeaderThumb() {
   el.style.backgroundImage = `url("file://${String(file).replace(/\\/g, "/")}")`;
   el.title = `Now showing ${currentWp.id || ""}${currentWp.resolution ? " \u00b7 " + currentWp.resolution : ""}. Click to open Now playing.`;
   el.classList.add("has-image");
+}
+
+// The two thumbs in the title bar show whether the wallpaper on screen is
+// already liked or disliked, the same way the Paused button shows its state.
+// Without this the only way to find out was to scroll the Library and look,
+// and it was easy to like the same wallpaper twice and silently clear it.
+function renderHeaderReactions() {
+  const like = document.getElementById("hdr-like");
+  const dislike = document.getElementById("hdr-dislike");
+  if (!like && !dislike) return;
+  const state = currentWp && currentWp.id ? wallpaperState(currentWp.id) : "neutral";
+  const has = !!(currentWp && currentWp.id);
+  if (like) {
+    like.classList.toggle("on", state === "liked");
+    like.setAttribute("aria-pressed", String(state === "liked"));
+    like.title = !has
+      ? "Like this wallpaper"
+      : state === "liked"
+        ? "Liked. Click to clear."
+        : "Like this wallpaper";
+  }
+  if (dislike) {
+    dislike.classList.toggle("on", state === "disliked");
+    dislike.setAttribute("aria-pressed", String(state === "disliked"));
+    dislike.title = !has
+      ? "Dislike and skip"
+      : state === "disliked"
+        ? "Disliked. Click to clear."
+        : "Dislike and skip";
+  }
 }
 
 // Apply an info payload directly (used by back/forward) without refetching.
@@ -3349,6 +3380,7 @@ async function changeWallpaperReaction(item, requested, knownState) {
   config = await api.getConfig();
   renderHistory();
   renderFavourites();
+  renderHeaderReactions();
   flash(
     next === "liked"
       ? "Moved to Liked"
@@ -4543,19 +4575,38 @@ function renderPlayPause() {
   b.classList.toggle("on", cyclePaused);
 }
 document.getElementById("hdr-thumb")?.addEventListener("click", () => goPage("home"));
+// Both title bar thumbs go through the same path the Library uses, so the
+// toggle, the cached sets and the lit state can never disagree. The old handler
+// added the id to likedIds unconditionally, even when the click had just
+// cleared the like, which left the button lit for a wallpaper that was no
+// longer liked.
 document.getElementById("hdr-like")?.addEventListener("click", async () => {
-  const r = await api.like();
-  flash(r.ok ? "Added to Liked" : r.reason, r.ok ? "ok" : "err");
-  if (r.ok && r.id != null) {
-    likedIds.add(String(r.id));
-    renderHistory();
+  if (!currentWp || !currentWp.id) return flash("No wallpaper yet", "err");
+  try {
+    await changeWallpaperReaction(currentWp, "liked");
+  } catch (e) {
+    flash(e.message || "Could not update wallpaper", "err");
   }
-  config = await api.getConfig();
-  renderPlaylistUI();
 });
 document.getElementById("hdr-dislike")?.addEventListener("click", async () => {
+  if (!currentWp || !currentWp.id) return flash("No wallpaper yet", "err");
+  // Clearing a dislike must not skip: there is nothing to move away from. Only
+  // a fresh dislike picks a replacement, which is what the tooltip promises.
+  if (wallpaperState(currentWp.id) === "disliked") {
+    try {
+      await changeWallpaperReaction(currentWp, "disliked");
+    } catch (e) {
+      flash(e.message || "Could not update wallpaper", "err");
+    }
+    return;
+  }
   const r = await api.dislike();
   flash(r.ok ? "Skipping — never showing again" : r.reason, r.ok ? "ok" : "err");
+  if (r.ok) {
+    dislikedIds.add(String(r.id));
+    config = await api.getConfig();
+    renderHeaderReactions();
+  }
 });
 document.getElementById("hdr-prev")?.addEventListener("click", async () => {
   const info = await api.wpBack();

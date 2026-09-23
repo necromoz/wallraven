@@ -198,6 +198,50 @@ check("clearing likes is offered next to clearing dislikes, and asks first", () 
   assert.ok(/likedIds\.clear\(\)/.test(handler), "the history grid keeps its stale hearts");
 });
 
+check("the title bar thumbs show whether the current wallpaper is liked", () => {
+  // There was no way to tell from the header, so the same wallpaper could be
+  // liked twice, which silently cleared the like.
+  assert.ok(/function renderHeaderReactions\(\)/.test(JS), "no renderHeaderReactions");
+  assert.ok(
+    hasCode(JS, 'like.classList.toggle("on", state === "liked")'),
+    "the Like thumb never lights up",
+  );
+  assert.ok(
+    hasCode(JS, 'dislike.classList.toggle("on", state === "disliked")'),
+    "the Dislike thumb never lights up",
+  );
+  // .on is the styling the Paused button already uses, so the header reads
+  // consistently. If that rule goes, the highlight silently does nothing.
+  assert.ok(/\.btn\.icon-btn\.on\s*\{/.test(CSS), "no .btn.icon-btn.on rule to light them with");
+  const thumb = extractFrom(JS, "renderHeaderThumb");
+  assert.ok(/renderHeaderReactions\(\)/.test(thumb), "the header redraw never refreshes them");
+  const change = extractFrom(JS, "changeWallpaperReaction");
+  assert.ok(
+    /renderHeaderReactions\(\)/.test(change),
+    "reacting from the Library leaves the header stale",
+  );
+});
+
+check("the title bar thumbs toggle through the same path as the Library", () => {
+  // The old handler called api.like() then added the id to likedIds whatever
+  // happened, so clearing a like left the button lit.
+  const at = JS.indexOf('getElementById("hdr-like")?.addEventListener');
+  assert.ok(at !== -1, "the Like thumb is not wired up");
+  const handler = JS.slice(at, at + 400);
+  assert.ok(
+    /changeWallpaperReaction\(currentWp, "liked"\)/.test(handler),
+    "Like does not go through changeWallpaperReaction",
+  );
+  assert.ok(!/likedIds\.add/.test(handler), "Like still writes likedIds behind the shared helper");
+  const dAt = JS.indexOf('getElementById("hdr-dislike")?.addEventListener');
+  const dHandler = JS.slice(dAt, dAt + 900);
+  assert.ok(
+    /wallpaperState\(currentWp\.id\) === "disliked"/.test(dHandler),
+    "clearing a dislike is not distinguished from making one",
+  );
+  assert.ok(/api\.dislike\(\)/.test(dHandler), "a fresh dislike must still skip to a replacement");
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);

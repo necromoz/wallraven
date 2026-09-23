@@ -789,6 +789,16 @@ input[type="range"] {
   color: var(--accent);
   border-color: var(--accent);
 }
+/* The two title bar thumbs light the same way the Library's do, so a liked
+   wallpaper reads identically wherever you happen to be looking. The rule
+   above only recolours text and border, and an emoji glyph ignores colour, so
+   on its own it was nearly invisible. */
+#hdr-like.on,
+#hdr-dislike.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
 .reaction-bar {
   position: absolute;
   right: 6px;
