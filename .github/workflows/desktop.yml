@@ -16,6 +16,11 @@ on:
     branches: [main, "fixes/**"]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      keep_installer:
+        description: "Keep the installer as a downloadable artifact"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -126,14 +131,34 @@ jobs:
           shopt -s nullglob
           sha256sum *.exe *.msix | tee SHA256SUMS.txt
 
-      - uses: actions/upload-artifact@v4
+      # Artifacts, and why this keeps almost nothing.
+      #
+      # The installer is 112 MB and the Store package another 110 MB. Uploading
+      # both on every push, kept for a fortnight, filled the 0.5 GB of Actions
+      # storage the plan includes in about two pushes, at which point further
+      # uploads are blocked and the build fails at this step. Nobody ever
+      # downloaded one: a tagged build publishes the installer to the release,
+      # which does not count against this quota, and anything else is tested by
+      # running from source.
+      #
+      # So the checksums are kept, because they are bytes rather than
+      # megabytes, and the installer only when someone explicitly asks for it
+      # by running the workflow by hand with "Keep the installer" ticked.
+      - name: Keep the checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHA256SUMS-v${{ steps.version.outputs.version }}
+          path: dist/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Keep the installer (only when asked)
+        if: inputs.keep_installer
+        uses: actions/upload-artifact@v4
         with:
           name: Wallraven-Setup-v${{ steps.version.outputs.version }}
-          path: |
-            dist/*.exe
-            dist/*.msix
-            dist/SHA256SUMS.txt
-          retention-days: 14
+          path: dist/*.exe
+          retention-days: 2
           if-no-files-found: error
 
       # Only on a version tag. The checksum file is published alongside the
