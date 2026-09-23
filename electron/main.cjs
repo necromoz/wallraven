@@ -2831,9 +2831,14 @@ function updateTrayMenu() {
       },
     },
     { type: "separator" },
+    // Both reactions read the same way and both toggle. They used to disagree:
+    // Like showed a heart/star, Dislike a thumb, and each went grey once set,
+    // so a reaction pressed by accident could not be undone from the tray at
+    // all. likeCurrent and dislikeCurrent have always toggled; only the menu
+    // stopped them being reached a second time.
     {
-      label: liked ? "★ Liked" : "♡ Like current",
-      enabled: !!last && !liked,
+      label: liked ? "👍 Liked (undo)" : "👍 Like current",
+      enabled: !!last,
       click: () => {
         likeCurrent();
         updateTrayMenu();
@@ -2841,11 +2846,12 @@ function updateTrayMenu() {
       },
     },
     {
-      label: disliked ? "✕ Disliked" : "👎 Dislike current (skip)",
-      enabled: !!last && !disliked,
+      label: disliked ? "👎 Disliked (undo)" : "👎 Dislike current (skip)",
+      enabled: !!last,
       click: () => {
         dislikeCurrent();
         updateTrayMenu();
+        notifyRenderer();
       },
     },
     {
@@ -3862,10 +3868,26 @@ ipcMain.handle("wp:dislike", () => {
   updateTrayMenu();
   return r;
 });
+// Both clears have to empty two lists, not one. config.dislikes / config.likes
+// hold ids and are what the picker filters on; config.dislikedItems and the
+// Liked playlist hold the full records the Library shows. Clearing only the id
+// list left the entries on screen with nothing behind them.
 ipcMain.handle("wp:clearDislikes", () => {
   config.dislikes = [];
+  config.dislikedItems = [];
   saveConfig();
+  updateTrayMenu();
+  notifyRenderer();
   return config.dislikes;
+});
+ipcMain.handle("wp:clearLikes", () => {
+  config.likes = [];
+  const liked = ensureLikedPlaylist();
+  liked.items = [];
+  saveConfig();
+  updateTrayMenu();
+  notifyRenderer();
+  return config.likes;
 });
 ipcMain.handle("schedule:preview", () => {
   const rule = activeScheduleRule();

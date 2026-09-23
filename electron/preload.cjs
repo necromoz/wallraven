@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld("api", {
   likes: () => ipcRenderer.invoke("wp:likes"),
   dislike: () => ipcRenderer.invoke("wp:dislike"),
   clearDislikes: () => ipcRenderer.invoke("wp:clearDislikes"),
+  clearLikes: () => ipcRenderer.invoke("wp:clearLikes"),
   schedulePreview: () => ipcRenderer.invoke("schedule:preview"),
   updateCheck: () => ipcRenderer.invoke("update:check"),
   updateDismiss: (v) => ipcRenderer.invoke("update:dismiss", v),

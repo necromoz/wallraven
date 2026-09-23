@@ -754,6 +754,8 @@ function hydrateInputs(c) {
   if (tr) tr.style.display = c.sorting === "toplist" ? "" : "none";
   const dc = $("#dislikeCount");
   if (dc) dc.textContent = (c.dislikes || []).length;
+  const lc = $("#likeCount");
+  if (lc) lc.textContent = (c.likes || []).length;
   chk("#scheduleEnabled", c.schedule?.enabled);
   renderScheduleRules(c.schedule?.rules || []);
   updateScheduleStatus();
@@ -1056,7 +1058,32 @@ function wireAllCards() {
       await api.clearDislikes();
       config = await api.getConfig();
       hydrateInputs(config);
+      renderPlaylistUI();
       flash("Dislikes cleared", "ok");
+    });
+  // Unlike clearing dislikes, this throws away a collection the user built on
+  // purpose, so it asks first. The wallpaper files stay in the cache.
+  $("#btn-clear-likes") &&
+    ($("#btn-clear-likes").onclick = async () => {
+      const n = (config.likes || []).length;
+      if (!n) {
+        flash("Nothing liked yet", "ok");
+        return;
+      }
+      if (
+        !confirm(
+          `Forget ${n} liked wallpaper${n === 1 ? "" : "s"} and empty the Liked playlist? ` +
+            "The image files stay in the cache.",
+        )
+      )
+        return;
+      await api.clearLikes();
+      config = await api.getConfig();
+      hydrateInputs(config);
+      likedIds.clear();
+      renderHistory();
+      renderPlaylistUI();
+      flash("Likes cleared", "ok");
     });
   $("#btn-like") &&
     ($("#btn-like").onclick = async () => {

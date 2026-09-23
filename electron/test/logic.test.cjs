@@ -682,6 +682,61 @@ check("everything that changes the wallpaper on purpose cancels it", () => {
   }
 });
 
+// ---------------------------------------------------------------- tray reactions
+
+console.log("tray reactions");
+
+const trayMenu = SRC.slice(
+  SRC.indexOf("function updateTrayMenu()"),
+  SRC.indexOf("Open current on Wallhaven"),
+);
+
+check("Like and Dislike wear the same kind of icon", () => {
+  // They used to disagree: a heart or star for Like, a thumb for Dislike, so
+  // the two halves of the same decision looked like unrelated features.
+  const icons = [
+    ...trayMenu.matchAll(
+      /"([^"]*?) (?:Liked \(undo\)|Like current|Disliked \(undo\)|Dislike current)/g,
+    ),
+  ].map((m) => m[1]);
+  assert.strictEqual(icons.length, 4, `expected 4 reaction labels, found ${icons.length}`);
+  assert.deepStrictEqual(
+    [...new Set(icons)].sort(),
+    ["\u{1F44D}", "\u{1F44E}"],
+    `tray reaction icons are inconsistent: ${icons.join(" ")}`,
+  );
+});
+
+check("both reactions stay clickable once set, so they can be undone", () => {
+  // enabled: !!last && !liked greyed the item out the moment it was pressed.
+  // likeCurrent and dislikeCurrent both toggle, so that was the menu refusing
+  // to let the user reach a behaviour that already existed.
+  assert.ok(
+    !/enabled: !!last && !liked/.test(trayMenu),
+    "Like is disabled once liked and cannot be undone from the tray",
+  );
+  assert.ok(
+    !/enabled: !!last && !disliked/.test(trayMenu),
+    "Dislike is disabled once disliked and cannot be undone from the tray",
+  );
+});
+
+check("clearing either reaction empties both lists behind it", () => {
+  // The ids are what the picker filters on; the item records are what the
+  // Library draws. Clearing one and not the other leaves orphans on screen.
+  const clearD = SRC.slice(
+    SRC.indexOf('ipcMain.handle("wp:clearDislikes"'),
+    SRC.indexOf('ipcMain.handle("wp:clearLikes"'),
+  );
+  assert.ok(/config\.dislikes = \[\]/.test(clearD), "dislike ids not cleared");
+  assert.ok(/config\.dislikedItems = \[\]/.test(clearD), "disliked item records survive the clear");
+  const at = SRC.indexOf('ipcMain.handle("wp:clearLikes"');
+  assert.ok(at !== -1, "there is no wp:clearLikes handler");
+  const clearL = SRC.slice(at, at + 400);
+  assert.ok(/config\.likes = \[\]/.test(clearL), "like ids not cleared");
+  assert.ok(/liked\.items = \[\]/.test(clearL), "the Liked playlist is not emptied");
+});
+
 // ---------------------------------------------------------------- summary
 
 console.log();

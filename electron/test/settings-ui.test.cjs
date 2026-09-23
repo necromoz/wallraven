@@ -184,6 +184,20 @@ check("every card part names a template that exists", () => {
   }
 });
 
+check("clearing likes is offered next to clearing dislikes, and asks first", () => {
+  // The window had a Clear dislikes button and no Clear likes, so a like
+  // pressed by accident could only be undone one wallpaper at a time.
+  assert.ok(/id="btn-clear-likes"/.test(HTML), "no Clear likes button");
+  assert.ok(/id="likeCount"/.test(HTML), "no like counter to fill in");
+  assert.ok(hasCode(JS, 'const lc = $("#likeCount");'), "the counter is never hydrated");
+  const at = JS.indexOf('$("#btn-clear-likes").onclick');
+  assert.ok(at !== -1, "Clear likes is never wired up");
+  const handler = JS.slice(at, at + 900);
+  assert.ok(/confirm\(/.test(handler), "clearing likes must confirm; it destroys a collection");
+  assert.ok(/api\.clearLikes\(\)/.test(handler), "handler never calls clearLikes");
+  assert.ok(/likedIds\.clear\(\)/.test(handler), "the history grid keeps its stale hearts");
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);
