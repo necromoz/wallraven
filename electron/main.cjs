@@ -1743,6 +1743,54 @@ function whyRefFor(mode, opts = {}) {
   return "";
 }
 
+// Key-order-independent comparison. JSON.stringify of {sfw, sketchy} and
+// {sketchy, sfw} differ, and a preset saved by an older version can easily
+// have its keys in a different order from the live config.
+function stableKey(v) {
+  if (Array.isArray(v)) return "[" + v.map(stableKey).join(",") + "]";
+  if (v && typeof v === "object") {
+    return (
+      "{" +
+      Object.keys(v)
+        .sort()
+        .map((k) => JSON.stringify(k) + ":" + stableKey(v[k]))
+        .join(",") +
+      "}"
+    );
+  }
+  return JSON.stringify(v === undefined ? null : v);
+}
+
+// What the live settings have to agree with for a preset to count as in
+// effect. Loading a preset resolves its "current screen" placeholders to real
+// values for this machine and forces the source back to search, so for a
+// loaded preset the resolved values are the truth, not the stored definition.
+// Built-ins exist only in the settings window, so for them the resolved values
+// are all there is.
+function presetMatchTarget(name) {
+  if (!name) return null;
+  if (config.activePresetValues) return config.activePresetValues;
+  if (String(name).startsWith("__builtin__:")) return null;
+  return (config.presets && config.presets[name]) || null;
+}
+
+// The preset genuinely in effect, or null. config.activePreset on its own is
+// only a claim: it was set when a preset was loaded and nothing ever cleared
+// it, so it could name a preset whose settings you changed an hour ago. This
+// checks the live settings still agree with the preset on everything the
+// preset specifies, and on nothing else: a preset that says nothing about
+// folders is not broken by adding one.
+function presetInEffect() {
+  const name = config.activePreset;
+  const target = presetMatchTarget(name);
+  if (!target) return null;
+  for (const k of SEARCH_AFFECTING) {
+    if (!(k in target)) continue;
+    if (stableKey(config[k]) !== stableKey(target[k])) return null;
+  }
+  return String(name).replace(/^__builtin__:/, "");
+}
+
 // Compact on purpose: this is written up to 200 times into history.json, so
 // empty fields are left out rather than stored as blanks.
 function buildWhy(parts = {}) {
@@ -1755,6 +1803,8 @@ function buildWhy(parts = {}) {
   // behind the first time one is edited.
   const rule = parts.rule === undefined ? activeScheduleRule() : parts.rule;
   if (rule && rule.id) why.rule = rule.id;
+  const preset = parts.preset === undefined ? presetInEffect() : parts.preset;
+  if (preset) why.preset = preset;
   return why;
 }
 
@@ -1860,7 +1910,7 @@ async function fetchAndSetWallpaper(manual = false) {
           file: cachedFile,
           ts: Date.now(),
           resolution: "",
-          why: buildWhy({ mode: "cache", cached: true }),
+          why: buildWhy({ mode: "cache", cached: true, preset: null }),
         });
         history.currentId = id;
         if (history.items.length > 200) history.items = history.items.slice(-200);
@@ -2254,6 +2304,10 @@ function applyScheduleRule(rule) {
     const p = { ...config.presets[rule.sourceRef] };
     delete p.schedule;
     Object.assign(config, p);
+    // Recorded exactly as a preset loaded by hand is, so Now playing can say
+    // the timetable switched you to it. This path never set it before.
+    config.activePreset = rule.sourceRef;
+    delete config.activePresetValues;
     dirty = true;
   }
   if (dirty) saveConfig();
@@ -3103,6 +3157,22 @@ ipcMain.handle("config:set", (_e, next) => {
     prefetched.length = 0;
     lastHealReason = null;
   }
+  // Keep activePreset honest. A save that names a preset is taken at its word:
+  // it is the load or the save-as itself, and save-as snapshots the form, which
+  // may not have been written yet. Any later save that moves the search off
+  // the preset clears it, so it cannot go on naming settings you have changed.
+  if ("activePreset" in patch) {
+    // A load sends the preset as resolved for this machine; remember that. A
+    // save-as sends no settings at all, and then the stored definition is
+    // exactly the form it was taken from, so there is nothing to remember.
+    const snap = {};
+    for (const k of SEARCH_AFFECTING) if (k in patch) snap[k] = patch[k];
+    if (patch.activePreset && Object.keys(snap).length) config.activePresetValues = snap;
+    else delete config.activePresetValues;
+  } else if (filtersMoved && config.activePreset && !presetInEffect()) {
+    config.activePreset = "";
+    delete config.activePresetValues;
+  }
   stampChangedSections(before, config);
   saveConfig();
   scheduleCycle();
@@ -3638,7 +3708,7 @@ ipcMain.handle("wp:setFromRemote", async (_e, w) => {
     resolution: w.resolution,
     thumb: wallpaperThumb(w),
     // Picked by hand, so no timetable rule gets the credit.
-    why: buildWhy({ mode: "manual", rule: null }),
+    why: buildWhy({ mode: "manual", rule: null, preset: null }),
   });
   history.currentId = w.id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
@@ -3755,7 +3825,7 @@ ipcMain.handle("history:setFromFile", async (_e, { file, id, url, resolution }) 
     ts: Date.now(),
     resolution,
     thumb: (previous && previous.thumb) || "",
-    why: (previous && previous.why) || buildWhy({ mode: "manual", rule: null }),
+    why: (previous && previous.why) || buildWhy({ mode: "manual", rule: null, preset: null }),
   });
   history.currentId = id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
@@ -4293,7 +4363,7 @@ async function pickRandomFavorite() {
       ts: Date.now(),
       resolution: pick.resolution,
       thumb: wallpaperThumb(pick),
-      why: buildWhy({ mode: "playlist", ref: "Liked", cached: true, rule: null }),
+      why: buildWhy({ mode: "playlist", ref: "Liked", cached: true, rule: null, preset: null }),
     });
     history.currentId = pick.id;
     if (history.items.length > 200) history.items = history.items.slice(-200);

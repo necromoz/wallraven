@@ -697,12 +697,16 @@ const prov = new Function(`
   let config = {};
   let rule = null;
   function activeScheduleRule() { return rule; }
+  ${extractConst("SEARCH_AFFECTING")}
   ${extract("samePathKey")}
   ${extract("wallpaperThumb")}
   ${extract("whyRefFor")}
+  ${extract("stableKey")}
+  ${extract("presetMatchTarget")}
+  ${extract("presetInEffect")}
   ${extract("buildWhy")}
   return {
-    wallpaperThumb, whyRefFor, buildWhy,
+    wallpaperThumb, whyRefFor, buildWhy, presetInEffect, stableKey,
     setConfig: (c) => { config = c; },
     setRule: (r) => { rule = r; },
   };
@@ -739,6 +743,7 @@ check("a folder source names which watched folder, and not a lookalike", () => {
 });
 
 check("the reason is compact and names the driving timetable rule", () => {
+  prov.setConfig({});
   prov.setRule({ id: "r1" });
   const w = prov.buildWhy({ mode: "playlist", ref: "Gym" });
   assert.deepStrictEqual(w, { mode: "playlist", ref: "Gym", rule: "r1" });
@@ -748,6 +753,98 @@ check("the reason is compact and names the driving timetable rule", () => {
   assert.deepStrictEqual(
     prov.buildWhy({ mode: "search", ref: "rain", fallback: "any category", cached: true }),
     { mode: "search", ref: "rain", fallback: "any category", cached: true },
+  );
+});
+
+check("key order does not make two identical settings differ", () => {
+  assert.strictEqual(
+    prov.stableKey({ sfw: true, sketchy: false }),
+    prov.stableKey({ sketchy: false, sfw: true }),
+  );
+  assert.notStrictEqual(prov.stableKey({ sfw: true }), prov.stableKey({ sfw: false }));
+});
+
+check("a preset is only named while the settings still match it", () => {
+  const rain = { query: "rain", purity: { sfw: true, sketchy: false } };
+  prov.setConfig({
+    activePreset: "Rain",
+    presets: { Rain: rain },
+    query: "rain",
+    purity: { sketchy: false, sfw: true },
+  });
+  assert.strictEqual(prov.presetInEffect(), "Rain");
+  // Edited afterwards: the old code went on claiming "Rain" indefinitely.
+  prov.setConfig({
+    activePreset: "Rain",
+    presets: { Rain: rain },
+    query: "snow",
+    purity: rain.purity,
+  });
+  assert.strictEqual(prov.presetInEffect(), null);
+});
+
+check("a preset is not broken by settings it says nothing about", () => {
+  prov.setConfig({
+    activePreset: "Rain",
+    presets: { Rain: { query: "rain" } },
+    query: "rain",
+    folderPaths: ["C:\\Added\\Later"],
+    sorting: "toplist",
+  });
+  assert.strictEqual(prov.presetInEffect(), "Rain");
+});
+
+check("a loaded preset matches what it resolved to on this machine", () => {
+  // Stored with a "current screen" placeholder; loading it wrote real values.
+  prov.setConfig({
+    activePreset: "Mine",
+    presets: { Mine: { ratios: "__current__", query: "x" } },
+    activePresetValues: { ratios: "16x9", query: "x", sourceMode: "search" },
+    ratios: "16x9",
+    query: "x",
+    sourceMode: "search",
+  });
+  assert.strictEqual(prov.presetInEffect(), "Mine");
+});
+
+check("a built-in preset is named without its internal prefix", () => {
+  prov.setConfig({
+    activePreset: "__builtin__:Anime",
+    activePresetValues: { query: "anime" },
+    query: "anime",
+  });
+  assert.strictEqual(prov.presetInEffect(), "Anime");
+  // A built-in with nothing remembered cannot be verified, so it is not named.
+  prov.setConfig({ activePreset: "__builtin__:Anime", query: "anime" });
+  assert.strictEqual(prov.presetInEffect(), null);
+});
+
+check("the reason names a preset in effect, and a hand pick never does", () => {
+  prov.setRule(null);
+  prov.setConfig({ activePreset: "Rain", presets: { Rain: { query: "rain" } }, query: "rain" });
+  assert.strictEqual(prov.buildWhy({ mode: "search", ref: "rain" }).preset, "Rain");
+  assert.strictEqual(prov.buildWhy({ mode: "manual", rule: null, preset: null }).preset, undefined);
+});
+
+check("saving settings away from a preset clears the claim", () => {
+  const h = SRC.slice(SRC.indexOf('ipcMain.handle("config:set"'));
+  const body = h.slice(0, h.indexOf("\n});"));
+  assert.ok(
+    /"activePreset" in patch/.test(body),
+    "a load or save-as is not told apart from an edit",
+  );
+  assert.ok(
+    /filtersMoved && config\.activePreset && !presetInEffect\(\)/.test(body),
+    "moving the search off a preset never clears activePreset",
+  );
+});
+
+check("a timetable rule that applies a preset records which one", () => {
+  const at = SRC.indexOf('rule.sourceType === "preset"');
+  const body = SRC.slice(at, at + 700);
+  assert.ok(
+    /config\.activePreset = rule\.sourceRef/.test(body),
+    "the timetable path never names its preset",
   );
 });
 
