@@ -20,7 +20,14 @@ const SRC = fs.readFileSync(path.join(__dirname, "..", "main.cjs"), "utf8").repl
 function extract(name) {
   const start = SRC.indexOf(`function ${name}(`);
   assert.ok(start !== -1, `could not find function ${name} in main.cjs`);
-  let i = SRC.indexOf("{", start);
+  // Step over the parameter list first. Taking the first brace after the name
+  // picks up a default value like \`opts = {}\` and returns half a function.
+  let p = SRC.indexOf("(", start);
+  for (let parens = 0; p < SRC.length; p++) {
+    if (SRC[p] === "(") parens++;
+    else if (SRC[p] === ")" && --parens === 0) break;
+  }
+  let i = SRC.indexOf("{", p);
   let depth = 0;
   for (let j = i; j < SRC.length; j++) {
     const c = SRC[j];
@@ -680,6 +687,77 @@ check("everything that changes the wallpaper on purpose cancels it", () => {
       `${site} does not cancel a queued save fetch`,
     );
   }
+});
+
+// ---------------------------------------------------------------- provenance
+
+console.log("where a wallpaper came from");
+
+const prov = new Function(`
+  let config = {};
+  let rule = null;
+  function activeScheduleRule() { return rule; }
+  ${extract("samePathKey")}
+  ${extract("wallpaperThumb")}
+  ${extract("whyRefFor")}
+  ${extract("buildWhy")}
+  return {
+    wallpaperThumb, whyRefFor, buildWhy,
+    setConfig: (c) => { config = c; },
+    setRule: (r) => { rule = r; },
+  };
+`)();
+
+check("a raw Wallhaven result gives its small thumbnail", () => {
+  assert.strictEqual(
+    prov.wallpaperThumb({ thumbs: { small: "s.jpg", original: "o.jpg" } }),
+    "s.jpg",
+  );
+  assert.strictEqual(prov.wallpaperThumb({ thumb: "already.jpg" }), "already.jpg");
+  assert.strictEqual(prov.wallpaperThumb({}), "");
+  assert.strictEqual(prov.wallpaperThumb(null), "");
+});
+
+check("a multi-group search records the group that ran, not the whole box", () => {
+  prov.setConfig({ query: "cars, mountains, rain" });
+  assert.strictEqual(prov.whyRefFor("search", { query: "mountains" }), "mountains");
+  // Nothing passed in: fall back to the box rather than claim nothing ran.
+  assert.strictEqual(prov.whyRefFor("search", {}), "cars, mountains, rain");
+  // An empty group is a real answer (the chain blanked the query) and must
+  // not be replaced by the box.
+  assert.strictEqual(prov.whyRefFor("search", { query: "" }), "");
+});
+
+check("a folder source names which watched folder, and not a lookalike", () => {
+  prov.setConfig({ folderPaths: ["C:\\Walls", "C:\\Walls2", "D:\\Art\\Nested"] });
+  assert.strictEqual(prov.whyRefFor("folder", { file: "C:\\Walls2\\a.jpg" }), "C:\\Walls2");
+  assert.strictEqual(prov.whyRefFor("folder", { file: "c:/walls/b.png" }), "C:\\Walls");
+  assert.strictEqual(
+    prov.whyRefFor("folder", { file: "D:\\Art\\Nested\\x.jpg" }),
+    "D:\\Art\\Nested",
+  );
+});
+
+check("the reason is compact and names the driving timetable rule", () => {
+  prov.setRule({ id: "r1" });
+  const w = prov.buildWhy({ mode: "playlist", ref: "Gym" });
+  assert.deepStrictEqual(w, { mode: "playlist", ref: "Gym", rule: "r1" });
+  // Picked by hand: the timetable gets no credit even while a rule is active.
+  assert.deepStrictEqual(prov.buildWhy({ mode: "manual", rule: null }), { mode: "manual" });
+  prov.setRule(null);
+  assert.deepStrictEqual(
+    prov.buildWhy({ mode: "search", ref: "rain", fallback: "any category", cached: true }),
+    { mode: "search", ref: "rain", fallback: "any category", cached: true },
+  );
+});
+
+check("every history entry the app writes carries a reason", () => {
+  // Five places push onto history. One missing the field would show a blank
+  // "why" for exactly the wallpapers that came through it.
+  const pushes = [...SRC.matchAll(/history\.items\.push\(\{[\s\S]*?\}\);/g)].map((m) => m[0]);
+  assert.ok(pushes.length >= 5, `found ${pushes.length} history pushes, expected 5`);
+  for (const p of pushes)
+    assert.ok(/why:/.test(p), `a history push has no reason:\n${p.slice(0, 160)}`);
 });
 
 // ---------------------------------------------------------------- tray reactions

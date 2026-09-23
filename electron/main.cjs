@@ -635,7 +635,14 @@ async function searchWithFallback() {
       const q = step.overrides.query === "" ? "" : pickQuery();
       const items = await fetchOneGroup(step.overrides, q);
       if (items.length)
-        return { items, usedFallback: step.label !== "your filters" ? step.label : null };
+        return {
+          items,
+          usedFallback: step.label !== "your filters" ? step.label : null,
+          // The query that actually ran. A comma-separated query is split into
+          // groups and one is picked at random per call, so config.query read
+          // back later does not say what produced this result.
+          query: q,
+        };
       attempts.push(`${step.label}: 0 results`);
     } catch (e) {
       // Rate limited: walking the rest of the chain just makes it worse and
@@ -1553,7 +1560,7 @@ async function doPrefetch() {
     const dest = path.join(CACHE_DIR, `${choice.id}.${ext}`);
     if (fs.existsSync(dest)) return;
     await downloadFile(choice.path, dest);
-    prefetched.push({ item: choice, file: dest });
+    prefetched.push({ item: choice, file: dest, query: res.query, usedFallback: res.usedFallback });
     while (prefetched.length > 5) prefetched.shift(); // never let candidates pile up
   } catch (e) {
     console.warn("prefetch failed", e.message);
@@ -1686,6 +1693,71 @@ async function navigateHistory(dir) {
 // Which source can we actually serve right now? Falls back to 'search' when the
 // configured source has nothing usable behind it, telling the user once.
 let lastHealReason = null;
+// ---------- Where a wallpaper came from ----------
+//
+// History used to record only id, url, file, time and resolution, so the app
+// could show you a wallpaper and had no way of saying why it was chosen. The
+// two additions below are written at the moment of choosing, which is the only
+// moment the answer is known: by the time the settings window asks, the source
+// may have rotated, the timetable may have moved on and the search box may
+// have been edited.
+//
+// Both are optional. Entries written by older versions simply lack them, and
+// every reader has to cope with that rather than assume.
+
+// Wallhaven's own small thumbnail. Worth storing because the cache prunes
+// oldest first, so a history entry more than a few hours old usually points at
+// a file that is gone, and re-downloading the full image just to draw a
+// filmstrip would be absurd.
+function wallpaperThumb(item) {
+  if (!item) return "";
+  if (item.thumb) return String(item.thumb);
+  const t = item.thumbs;
+  return (t && (t.small || t.original || t.large)) || "";
+}
+
+// The one detail that identifies the source within its mode: which search ran,
+// which playlist, which of several watched folders, which collection.
+function whyRefFor(mode, opts = {}) {
+  if (mode === "search") return opts.query == null ? config.query || "" : opts.query;
+  if (mode === "playlist") return config.activePlaylist || "";
+  if (mode === "collection") return config.collectionId || "";
+  if (mode === "folder") {
+    // Which of the watched folders this file actually came from. Knowing it is
+    // "a folder" is useless when several are watched.
+    const file = String(opts.file || "");
+    const key = samePathKey(file);
+    // Longest root first, so a nested watched folder wins over its parent. The
+    // separator check matters: without it C:\\Wallpapers would claim a file in
+    // C:\\Wallpapers2.
+    const roots = (config.folderPaths || [])
+      .slice()
+      .sort((a, b) => String(b).length - String(a).length);
+    for (const root of roots) {
+      if (!root) continue;
+      const rk = samePathKey(root);
+      if (key === rk || key.startsWith(rk + "/")) return root;
+    }
+    return roots[0] || "";
+  }
+  return "";
+}
+
+// Compact on purpose: this is written up to 200 times into history.json, so
+// empty fields are left out rather than stored as blanks.
+function buildWhy(parts = {}) {
+  const why = { mode: parts.mode || "search" };
+  if (parts.ref) why.ref = String(parts.ref).slice(0, 120);
+  if (parts.fallback) why.fallback = String(parts.fallback);
+  if (parts.cached) why.cached = true;
+  // The rule id rather than a description: the settings window already knows
+  // how to describe a rule, and storing the text would leave 200 stale copies
+  // behind the first time one is edited.
+  const rule = parts.rule === undefined ? activeScheduleRule() : parts.rule;
+  if (rule && rule.id) why.rule = rule.id;
+  return why;
+}
+
 function resolveSourceMode() {
   const want = config.sourceMode || "search";
   let reason = null;
@@ -1782,7 +1854,14 @@ async function fetchAndSetWallpaper(manual = false) {
       if (cachedFile) {
         await applyWallpaper(cachedFile, null);
         const id = path.basename(cachedFile, path.extname(cachedFile));
-        history.items.push({ id, url: "", file: cachedFile, ts: Date.now(), resolution: "" });
+        history.items.push({
+          id,
+          url: "",
+          file: cachedFile,
+          ts: Date.now(),
+          resolution: "",
+          why: buildWhy({ mode: "cache", cached: true }),
+        });
         history.currentId = id;
         if (history.items.length > 200) history.items = history.items.slice(-200);
         navPos = history.items.length - 1;
@@ -1798,6 +1877,7 @@ async function fetchAndSetWallpaper(manual = false) {
     }
     let items,
       usedFallback = null,
+      usedQuery = null,
       playlistChoice = null;
     if (mode === "playlist") {
       // Sequential playback of a local playlist. Skip missing files.
@@ -1862,6 +1942,7 @@ async function fetchAndSetWallpaper(manual = false) {
         const res = await searchWithFallback();
         items = res.items;
         usedFallback = res.usedFallback;
+        usedQuery = res.query;
         sourceLabel = "search";
       }
     } else {
@@ -1869,10 +1950,16 @@ async function fetchAndSetWallpaper(manual = false) {
       const pre = takePrefetched();
       if (pre) {
         items = [pre.item];
+        // The prefetcher ran its own search, so its query is the honest answer
+        // here. config.query may have been edited since, and a multi-group
+        // query picks a different group every call.
+        usedQuery = pre.query;
+        usedFallback = pre.usedFallback || null;
       } else {
         const res = await searchWithFallback();
         items = res.items;
         usedFallback = res.usedFallback;
+        usedQuery = res.query;
       }
     }
     let choice, dest;
@@ -1914,6 +2001,13 @@ async function fetchAndSetWallpaper(manual = false) {
       file: dest,
       ts: Date.now(),
       resolution: choice.resolution,
+      thumb: wallpaperThumb(choice),
+      why: buildWhy({
+        mode: sourceLabel,
+        ref: whyRefFor(sourceLabel, { query: usedQuery, file: dest }),
+        fallback: usedFallback,
+        cached: servedFromCache,
+      }),
     });
     history.currentId = choice.id;
     if (history.items.length > 200) history.items = history.items.slice(-200);
@@ -3542,6 +3636,9 @@ ipcMain.handle("wp:setFromRemote", async (_e, w) => {
     file: dest,
     ts: Date.now(),
     resolution: w.resolution,
+    thumb: wallpaperThumb(w),
+    // Picked by hand, so no timetable rule gets the credit.
+    why: buildWhy({ mode: "manual", rule: null }),
   });
   history.currentId = w.id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
@@ -3647,7 +3744,19 @@ ipcMain.handle("history:setFromFile", async (_e, { file, id, url, resolution }) 
   if (!target)
     throw new Error("That wallpaper is no longer cached and could not be downloaded again");
   await applyWallpaper(target, null);
-  history.items.push({ id, url, file: target, ts: Date.now(), resolution });
+  // Re-showing something keeps the reason it was chosen the first time, if we
+  // still have it. Saying "you picked this by hand" about a wallpaper your
+  // timetable found last Tuesday would be a lie.
+  const previous = history.items.filter((it) => it && String(it.id) === String(id)).pop();
+  history.items.push({
+    id,
+    url,
+    file: target,
+    ts: Date.now(),
+    resolution,
+    thumb: (previous && previous.thumb) || "",
+    why: (previous && previous.why) || buildWhy({ mode: "manual", rule: null }),
+  });
   history.currentId = id;
   if (history.items.length > 200) history.items = history.items.slice(-200);
   navPos = history.items.length - 1;
@@ -4183,6 +4292,8 @@ async function pickRandomFavorite() {
       file: pick.file,
       ts: Date.now(),
       resolution: pick.resolution,
+      thumb: wallpaperThumb(pick),
+      why: buildWhy({ mode: "playlist", ref: "Liked", cached: true, rule: null }),
     });
     history.currentId = pick.id;
     if (history.items.length > 200) history.items = history.items.slice(-200);
