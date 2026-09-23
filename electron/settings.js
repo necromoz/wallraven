@@ -1085,22 +1085,11 @@ function wireAllCards() {
       renderPlaylistUI();
       flash("Likes cleared", "ok");
     });
-  $("#btn-like") &&
-    ($("#btn-like").onclick = async () => {
-      const r = await api.like();
-      flash(r.ok ? "Added to Liked playlist" : r.reason, r.ok ? "ok" : "err");
-      if (r.ok && r.id != null) {
-        likedIds.add(String(r.id));
-        renderHistory();
-      }
-      config = await api.getConfig();
-      renderPlaylistUI();
-    });
-  $("#btn-dislike") &&
-    ($("#btn-dislike").onclick = async () => {
-      const r = await api.dislike();
-      flash(r.ok ? "Skipping — never showing again" : r.reason, r.ok ? "ok" : "err");
-    });
+  // Same handlers as the title bar, so the two pairs of thumbs can never
+  // disagree. These had the same fault the header did: a click that cleared a
+  // like still marked the wallpaper as liked.
+  $("#btn-like") && ($("#btn-like").onclick = reactLikeCurrent);
+  $("#btn-dislike") && ($("#btn-dislike").onclick = reactDislikeCurrent);
   $("#pauseOnFullscreen")?.addEventListener("change", syncFullscreenRows);
   $("#pauseFullscreenMode")?.addEventListener("change", syncFullscreenRows);
   // Pick from what is actually running. The old button probed the foreground
@@ -3009,6 +2998,7 @@ async function refreshInfo() {
     }
   }
   renderHeaderThumb();
+  renderWhy();
   renderHistory();
   const sub = document.querySelector('[data-id="history"] [data-role="sub"]');
   if (sub) sub.textContent = historyItems.length ? `- ${historyItems.length}` : "";
@@ -3041,6 +3031,82 @@ function renderHeaderThumb() {
   el.classList.add("has-image");
 }
 
+// Why the wallpaper on screen was chosen, as a chain from cause to effect:
+// the timetable entry that was driving, the preset it switched to, and the
+// source that actually produced the image. Answering that used to mean
+// visiting the timetable, the presets and the search in turn, and even then
+// you were guessing, because they may all have moved on since.
+//
+// Everything here comes from the reason main recorded at the moment of
+// choosing. Nothing is inferred from the settings as they are now.
+function describeWhy(wp, cfg) {
+  const why = wp && wp.why;
+  if (!why) return null;
+  const e = escapeHtml;
+  const quoted = (v) => `\u201c${e(v)}\u201d`;
+  const chain = [];
+  if (why.rule) {
+    const rule = ((cfg && cfg.schedule && cfg.schedule.rules) || []).find(
+      (r) => r && r.id === why.rule,
+    );
+    chain.push(
+      rule
+        ? `Timetable, from <strong>${e(rule.startHHMM || "??:??")}</strong> ${e(describeDays(rule.days))}`
+        : "Timetable (that entry has since been removed)",
+    );
+  }
+  if (why.preset) chain.push(`Preset <strong>${e(why.preset)}</strong>`);
+  switch (why.mode) {
+    case "search":
+      chain.push(why.ref ? `Search ${quoted(why.ref)}` : "Search, with no keywords");
+      break;
+    case "playlist":
+      chain.push(why.ref ? `Playlist ${quoted(why.ref)}` : "A playlist");
+      break;
+    case "folder":
+      chain.push(why.ref ? `Folder <span class="why-path">${e(why.ref)}</span>` : "Your folders");
+      break;
+    case "collection":
+      chain.push("Your Wallhaven collection");
+      break;
+    case "cache":
+      chain.push("Offline, so picked from wallpapers already downloaded");
+      break;
+    case "manual":
+      chain.push("Picked by you");
+      break;
+    default:
+      chain.push(e(why.mode || "Unknown source"));
+  }
+  const notes = [];
+  if (why.fallback) {
+    notes.push(`Nothing matched your filters exactly, so it searched ${e(why.fallback)}.`);
+  }
+  return { chain, notes };
+}
+
+function renderWhy() {
+  const el = document.getElementById("why");
+  if (!el) return;
+  if (!currentWp) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  const d = describeWhy(currentWp, config);
+  if (!d) {
+    el.innerHTML =
+      '<span class="why-label">Why this one</span>' +
+      '<span class="why-muted">Chosen before WallRaven started recording why.</span>';
+    return;
+  }
+  el.innerHTML =
+    '<span class="why-label">Why this one</span>' +
+    d.chain.join('<span class="why-sep">\u203a</span>') +
+    d.notes.map((n) => `<span class="why-note">${n}</span>`).join("");
+}
+
 // The two thumbs in the title bar show whether the wallpaper on screen is
 // already liked or disliked, the same way the Paused button shows its state.
 // Without this the only way to find out was to scroll the Library and look,
@@ -3048,8 +3114,11 @@ function renderHeaderThumb() {
 function renderHeaderReactions() {
   const like = document.getElementById("hdr-like");
   const dislike = document.getElementById("hdr-dislike");
-  if (!like && !dislike) return;
   const state = currentWp && currentWp.id ? wallpaperState(currentWp.id) : "neutral";
+  // The Now playing card has its own pair; light them the same way.
+  document.getElementById("btn-like")?.classList.toggle("on", state === "liked");
+  document.getElementById("btn-dislike")?.classList.toggle("on", state === "disliked");
+  if (!like && !dislike) return;
   const has = !!(currentWp && currentWp.id);
   if (like) {
     like.classList.toggle("on", state === "liked");
@@ -3076,6 +3145,7 @@ function refreshInfoFrom(info) {
   currentWp = info.current || null;
   const has = !!currentWp;
   renderHeaderThumb();
+  renderWhy();
   const bo = $("#btn-open"),
     bf = $("#btn-folder"),
     bb = $("#btn-back"),
@@ -4580,15 +4650,15 @@ document.getElementById("hdr-thumb")?.addEventListener("click", () => goPage("ho
 // added the id to likedIds unconditionally, even when the click had just
 // cleared the like, which left the button lit for a wallpaper that was no
 // longer liked.
-document.getElementById("hdr-like")?.addEventListener("click", async () => {
+async function reactLikeCurrent() {
   if (!currentWp || !currentWp.id) return flash("No wallpaper yet", "err");
   try {
     await changeWallpaperReaction(currentWp, "liked");
   } catch (e) {
     flash(e.message || "Could not update wallpaper", "err");
   }
-});
-document.getElementById("hdr-dislike")?.addEventListener("click", async () => {
+}
+async function reactDislikeCurrent() {
   if (!currentWp || !currentWp.id) return flash("No wallpaper yet", "err");
   // Clearing a dislike must not skip: there is nothing to move away from. Only
   // a fresh dislike picks a replacement, which is what the tooltip promises.
@@ -4607,7 +4677,9 @@ document.getElementById("hdr-dislike")?.addEventListener("click", async () => {
     config = await api.getConfig();
     renderHeaderReactions();
   }
-});
+}
+document.getElementById("hdr-like")?.addEventListener("click", reactLikeCurrent);
+document.getElementById("hdr-dislike")?.addEventListener("click", reactDislikeCurrent);
 document.getElementById("hdr-prev")?.addEventListener("click", async () => {
   const info = await api.wpBack();
   await loadHistory();

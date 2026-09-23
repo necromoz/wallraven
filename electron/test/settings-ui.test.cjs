@@ -222,24 +222,62 @@ check("the title bar thumbs show whether the current wallpaper is liked", () => 
   );
 });
 
-check("the title bar thumbs toggle through the same path as the Library", () => {
-  // The old handler called api.like() then added the id to likedIds whatever
-  // happened, so clearing a like left the button lit.
-  const at = JS.indexOf('getElementById("hdr-like")?.addEventListener');
-  assert.ok(at !== -1, "the Like thumb is not wired up");
-  const handler = JS.slice(at, at + 400);
+check("every pair of thumbs toggles through the same path as the Library", () => {
+  // The old handlers called api.like() then added the id to likedIds whatever
+  // happened, so clearing a like left the button lit. The title bar and the
+  // Now playing card had separate copies of that fault.
+  const like = extractFrom(JS, "reactLikeCurrent");
   assert.ok(
-    /changeWallpaperReaction\(currentWp, "liked"\)/.test(handler),
+    /changeWallpaperReaction\(currentWp, "liked"\)/.test(like),
     "Like does not go through changeWallpaperReaction",
   );
-  assert.ok(!/likedIds\.add/.test(handler), "Like still writes likedIds behind the shared helper");
-  const dAt = JS.indexOf('getElementById("hdr-dislike")?.addEventListener');
-  const dHandler = JS.slice(dAt, dAt + 900);
+  assert.ok(!/likedIds\.add/.test(like), "Like still writes likedIds behind the shared helper");
+  const dislike = extractFrom(JS, "reactDislikeCurrent");
   assert.ok(
-    /wallpaperState\(currentWp\.id\) === "disliked"/.test(dHandler),
+    /wallpaperState\(currentWp\.id\) === "disliked"/.test(dislike),
     "clearing a dislike is not distinguished from making one",
   );
-  assert.ok(/api\.dislike\(\)/.test(dHandler), "a fresh dislike must still skip to a replacement");
+  assert.ok(/api\.dislike\(\)/.test(dislike), "a fresh dislike must still skip to a replacement");
+  for (const [id, fn] of [
+    ["hdr-like", "reactLikeCurrent"],
+    ["hdr-dislike", "reactDislikeCurrent"],
+  ]) {
+    assert.ok(
+      hasCode(JS, `getElementById("${id}")?.addEventListener("click", ${fn})`),
+      `${id} is not wired to ${fn}`,
+    );
+  }
+  assert.ok(
+    hasCode(JS, '($("#btn-like").onclick = reactLikeCurrent)'),
+    "card Like has its own handler",
+  );
+  assert.ok(
+    hasCode(JS, '($("#btn-dislike").onclick = reactDislikeCurrent)'),
+    "card Dislike has its own handler",
+  );
+});
+
+check("Now playing says why this wallpaper was chosen", () => {
+  assert.ok(/<div class="why" id="why" hidden><\/div>/.test(HTML), "no Why line in the card");
+  const describe = extractFrom(JS, "describeWhy");
+  // It must read the reason recorded at the time, never today's settings.
+  assert.ok(/wp && wp\.why/.test(describe), "describeWhy does not read the recorded reason");
+  assert.ok(
+    !/config\.query|cfg\.query/.test(describe),
+    "describeWhy guesses from the live search box",
+  );
+  for (const mode of ["search", "playlist", "folder", "collection", "cache", "manual"]) {
+    assert.ok(describe.includes(`case "${mode}"`), `no wording for the ${mode} source`);
+  }
+  assert.ok(/since been removed/.test(describe), "a deleted timetable entry is not handled");
+  const render = extractFrom(JS, "renderWhy");
+  assert.ok(
+    /before WallRaven started recording why/.test(render),
+    "old history shows nothing at all",
+  );
+  // Both redraws, or the line goes stale after Back and Forward.
+  const calls = JS.split("renderHeaderThumb();\n  renderWhy();").length - 1;
+  assert.strictEqual(calls, 2, "renderWhy is not called beside both header redraws");
 });
 
 console.log();
