@@ -1,65 +1,30 @@
 # Wallraven changelog
 
-## v1.3.0-beta.6 — 24 Sep 2026
+## v1.3.0 — 24 Sep 2026
 
 ### New
 
-- **The full size view has its own controls.** Arrow keys or the buttons at the sides move through your wallpapers, and Set as wallpaper works from inside it.
+- **Browse your wallpapers.** Now playing is a carousel: the wallpaper on your desktop in the middle, your last 25 to the left and what comes next to the right. Drag it, use the slider or the arrow keys, or click a picture to bring it to the middle. Nothing on your desktop changes until you press Set as wallpaper. Double-click the middle one to see it full size, and move through them from there too.
+- **Why this one.** Now playing says how the wallpaper was chosen: the timetable entry in charge, the preset it switched to, and the search, playlist, folder or collection it came from.
+- **The thumbs show where you stand.** Like and dislike light up when the wallpaper on screen is already liked or disliked, in the tray too, and pressing a lit one undoes it.
 - **Undo a dislike.** Dislike & skip leaves a notice with Undo, which brings the wallpaper back.
+- **Clear likes**, next to Clear dislikes. It asks first, because a Liked collection is something you built on purpose.
 
 ### Changed
 
 - **Save tells you when there is something to save.** It says Saved when there is nothing pending and Save changes when there is. Theme and colour still save the moment you pick them.
 - **Pause says Pause.** The button names what it will do, and lights up while paused.
-- **Less repetition.** The Now playing card no longer repeats the title bar's buttons, and Home no longer repeats the sidebar.
-- **The wheel scrolls the page again** when the pointer happens to be over the carousel. Click the carousel first, or scroll sideways, to move it with the wheel.
+- **Less repetition.** Now playing no longer repeats the title bar's buttons, and Home no longer repeats the sidebar.
 - **Easier to read** in the Nord, Glass and Raven themes.
 - A lit dislike is a different colour from a lit like, and the window is called WallRaven.
 
-## v1.3.0-beta.5 — 24 Sep 2026
-
 ### Fixed
 
-- **The full size view closes.** Esc, clicking anywhere, or the new close button.
-- **The carousel slides smoothly.** A picture moving into the middle no longer passes behind the one it is replacing.
-
-## v1.3.0-beta.4 — 24 Sep 2026
-
-### New
-
-- **Browse before you choose.** Scroll over the carousel, drag it, use the arrow keys or the slider underneath to look through your wallpapers without changing your desktop. Press Set as wallpaper to use the one in the middle, or Back to current to return. Double-click the middle one to see it full size.
-- **Further back.** The carousel now holds your last 25 wallpapers.
-
-## v1.3.0-beta.3 — 24 Sep 2026
-
-### Fixed
-
-- **Next shows up.** The carousel could sit on "The next one is being found" until the wallpaper changed. The app now always has the next one ready within a few seconds, including straight after starting up, saving a change or a timetable switch.
-
-## v1.3.0-beta.2 — 24 Sep 2026
-
-### New
-
-- **Now playing is a carousel.** The wallpaper on screen sits in the middle, the ones before it angle away to the left and what comes next to the right. Click an earlier one to go straight back to it, or the next one to show it now. The right-hand side only shows what is genuinely next: in modes that pick at random when it is time, it says so instead of guessing.
-
-### Fixed
-
-- **A timetable switch starts with the new search.** The first wallpaper after a timetable entry took over could still come from the previous search.
-
-## v1.3.0-beta.1 — 24 Sep 2026
-
-### New
-
-- **Why this one.** Now playing says how the wallpaper on screen was chosen: the timetable entry that was in charge, the preset it switched to, and the search, playlist, folder or collection it came from. If nothing matched your filters and the app had to loosen them, it says which one it dropped.
-- **The thumbs show where you stand.** The like and dislike buttons in the title bar and in Now playing light up when the wallpaper on screen is already liked or disliked, and pressing a lit one undoes it.
-- **Clear likes**, next to Clear dislikes. It asks first, because a Liked collection is something you built on purpose.
-
-### Fixed
-
-- **Like and dislike can be undone from the tray.** Both went grey the moment you pressed them, so a mistake meant opening the settings window. The tray now uses the same thumbs as everywhere else.
 - **A preset switched on by the timetable matches your screen.** "Match my screen" was ignored on that route, so it searched every resolution and aspect ratio.
+- **A timetable switch starts with the new search.** The first wallpaper after a timetable entry took over could still come from the previous one.
 - **The app only names a preset while it is really in use.** It used to go on naming the last preset you loaded after you had changed its settings.
 - **Clearing likes or dislikes clears them properly.** The Library kept showing entries that nothing else remembered.
+- **The next wallpaper is ready sooner** after starting up, saving a change or a timetable switch.
 
 ## v1.2.1 — 18 Sep 2026
 
