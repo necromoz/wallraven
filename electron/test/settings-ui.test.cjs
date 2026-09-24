@@ -282,14 +282,10 @@ check("Now playing says why this wallpaper was chosen", () => {
 
 check("Now playing is a carousel around the wallpaper on screen", () => {
   assert.ok(/id="coverflow"/.test(HTML), "no carousel stage in the card");
-  assert.ok(
-    /id="cf-back"/.test(HTML) && /id="cf-fwd"/.test(HTML),
-    "missing a side of the carousel",
-  );
-  // #thumb stays inside the stage: every existing redraw writes to it.
-  const stage = HTML.slice(HTML.indexOf('id="coverflow"'), HTML.indexOf('id="cf-fwd"'));
-  assert.ok(/id="thumb"/.test(stage), "the centre image is not in the stage");
-  // Redrawn beside both header redraws, or it goes stale after Back/Forward.
+  // #thumb is the desktop's own card, inside the track: every existing redraw
+  // writes to it, and it slides like the others while browsing.
+  const track = HTML.slice(HTML.indexOf('id="cf-track"'), HTML.indexOf('id="cf-note"'));
+  assert.ok(/id="thumb"/.test(track), "the desktop's picture is not in the track");
   const calls = JS.split("renderWhy();\n  renderCarousel();").length - 1;
   assert.strictEqual(calls, 2, "renderCarousel is not called beside both redraws");
   assert.ok(
@@ -301,37 +297,87 @@ check("Now playing is a carousel around the wallpaper on screen", () => {
 check("the carousel cannot be painted by a stale answer", () => {
   const r = extractFrom(JS, "renderCarousel");
   assert.ok(/seq !== carouselSeq/.test(r), "an older reply can overwrite a newer one");
-  // Anything not shaped like the expected data must draw nothing, not throw.
-  const d = extractFrom(JS, "drawCarousel");
+  const b = extractFrom(JS, "buildStrip");
   assert.ok(
-    /Array\.isArray\(raw\.back\)/.test(d) && /Array\.isArray\(raw\.forward\)/.test(d),
+    /Array\.isArray\(raw\.back\)/.test(b) && /Array\.isArray\(raw\.forward\)/.test(b),
     "unguarded data shape",
   );
 });
 
-check("the carousel's cards are actually angled", () => {
-  // perspective only reaches direct children. It was first put on the stage,
-  // whose grandchildren are the cards, and every card drew flat.
-  const side = CSS.slice(CSS.indexOf(".cf-side {"), CSS.indexOf("}", CSS.indexOf(".cf-side {")));
+check("the carousel's cards are actually angled, and cannot escape the card", () => {
+  // perspective only reaches direct children. Put on the wrong element once,
+  // and every card drew flat.
+  const at = CSS.indexOf(".cf-track {");
+  const track = CSS.slice(at, CSS.indexOf("}", at));
+  assert.ok(/perspective:\s*\d+px/.test(track), "the track has no perspective, so cards draw flat");
+  const s0 = CSS.indexOf(".coverflow {");
   assert.ok(
-    /perspective:\s*\d+px/.test(side),
-    "the side containers have no perspective, so cards draw flat",
+    /isolation:\s*isolate/.test(CSS.slice(s0, CSS.indexOf("}", s0))),
+    "the stage is not isolated",
   );
-  // Its own stacking context, so angled cards cannot escape above the header
-  // or under a theme backdrop, the way #intro-panel did in beta.2.
-  const stageCss = CSS.slice(
-    CSS.indexOf(".coverflow {"),
-    CSS.indexOf("}", CSS.indexOf(".coverflow {")),
-  );
-  assert.ok(/isolation:\s*isolate/.test(stageCss), "the stage is not isolated");
+  assert.ok(/class="cf-item cf-card"|cf-item cf-card/.test(JS), "cards are not cf-items");
 });
 
-check("only the first card ahead can be clicked, because only it is certain", () => {
+check("browsing never changes the desktop; only Set as wallpaper does", () => {
+  // Every input funnels into cfMove, which must not reach the main process.
+  const move = extractFrom(JS, "cfMove");
+  assert.ok(!/api\./.test(move), "moving the focus calls into the main process");
+  const wiring = JS.slice(
+    JS.indexOf("(function wireCarouselInput()"),
+    JS.indexOf("api.onCarouselChanged?.("),
+  );
+  for (const bad of ["api.next(", "api.historyGoto(", "api.historySetFromFile("]) {
+    assert.ok(!wiring.includes(bad), `input handling calls ${bad} directly`);
+  }
+  for (const input of [
+    '"wheel"',
+    '"keydown"',
+    '"pointerdown"',
+    '"pointermove"',
+    '"pointerup"',
+    'e.target.id === "cf-scroll"',
+  ]) {
+    assert.ok(wiring.includes(input), `no ${input} handling`);
+  }
+  // A drag is told apart from a click by distance, not by timing.
+  assert.ok(
+    /Math\.abs\(dx\) > 6/.test(wiring),
+    "no drag threshold, so every click risks being a drag",
+  );
+  const set = extractFrom(JS, "cfSetFocused");
+  assert.ok(
+    /api\.historyGoto\(c\.index\)/.test(set),
+    "an earlier wallpaper is not set through history",
+  );
+  assert.ok(/api\.next\(\)/.test(set), "the next one is not taken off the queue the normal way");
+  assert.ok(/api\.historySetFromFile\(/.test(set), "a later playlist item cannot be set");
+  assert.ok(
+    /id="cf-set"/.test(HTML) && /id="cf-home"/.test(HTML) && /id="cf-view"/.test(HTML),
+    "missing a bar button",
+  );
+});
+
+check("only the cards on screen hold an image", () => {
+  // 25 decoded wallpapers for a strip of thumbnails would be hundreds of MB.
   const d = extractFrom(JS, "drawCarousel");
-  assert.ok(/cf-later/.test(d), "later upcoming cards are not marked unclickable");
-  assert.ok(/api\.next\(\)/.test(d), "the next card does not show it now");
-  assert.ok(/api\.historyGoto\(c\.index\)/.test(d), "history cards do not jump to their entry");
-  assert.ok(/cf-dead/.test(d), "unrecoverable history is not marked");
+  assert.ok(
+    /ad <= CF_VISIBLE \? cfImageFor\(c, d === 0\) : ""/.test(d),
+    "off-stage cards keep their images",
+  );
+  // Side cards prefer Wallhaven's small thumbnail over the full file.
+  const img = extractFrom(JS, "cfImageFor");
+  assert.ok(
+    img.indexOf("if (c.thumb") < img.lastIndexOf("if (c.file)"),
+    "side cards load the full file first",
+  );
+});
+
+check("the Why line follows the picture being looked at", () => {
+  const w = extractFrom(JS, "renderWhy");
+  assert.ok(
+    /cfFocusedItem\(\)/.test(w),
+    "Why keeps describing the desktop's picture while browsing",
+  );
 });
 
 console.log();

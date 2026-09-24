@@ -912,6 +912,7 @@ const cf = new Function(`
   function localFolderFiles() { return folderFiles; }
   function activeScheduleRule() { return null; }
   ${extractConst("CAROUSEL_SIDE")}
+  ${extractConst("CAROUSEL_BACK")}
   ${extract("historyRestorable")}
   ${extract("samePathKey")}
   ${extract("wallpaperThumb")}
@@ -937,7 +938,7 @@ const cf = new Function(`
 const hist = (n) =>
   Array.from({ length: n }, (_, i) => ({ id: `h${i}abc`, file: `C:/c/h${i}.jpg`, thumb: `t${i}` }));
 
-check("behind is history, nearest first, three at most", () => {
+check("behind is history, nearest first, enough to scroll through", () => {
   cf.set({
     config: { sourceMode: "search" },
     items: hist(6),
@@ -946,15 +947,19 @@ check("behind is history, nearest first, three at most", () => {
     present: [],
     offline: false,
   });
-  const { back } = cf.carouselInfo();
+  let { back } = cf.carouselInfo();
   assert.deepStrictEqual(
     back.map((c) => c.id),
-    ["h4abc", "h3abc", "h2abc"],
+    ["h4abc", "h3abc", "h2abc", "h1abc", "h0abc"],
   );
   assert.deepStrictEqual(
     back.map((c) => c.index),
-    [4, 3, 2],
+    [4, 3, 2, 1, 0],
   );
+  cf.set({ items: hist(60) });
+  back = cf.carouselInfo().back;
+  assert.strictEqual(back.length, 25, "capped, so a 200-entry history is not sent every redraw");
+  assert.strictEqual(back[0].index, 58);
 });
 
 check("ahead in search mode is the prefetch queue, in the order it will be used", () => {

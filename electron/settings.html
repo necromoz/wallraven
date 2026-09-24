@@ -98,10 +98,38 @@
     <!-- ============================ Card templates ============================ -->
     <template id="tpl-current">
       <div class="preview">
-        <div class="coverflow" id="coverflow">
-          <div class="cf-side" id="cf-back" aria-label="Earlier wallpapers"></div>
-          <div class="thumb" id="thumb"></div>
-          <div class="cf-side" id="cf-fwd" aria-label="Coming up"></div>
+        <div
+          class="coverflow"
+          id="coverflow"
+          tabindex="0"
+          aria-label="Wallpapers. Scroll, drag or use the arrow keys to browse."
+        >
+          <div class="cf-track" id="cf-track">
+            <div class="thumb cf-item" id="thumb">
+              <span class="cf-tag cf-tag-now">Now</span>
+            </div>
+          </div>
+          <div class="cf-note" id="cf-note" hidden></div>
+        </div>
+        <div class="cf-scroll" id="cf-scrollwrap" hidden>
+          <input
+            type="range"
+            id="cf-scroll"
+            min="0"
+            max="0"
+            step="1"
+            value="0"
+            aria-label="Browse wallpapers"
+          />
+          <span class="cf-here" id="cf-here" title="Your current wallpaper"></span>
+        </div>
+        <div class="cf-bar" id="cf-bar" hidden>
+          <span class="cf-bar-text" id="cf-bar-text"></span>
+          <span class="cf-bar-actions">
+            <button class="btn secondary" id="cf-view">View full size</button>
+            <button class="btn secondary" id="cf-home" hidden>Back to current</button>
+            <button class="btn" id="cf-set" hidden>Set as wallpaper</button>
+          </span>
         </div>
         <div class="meta" id="meta">
           No wallpaper yet - press <strong>►</strong> in the top bar.

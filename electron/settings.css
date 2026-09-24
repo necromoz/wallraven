@@ -1878,85 +1878,83 @@ html[data-mascot="raven-fire"] #view-bar {
   margin-top: 2px;
 }
 
-/* Now playing as a carousel: the wallpaper on screen in the middle, earlier
-   ones to the left and what comes next to the right, angled away like the old
-   iTunes Cover Flow. Positions are set from JS because they depend on the
-   stage's height; everything else lives here. The stage is its own stacking
-   context so the angled cards can never escape above the header or under a
-   theme's backdrop, which is how beta.2 went wrong. */
+/* Now playing as a carousel. Every picture, the one on the desktop included,
+   is a .cf-item positioned from JS by its distance from the one in focus, so
+   browsing only moves transforms and the CSS transition does the sliding.
+   The stage is its own stacking context so angled cards can never escape
+   above the header or under a theme backdrop, which is how beta.2 broke. */
 .coverflow {
   position: relative;
   isolation: isolate;
   flex: 1 1 100%;
   min-width: 0;
   height: 150px;
-  perspective: 1000px;
   margin-bottom: 26px; /* room for the reflection */
   overflow: visible;
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+  outline: none;
+}
+.coverflow.cf-dragging {
+  cursor: grabbing;
 }
 #cards.page-home > .card[data-id="current"] .coverflow {
   height: clamp(160px, 20vw, 260px);
 }
-.coverflow .thumb,
-#cards.page-home > .card[data-id="current"] .preview .coverflow .thumb {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  height: 100%;
-  width: auto;
-  max-width: none;
-  aspect-ratio: 16 / 9;
-  flex: none;
-  transform: translateX(-50%);
-  z-index: 10;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  -webkit-box-reflect: below 3px linear-gradient(transparent 62%, rgba(255, 255, 255, 0.2));
-}
-/* perspective only reaches direct children, and the cards sit inside these,
-   so each side is its own perspective container centred on the stage. */
-.cf-side {
+/* perspective only reaches direct children, so it sits on the track that
+   holds the cards, not on the stage. */
+.cf-track {
   position: absolute;
   inset: 0;
-  pointer-events: none;
   perspective: 560px;
   perspective-origin: 50% 50%;
 }
-.cf-card {
+.coverflow .cf-item,
+#cards.page-home > .card[data-id="current"] .preview .coverflow .thumb {
   position: absolute;
   left: 50%;
   top: 11%;
   height: 78%;
+  width: auto;
+  max-width: none;
+  min-width: 0;
   aspect-ratio: 16 / 9;
+  flex: none;
   border-radius: 6px;
   border: 1px solid var(--border);
   background-color: var(--panel-2);
   background-size: cover;
   background-position: center;
-  pointer-events: auto;
-  cursor: pointer;
+  filter: brightness(0.62);
   transition:
     transform 0.35s ease,
-    filter 0.2s ease;
-  filter: brightness(0.62);
+    top 0.35s ease,
+    height 0.35s ease,
+    filter 0.2s ease,
+    opacity 0.2s ease;
   -webkit-box-reflect: below 3px linear-gradient(transparent 62%, rgba(255, 255, 255, 0.14));
 }
-.cf-card:hover {
-  filter: brightness(0.95);
+.coverflow .cf-item.cf-focus,
+#cards.page-home > .card[data-id="current"] .preview .coverflow .thumb.cf-focus {
+  top: 0;
+  height: 100%;
+  filter: none;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  -webkit-box-reflect: below 3px linear-gradient(transparent 62%, rgba(255, 255, 255, 0.2));
 }
-.cf-card.cf-dead,
-.cf-card.cf-later {
-  cursor: default;
+.coverflow .cf-item:not(.cf-focus):hover {
+  filter: brightness(0.9);
 }
-.cf-card.cf-dead {
+.coverflow .cf-item.cf-far {
+  opacity: 0;
+  pointer-events: none;
+}
+.coverflow .cf-item.cf-dead {
   filter: brightness(0.35) grayscale(1);
 }
-.cf-card.cf-later:hover {
-  filter: brightness(0.62);
-}
-/* On the outer edge: the inner edge of a side card is tucked behind the
-   centre one, so a label there is hidden. */
-.cf-card .cf-tag {
+.cf-tag {
   position: absolute;
   right: 6px;
   bottom: 6px;
@@ -1965,10 +1963,19 @@ html[data-mascot="raven-fire"] #view-bar {
   text-transform: uppercase;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
+  pointer-events: none;
 }
-.cf-card .cf-empty {
+/* The desktop's own picture says so only once you have browsed away from it. */
+.cf-tag-now {
+  display: none;
+}
+.coverflow .thumb:not(.cf-focus) .cf-tag-now {
+  display: block;
+  background: var(--accent);
+}
+.cf-item .cf-empty {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1987,9 +1994,72 @@ html[data-mascot="raven-fire"] #view-bar {
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--muted);
-  pointer-events: auto;
+}
+.cf-scroll {
+  position: relative;
+  flex: 1 1 100%;
+  padding: 0 4px;
+}
+.cf-scroll input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+/* A mark on the track where the desktop's wallpaper sits, to scroll back to. */
+.cf-here {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.cf-bar {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.cf-bar-text strong {
+  color: var(--fg);
+}
+.cf-bar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 #cards.page-home > .card[data-id="current"] .preview .meta {
   flex: 1 1 100%;
   text-align: center;
+}
+/* Full size view. On the body, above everything, including the themes'
+   lifted header and shell. */
+.cf-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.9);
+  cursor: zoom-out;
+}
+.cf-viewer img {
+  max-width: 94vw;
+  max-height: 86vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.cf-viewer .cf-viewer-caption {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12.5px;
 }

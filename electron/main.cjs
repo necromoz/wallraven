@@ -1670,13 +1670,19 @@ async function restoreHistoryFile(item) {
 // Folders on random, Wallhaven collections and offline mode pick at the moment
 // of rotating, so for those the carousel says so rather than draws a guess.
 // A picture of "next" that turns out not to be next is worse than none.
+// Ahead: only ever what is genuinely known.
 const CAROUSEL_SIDE = 3;
+// Behind is certain, and browsing it is the point of the scroll bar, so it
+// holds enough to be worth scrolling. The window only loads images for the few
+// cards actually on screen, so this is cheap.
+const CAROUSEL_BACK = 25;
 
 function carouselCard(item, extra = {}) {
   if (!item) return null;
   const file = item.file && fileExistsSafe(item.file) ? item.file : "";
   return {
     id: String(item.id || ""),
+    url: item.url || "",
     file,
     thumb: wallpaperThumb(item),
     resolution: item.resolution || "",
@@ -1775,7 +1781,7 @@ function carouselInfo() {
   const items = history.items;
   const pos = navPos >= 0 && navPos < items.length ? navPos : items.length - 1;
   const back = [];
-  for (let i = pos - 1; i >= 0 && back.length < CAROUSEL_SIDE; i--) {
+  for (let i = pos - 1; i >= 0 && back.length < CAROUSEL_BACK; i--) {
     back.push(carouselCard(items[i], { index: i, kind: "history" }));
   }
   const forward = [];

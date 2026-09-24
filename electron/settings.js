@@ -3089,13 +3089,16 @@ function describeWhy(wp, cfg) {
 function renderWhy() {
   const el = document.getElementById("why");
   if (!el) return;
-  if (!currentWp) {
+  // While browsing the carousel, describe the picture in the centre, not the
+  // one on the desktop.
+  const wp = (typeof cfFocusedItem === "function" && cfFocusedItem()) || currentWp;
+  if (!wp) {
     el.hidden = true;
     el.innerHTML = "";
     return;
   }
   el.hidden = false;
-  const d = describeWhy(currentWp, config);
+  const d = describeWhy(wp, config);
   if (!d) {
     el.innerHTML =
       '<span class="why-label">Why this one</span>' +
@@ -3112,11 +3115,21 @@ function renderWhy() {
 //
 // Earlier wallpapers to the left of Now playing, what comes next to the right.
 // Main decides what is genuinely known to be next (see carouselInfo); this
-// only draws it. Where the next one is picked at the moment of rotating, main
-// sends a sentence instead of cards and that is what is shown.
-const CAROUSEL_STEPS = 3;
+// only draws it.
+//
+// Browsing is separate from setting. Scrolling, dragging, the arrow keys and
+// the slider all move one thing, cfFocus, which is only which picture sits in
+// the centre. The desktop changes when "Set as wallpaper" is pressed, and at
+// no other time. Every picture, the one on the desktop included (#thumb), is a
+// card positioned by its distance from the focus, so a move only changes
+// transforms and the CSS transition does the sliding.
+const CF_VISIBLE = 4; // cards drawn each side of the centre; the rest wait off stage
 let carouselSeq = 0;
 let carouselData = null;
+let cfStrip = []; // oldest first: earlier..., the desktop's, ahead...
+let cfCurrent = 0; // index of the wallpaper on the desktop
+let cfFocus = 0; // index shown in the centre
+let cfFocusKey = null; // what is being looked at, so a redraw does not yank it away
 
 async function renderCarousel() {
   if (!api.carousel || !document.getElementById("coverflow")) return;
@@ -3131,12 +3144,58 @@ async function renderCarousel() {
   // together); only the newest may paint.
   if (seq !== carouselSeq) return;
   carouselData = data;
+  buildStrip();
   drawCarousel();
+  renderWhy();
 }
 
-function carouselImage(c) {
-  if (c.file) return `url("file://${String(c.file).replace(/\\/g, "/")}")`;
-  if (c.thumb && /^https:\/\//.test(c.thumb)) return `url("${c.thumb.replace(/"/g, "%22")}")`;
+function cfFocusKeyOf(c) {
+  return c.kind === "current" ? "cur" : `${c.kind}:${c.id}`;
+}
+function cfElementKey(c) {
+  return c.kind === "history" ? `h${c.index}` : `u${c.id}`;
+}
+
+function buildStrip() {
+  const raw = carouselData || {};
+  const back = Array.isArray(raw.back) ? raw.back.filter(Boolean) : [];
+  const forward = Array.isArray(raw.forward) ? raw.forward.filter(Boolean) : [];
+  cfStrip = [...back.slice().reverse(), { ...(currentWp || {}), kind: "current" }, ...forward];
+  cfCurrent = back.length;
+  // Keep looking at the same picture across a redraw (a prefetch landing, or
+  // the timer rotating while you browse). If it has gone, go back to the
+  // desktop's rather than to whatever now happens to sit at the same index.
+  const keep = cfFocusKey ? cfStrip.findIndex((c) => cfFocusKeyOf(c) === cfFocusKey) : -1;
+  cfFocus = keep >= 0 ? keep : cfCurrent;
+  if (keep < 0) cfFocusKey = null;
+}
+
+function cfFileUrl(file) {
+  return `file://${String(file).replace(/\\/g, "/")}`;
+}
+// Wallhaven serves thumbnails at /small/, /lg/ and /orig/ under the same name.
+// Only the small one is stored, which is soft blown up to the centre.
+function cfLargeThumb(thumb) {
+  return String(thumb || "").replace("/small/", "/orig/");
+}
+function cfBrowsing() {
+  return cfStrip.length > 0 && cfFocus !== cfCurrent;
+}
+function cfFocusedItem() {
+  return cfBrowsing() ? cfStrip[cfFocus] : null;
+}
+function cfFirstUpcoming() {
+  return cfStrip.findIndex((c) => c && c.kind === "upcoming");
+}
+
+function cfImageFor(c, centre) {
+  if (centre) {
+    if (c.file) return cfFileUrl(c.file);
+    if (c.thumb && /^https:\/\//.test(c.thumb)) return cfLargeThumb(c.thumb);
+    return "";
+  }
+  if (c.thumb && /^https:\/\//.test(c.thumb)) return c.thumb;
+  if (c.file) return cfFileUrl(c.file);
   return "";
 }
 
@@ -3150,20 +3209,21 @@ function carouselWhyText(c) {
 
 function drawCarousel() {
   const stage = document.getElementById("coverflow");
-  const back = document.getElementById("cf-back");
-  const fwd = document.getElementById("cf-fwd");
-  if (!stage || !back || !fwd) return;
-  back.innerHTML = "";
-  fwd.innerHTML = "";
-  if (!currentWp) return;
-  const raw = carouselData || {};
-  const data = {
-    back: Array.isArray(raw.back) ? raw.back : [],
-    forward: Array.isArray(raw.forward) ? raw.forward : [],
-    note: typeof raw.note === "string" ? raw.note : "",
-  };
+  const track = document.getElementById("cf-track");
+  const thumb = document.getElementById("thumb");
+  if (!stage || !track || !thumb) return;
+  if (!currentWp) {
+    for (const el of track.querySelectorAll(".cf-card")) el.remove();
+    thumb.classList.add("cf-focus");
+    thumb.style.transform = "translateX(-50%)";
+    ["cf-scrollwrap", "cf-bar", "cf-note"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    });
+    return;
+  }
 
-  // Geometry from the stage itself, so it holds on any window size: the first
+  // Geometry from the stage itself, so it holds at any window size: the first
   // card tucks just behind the centre's edge and the rest stack outwards,
   // closer together when there is less room.
   const h = stage.clientHeight || 150;
@@ -3172,66 +3232,308 @@ function drawCarousel() {
   const cardW = (h * 0.78 * 16) / 9;
   const first = centreW / 2 + cardW * 0.12;
   const room = half - first - cardW * 0.3;
-  const step = Math.max(cardW * 0.08, Math.min(cardW * 0.3, room / (CAROUSEL_STEPS - 1)));
-  const place = (el, dir, k) => {
-    el.style.transform = `translateX(calc(-50% + ${dir * (first + k * step)}px)) translateZ(-70px) rotateY(${dir * -62}deg)`;
-    el.style.zIndex = String(9 - k);
-  };
+  const step = Math.max(cardW * 0.06, Math.min(cardW * 0.3, room / (CF_VISIBLE - 1)));
 
-  const firstUpcoming = data.forward.findIndex((c) => c && c.kind === "upcoming");
-  const make = (c, dir, k) => {
-    const el = document.createElement("div");
-    el.className = "cf-card";
-    const img = carouselImage(c);
-    if (img) el.style.backgroundImage = img;
-    else {
-      const e = document.createElement("div");
-      e.className = "cf-empty";
-      e.textContent = "No longer cached";
-      el.appendChild(e);
-    }
-    const upcoming = c.kind === "upcoming";
-    const isNext = upcoming && k === firstUpcoming;
-    if (isNext) {
-      const tag = document.createElement("span");
-      tag.className = "cf-tag";
-      tag.textContent = "Next";
-      el.appendChild(tag);
-    }
-    const why = carouselWhyText(c);
-    const name = `${c.id || "Wallpaper"}${c.resolution ? " · " + c.resolution : ""}`;
-    if (upcoming && !isNext) {
-      el.classList.add("cf-later");
-      el.title = `Coming up after that: ${name}${why ? "\n" + why : ""}`;
-    } else if (upcoming) {
-      el.title = `Next up: ${name}${why ? "\n" + why : ""}\nClick to show it now.`;
-      el.addEventListener("click", async () => {
-        await api.next();
-      });
-    } else if (!c.reachable) {
-      el.classList.add("cf-dead");
-      el.title = `${name}\nNo longer cached, and not from Wallhaven, so it cannot be shown again.`;
+  // Reuse elements by key so a move animates instead of redrawing.
+  const existing = new Map();
+  for (const el of track.querySelectorAll(".cf-card")) existing.set(el.dataset.key, el);
+  const used = new Set();
+  const firstUp = cfFirstUpcoming();
+
+  cfStrip.forEach((c, i) => {
+    let el;
+    if (c.kind === "current") {
+      el = thumb;
     } else {
-      el.title = `${dir < 0 ? "Earlier" : "Later"}: ${name}${why ? "\n" + why : ""}\nClick to go back to it.`;
-      el.addEventListener("click", async () => {
-        const info = await api.historyGoto(c.index);
-        await loadHistory();
-        refreshInfoFrom(info);
-      });
+      const key = cfElementKey(c);
+      used.add(key);
+      el = existing.get(key);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "cf-item cf-card";
+        el.dataset.key = key;
+        track.appendChild(el);
+      }
+      el.classList.toggle("cf-dead", c.kind === "history" && !c.reachable);
+      const wantTag = i === firstUp ? "Next" : "";
+      let tag = el.querySelector(".cf-tag");
+      if (wantTag && !tag) {
+        tag = document.createElement("span");
+        tag.className = "cf-tag";
+        el.appendChild(tag);
+      }
+      if (tag) {
+        if (wantTag) tag.textContent = wantTag;
+        else tag.remove();
+      }
     }
-    place(el, dir, k);
-    return el;
-  };
-  data.back.forEach((c, k) => c && back.appendChild(make(c, -1, k)));
-  data.forward.forEach((c, k) => c && fwd.appendChild(make(c, 1, k)));
-  if (!data.forward.length && data.note) {
-    const n = document.createElement("div");
-    n.className = "cf-note";
-    n.textContent = data.note;
-    n.style.left = `calc(50% + ${centreW / 2 + 18}px)`;
-    fwd.appendChild(n);
+    el.dataset.index = String(i);
+    const d = i - cfFocus;
+    const ad = Math.abs(d);
+    el.classList.toggle("cf-focus", d === 0);
+    el.classList.toggle("cf-far", ad > CF_VISIBLE);
+    if (d === 0) {
+      el.style.transform = "translateX(-50%)";
+    } else {
+      const dir = Math.sign(d);
+      const k = Math.min(ad, CF_VISIBLE + 1) - 1;
+      el.style.transform = `translateX(calc(-50% + ${dir * (first + k * step)}px)) translateZ(-70px) rotateY(${dir * -62}deg)`;
+    }
+    el.style.zIndex = String(50 - ad);
+
+    // Only the cards on screen hold an image; each decoded wallpaper is tens
+    // of megabytes, and 25 of them would be absurd for a strip of thumbnails.
+    if (el !== thumb) {
+      const img = ad <= CF_VISIBLE ? cfImageFor(c, d === 0) : "";
+      if (el.dataset.bg !== img) {
+        el.dataset.bg = img;
+        el.style.backgroundImage = img ? `url("${img.replace(/"/g, "%22")}")` : "";
+      }
+      let empty = el.querySelector(".cf-empty");
+      if (!img && ad <= CF_VISIBLE && !empty) {
+        empty = document.createElement("div");
+        empty.className = "cf-empty";
+        empty.textContent = "No longer cached";
+        el.appendChild(empty);
+      } else if (img && empty) empty.remove();
+    }
+    const name = `${c.id || "Wallpaper"}${c.resolution ? " · " + c.resolution : ""}`;
+    const why = carouselWhyText(c);
+    el.title =
+      d === 0
+        ? `${name}${why ? "\n" + why : ""}\nDouble-click to view full size.`
+        : `${name}${why ? "\n" + why : ""}`;
+  });
+  for (const [key, el] of existing) if (!used.has(key)) el.remove();
+
+  // Why nothing is ahead, when that is the honest answer. Only while looking
+  // at the desktop's own picture; it describes the space to its right.
+  const raw = carouselData || {};
+  const note = document.getElementById("cf-note");
+  if (note) {
+    const show =
+      !cfBrowsing() && cfFocus === cfStrip.length - 1 && typeof raw.note === "string" && raw.note;
+    note.hidden = !show;
+    if (show) {
+      note.textContent = raw.note;
+      note.style.left = `calc(50% + ${centreW / 2 + 18}px)`;
+    }
+  }
+
+  // The slider mirrors the focus, with a mark where the desktop's picture is.
+  const wrap = document.getElementById("cf-scrollwrap");
+  const range = document.getElementById("cf-scroll");
+  const here = document.getElementById("cf-here");
+  if (wrap && range) {
+    wrap.hidden = cfStrip.length < 2;
+    range.max = String(Math.max(0, cfStrip.length - 1));
+    range.value = String(cfFocus);
+    if (here && cfStrip.length > 1) {
+      // A range thumb is ~16px wide and its centre travels 8px in from each end.
+      const pct = cfCurrent / (cfStrip.length - 1);
+      here.style.left = `calc(4px + 8px + (100% - 24px) * ${pct})`;
+    }
+  }
+
+  // What you are looking at, and what you can do with it.
+  const bar = document.getElementById("cf-bar");
+  const text = document.getElementById("cf-bar-text");
+  const setBtn = document.getElementById("cf-set");
+  const homeBtn = document.getElementById("cf-home");
+  const meta = document.getElementById("meta");
+  const c = cfStrip[cfFocus] || {};
+  const browsing = cfBrowsing();
+  if (bar) bar.hidden = false;
+  if (meta) meta.hidden = browsing;
+  if (text) {
+    const nm = `<strong>${escapeHtml(c.id || "")}</strong>${c.resolution ? " · " + escapeHtml(c.resolution) : ""}`;
+    if (!browsing) {
+      text.innerHTML =
+        cfStrip.length > 1
+          ? "On your desktop now. Scroll, drag, or use ← → to browse."
+          : "On your desktop now.";
+    } else if (c.kind === "history") {
+      const n = cfCurrent - cfFocus;
+      text.innerHTML =
+        n > 0
+          ? `${n} ${n === 1 ? "wallpaper" : "wallpapers"} ago · ${nm}`
+          : `After this one, from going Back · ${nm}`;
+    } else {
+      text.innerHTML = `${cfFocus === cfFirstUpcoming() ? "Coming up next" : "Coming up later"} · ${nm}`;
+    }
+  }
+  if (homeBtn) homeBtn.hidden = !browsing;
+  if (setBtn) {
+    const settable = browsing && (c.kind === "upcoming" || (c.kind === "history" && c.reachable));
+    setBtn.hidden = !settable;
   }
 }
+
+function cfMove(to) {
+  if (!cfStrip.length) return;
+  const n = Math.max(0, Math.min(cfStrip.length - 1, to));
+  if (n === cfFocus) return;
+  cfFocus = n;
+  cfFocusKey = n === cfCurrent ? null : cfFocusKeyOf(cfStrip[n]);
+  drawCarousel();
+  renderWhy();
+}
+
+// The one action that changes the desktop.
+async function cfSetFocused() {
+  const c = cfStrip[cfFocus];
+  if (!c || c.kind === "current") return;
+  cfFocusKey = null; // whatever is set becomes the desktop's, and the centre follows it
+  try {
+    if (c.kind === "history") {
+      const info = await api.historyGoto(c.index);
+      await loadHistory();
+      refreshInfoFrom(info);
+    } else if (cfFocus === cfFirstUpcoming()) {
+      // Take it off the queue the normal way, so the playlist index or the
+      // prefetch queue moves on exactly as pressing forward would.
+      await api.next();
+    } else {
+      // Further ahead in a playlist or folder: set the file itself and leave
+      // the order alone.
+      await api.historySetFromFile({
+        file: c.file,
+        id: c.id,
+        url: c.url || "",
+        resolution: c.resolution || "",
+      });
+    }
+  } catch (e) {
+    flash((e && e.message) || "Could not set that wallpaper", "err");
+  }
+}
+
+function cfOpenViewer() {
+  const c = cfStrip[cfFocus];
+  if (!c) return;
+  const src = cfImageFor(c.kind === "current" ? { ...currentWp } : c, true);
+  if (!src) return;
+  let v = document.getElementById("cf-viewer");
+  if (!v) {
+    v = document.createElement("div");
+    v.id = "cf-viewer";
+    v.className = "cf-viewer";
+    v.innerHTML = '<img alt="" /><div class="cf-viewer-caption"></div>';
+    v.addEventListener("click", () => (v.hidden = true));
+    document.body.appendChild(v);
+  }
+  v.querySelector("img").src = src;
+  const small = !c.file && c.kind !== "current";
+  v.querySelector(".cf-viewer-caption").textContent =
+    `${c.id || ""}${c.resolution ? " · " + c.resolution : ""}` +
+    (small ? " · Wallhaven's preview; the full image downloads when you set it" : "") +
+    " · Click or press Esc to close";
+  v.hidden = false;
+}
+
+// Input. Everything funnels into cfMove; nothing here touches the desktop.
+(function wireCarouselInput() {
+  document.addEventListener(
+    "wheel",
+    (e) => {
+      const stage = e.target && e.target.closest && e.target.closest("#coverflow");
+      if (!stage || !cfStrip.length) return;
+      e.preventDefault();
+      stage._acc =
+        (stage._acc || 0) + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY);
+      if (Math.abs(stage._acc) >= 60) {
+        cfMove(cfFocus + Math.sign(stage._acc));
+        stage._acc = 0;
+      }
+    },
+    { passive: false },
+  );
+
+  document.addEventListener("keydown", (e) => {
+    const v = document.getElementById("cf-viewer");
+    if (e.key === "Escape" && v && !v.hidden) {
+      v.hidden = true;
+      return;
+    }
+    const stage = document.getElementById("coverflow");
+    if (!stage || !stage.offsetParent || !cfStrip.length) return; // not on screen
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    if (e.key === "ArrowLeft") cfMove(cfFocus - 1);
+    else if (e.key === "ArrowRight") cfMove(cfFocus + 1);
+    else if (e.key === "Escape" && cfBrowsing()) cfMove(cfCurrent);
+    else return;
+    e.preventDefault();
+  });
+
+  // Dragging, told apart from a click by moving more than a few pixels, so a
+  // slightly shaky click still counts as a click.
+  let drag = null;
+  let lastTap = { at: 0, i: -1 };
+  document.addEventListener("pointerdown", (e) => {
+    const stage = e.target && e.target.closest && e.target.closest("#coverflow");
+    if (!stage || e.button !== 0 || !cfStrip.length) return;
+    const h = stage.clientHeight || 150;
+    drag = {
+      stage,
+      x: e.clientX,
+      from: cfFocus,
+      moved: false,
+      px: Math.max(40, h * 0.5),
+      id: e.pointerId,
+    };
+    try {
+      stage.setPointerCapture(e.pointerId);
+    } catch {}
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) > 6) {
+      drag.moved = true;
+      drag.stage.classList.add("cf-dragging");
+    }
+    if (drag.moved) cfMove(drag.from - Math.round(dx / drag.px));
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    d.stage.classList.remove("cf-dragging");
+    try {
+      d.stage.releasePointerCapture(e.pointerId);
+    } catch {}
+    if (d.moved || e.type === "pointercancel") return;
+    // A click: bring that card to the centre. Twice on the centre: full size.
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const card = hit && hit.closest && hit.closest(".cf-item");
+    if (!card) return;
+    const i = Number(card.dataset.index);
+    if (!Number.isInteger(i)) return;
+    if (i !== cfFocus) {
+      cfMove(i);
+      lastTap = { at: 0, i: -1 };
+      return;
+    }
+    const now = Date.now();
+    if (lastTap.i === i && now - lastTap.at < 400) {
+      lastTap = { at: 0, i: -1 };
+      cfOpenViewer();
+    } else lastTap = { at: now, i };
+  };
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+
+  document.addEventListener("input", (e) => {
+    if (e.target && e.target.id === "cf-scroll") cfMove(Number(e.target.value));
+  });
+  document.addEventListener("click", (e) => {
+    const id = e.target && e.target.id;
+    if (id === "cf-set") cfSetFocused();
+    else if (id === "cf-home") cfMove(cfCurrent);
+    else if (id === "cf-view") cfOpenViewer();
+  });
+})();
 api.onCarouselChanged?.(() => renderCarousel());
 {
   let t = null;
