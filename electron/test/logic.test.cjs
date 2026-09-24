@@ -841,11 +841,50 @@ check("saving settings away from a preset clears the claim", () => {
 
 check("a timetable rule that applies a preset records which one", () => {
   const at = SRC.indexOf('rule.sourceType === "preset"');
-  const body = SRC.slice(at, at + 700);
+  const body = SRC.slice(at, at + 1200);
   assert.ok(
     /config\.activePreset = rule\.sourceRef/.test(body),
     "the timetable path never names its preset",
   );
+});
+
+const screenFix = new Function(`
+  ${extractConst("SCREEN_RATIOS")}
+  ${extract("resolveScreenPlaceholders")}
+  return resolveScreenPlaceholders;
+`)();
+
+check("a timetable preset gets your real screen, not 'any'", () => {
+  // The timetable applied presets raw, and a raw placeholder is dropped by the
+  // search builder, so the preset quietly searched every size and ratio.
+  const r = screenFix({ atleastResolution: "__current__", ratios: "__current__" }, 3440, 1440);
+  assert.strictEqual(r.atleastResolution, "3440x1440");
+  assert.strictEqual(r.ratios, "21x9");
+  assert.strictEqual(screenFix({ ratios: "__current__" }, 2560, 1600).ratios, "16x10");
+  assert.strictEqual(screenFix({ ratios: "__current__" }, 1080, 1920).ratios, "9x16");
+});
+
+check("placeholder resolution leaves real values and other fields alone", () => {
+  const r = screenFix({ ratios: "__current__,21x9,16x9", query: "rain" }, 1920, 1080);
+  // 16x9 appears twice once resolved; once is enough.
+  assert.strictEqual(r.ratios, "16x9,21x9");
+  assert.strictEqual(r.query, "rain");
+  assert.strictEqual(
+    screenFix({ atleastResolution: "2560x1440" }, 1920, 1080).atleastResolution,
+    "2560x1440",
+  );
+  // No screen known: leave it as it was rather than invent one.
+  assert.strictEqual(screenFix({ ratios: "__current__" }, 0, 0).ratios, "__current__");
+});
+
+check("the timetable remembers what a preset resolved to, so it can be credited", () => {
+  const at = SRC.indexOf('rule.sourceType === "preset"');
+  const body = SRC.slice(at, at + 1200);
+  assert.ok(
+    /resolveScreenPlaceholders\(/.test(body),
+    "the timetable still applies placeholders raw",
+  );
+  assert.ok(/config\.activePresetValues = snap/.test(body), "resolved values are not remembered");
 });
 
 check("every history entry the app writes carries a reason", () => {

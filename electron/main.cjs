@@ -2264,6 +2264,50 @@ function activeScheduleRule(now = new Date()) {
   if (!sch.enabled || !Array.isArray(sch.rules) || !sch.rules.length) return null;
   return findActiveRule(sch.rules, now);
 }
+// Presets store "match my screen" as the placeholder __current__ for both the
+// minimum resolution and the aspect ratio. Wallhaven does not understand it,
+// and the search builder drops it, so a raw placeholder means "any". Loading a
+// preset in the settings window resolved it; the timetable applied presets raw,
+// so a preset switched on by the timetable searched every resolution and ratio.
+// This is the same resolution the settings window does, kept pure so it can be
+// tested; the caller supplies the physical screen size.
+const SCREEN_RATIOS = [
+  { v: "16x9", r: 16 / 9 },
+  { v: "16x10", r: 16 / 10 },
+  { v: "21x9", r: 21 / 9 },
+  { v: "32x9", r: 32 / 9 },
+  { v: "4x3", r: 4 / 3 },
+  { v: "5x4", r: 5 / 4 },
+  { v: "9x16", r: 9 / 16 },
+  { v: "10x16", r: 10 / 16 },
+];
+function resolveScreenPlaceholders(preset, sw, sh) {
+  const out = { ...preset };
+  if (!(sw > 0 && sh > 0)) return out;
+  if (out.atleastResolution === "__current__") out.atleastResolution = `${sw}x${sh}`;
+  if (typeof out.ratios === "string" && out.ratios.includes("__current__")) {
+    const actual = sw / sh;
+    let best = SCREEN_RATIOS[0];
+    for (const c of SCREEN_RATIOS) if (Math.abs(c.r - actual) < Math.abs(best.r - actual)) best = c;
+    const parts = out.ratios
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map((v) => (v === "__current__" ? best.v : v));
+    out.ratios = [...new Set(parts)].join(",");
+  }
+  return out;
+}
+function primaryScreenPixels() {
+  try {
+    const d = screen.getPrimaryDisplay();
+    const f = d.scaleFactor || 1;
+    return [Math.round(d.size.width * f), Math.round(d.size.height * f)];
+  } catch {
+    return [0, 0];
+  }
+}
+
 function applyScheduleRule(rule) {
   if (!rule) return;
   let dirty = false;
@@ -2301,13 +2345,18 @@ function applyScheduleRule(rule) {
   if (rule.sourceType === "preset" && rule.sourceRef && config.presets?.[rule.sourceRef]) {
     // A preset must never rewrite the timetable that's driving it, or we'd get
     // rules replacing rules mid-tick.
-    const p = { ...config.presets[rule.sourceRef] };
+    const [sw, sh] = primaryScreenPixels();
+    const p = resolveScreenPlaceholders(config.presets[rule.sourceRef], sw, sh);
     delete p.schedule;
     Object.assign(config, p);
     // Recorded exactly as a preset loaded by hand is, so Now playing can say
-    // the timetable switched you to it. This path never set it before.
+    // the timetable switched you to it. This path never set it before. The
+    // resolved values are what the live settings will match, not the stored
+    // placeholders, so they are remembered the same way a hand load does.
     config.activePreset = rule.sourceRef;
-    delete config.activePresetValues;
+    const snap = {};
+    for (const k of SEARCH_AFFECTING) if (k in p) snap[k] = p[k];
+    config.activePresetValues = snap;
     dirty = true;
   }
   if (dirty) saveConfig();
