@@ -1535,36 +1535,56 @@ function bumpStats({ cached = false, fallback = false, source = null }) {
   persistConfigQuiet();
 }
 
-// Prefetch: pre-warm the next candidate so the next swap is instant. Runs the
-// same search selection, downloads to the cache, and stashes metadata. The
-// next rotation prefers a ready candidate. Best-effort, silent on failure.
-function schedulePrefetch() {
+// Prefetch: choose the next wallpaper ahead of time and have it on disk, so
+// the next swap is instant. The carousel shows this queue as "Next", so it has
+// to be kept filled, not just filled when convenient:
+//
+//   - A candidate already in the cache used to be dropped instead of queued,
+//     on the grounds that it needed no download. With a large cache and a
+//     narrow search that was most picks, so the queue sat empty and the
+//     carousel said "being found" until the next rotation, half an hour later.
+//   - It only ran after a rotation. Startup, a settings save and a timetable
+//     switch all empty or start with an empty queue and nothing refilled it.
+//   - A game in the foreground or a failed search skipped it with no retry.
+//
+// One candidate at a time, deliberately: each is a search and a download of
+// several megabytes, and the next rotation only needs one.
+const PREFETCH_DELAY_MS = 4000;
+const PREFETCH_RETRY_MS = 60000;
+
+function schedulePrefetch(delay = PREFETCH_DELAY_MS) {
   clearTimeout(prefetchTimer);
   if (!config.prefetchEnabled) return;
   if (config.sourceMode !== "search") return;
-  prefetchTimer = setTimeout(doPrefetch, 10000);
+  prefetchTimer = setTimeout(doPrefetch, delay);
 }
 async function doPrefetch() {
+  if (prefetched.some((p) => p && p.file && fs.existsSync(p.file))) return; // already have one
   try {
-    if (await shouldDeferForFullscreen()) return; // don't compete with a game
-    if (await useCachedOnly()) return; // offline — nothing to prefetch
+    if (await shouldDeferForFullscreen()) return schedulePrefetch(PREFETCH_RETRY_MS);
+    if (await useCachedOnly()) return; // offline: the rotation will not use the queue
     const res = await searchWithFallback();
+    const current = currentItem();
     const recentIds = new Set(history.items.slice(-30).map((i) => i.id));
     const disliked = new Set((config.dislikes || []).map(String));
-    const pool = (res.items || []).filter(
-      (w) => !recentIds.has(w.id) && !disliked.has(String(w.id)),
+    const items = (res.items || []).filter(
+      (w) => !disliked.has(String(w.id)) && !(current && String(current.id) === String(w.id)),
     );
-    if (!pool.length) return;
-    const choice = pool[Math.floor(Math.random() * pool.length)];
+    // The same fallback the rotation uses: prefer something not seen recently,
+    // but a narrow search that has shown everything lately still gets a next.
+    const pool = items.filter((w) => !recentIds.has(w.id));
+    const src = pool.length ? pool : items;
+    if (!src.length) return;
+    const choice = src[Math.floor(Math.random() * src.length)];
     const ext = choice.file_type && choice.file_type.includes("png") ? "png" : "jpg";
     const dest = path.join(CACHE_DIR, `${choice.id}.${ext}`);
-    if (fs.existsSync(dest)) return;
-    await downloadFile(choice.path, dest);
+    if (!fs.existsSync(dest)) await downloadFile(choice.path, dest);
     prefetched.push({ item: choice, file: dest, query: res.query, usedFallback: res.usedFallback });
-    notifySettings("carousel-changed", true);
     while (prefetched.length > 5) prefetched.shift(); // never let candidates pile up
+    notifySettings("carousel-changed", true);
   } catch (e) {
     console.warn("prefetch failed", e.message);
+    schedulePrefetch(PREFETCH_RETRY_MS);
   }
 }
 function takePrefetched() {
@@ -2530,6 +2550,7 @@ function applyScheduleRule(rule) {
     prefetched.length = 0;
     saveConfig();
     notifySettings("carousel-changed", true);
+    schedulePrefetch();
   }
 }
 function effectiveCycleMinutes() {
@@ -3377,6 +3398,7 @@ ipcMain.handle("config:set", (_e, next) => {
     prefetched.length = 0;
     lastHealReason = null;
     notifySettings("carousel-changed", true);
+    schedulePrefetch();
   }
   // Keep activePreset honest. A save that names a preset is taken at its word:
   // it is the load or the save-as itself, and save-as snapshots the form, which
@@ -5050,6 +5072,7 @@ if (!gotLock) {
     updateTrayMenu();
     scheduleCycle();
     startScheduleTicker();
+    schedulePrefetch();
     applyAutoStart();
     registerHotkeysAndReport({ announce: false });
     // Kick an update check on startup, then every 6h.

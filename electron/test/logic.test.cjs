@@ -1088,6 +1088,43 @@ check("a local picture that has been deleted cannot be clicked back to", () => {
   assert.strictEqual(byId["wh1234"], true);
 });
 
+check("the prefetch queue is kept filled, so Next does not stick on 'being found'", () => {
+  const body = extract("doPrefetch");
+  // Found in beta.2 testing: a candidate already in the cache was dropped, not
+  // queued. With a big cache and a narrow search that was most picks.
+  assert.ok(
+    !/if \(fs\.existsSync\(dest\)\) return;/.test(body),
+    "a cached candidate is dropped instead of queued",
+  );
+  assert.ok(
+    /if \(!fs\.existsSync\(dest\)\) await downloadFile/.test(body),
+    "a cached candidate should skip only the download",
+  );
+  // The rotation's own fallback, or a narrow search that has shown everything
+  // recently never gets a next.
+  assert.ok(/pool\.length \? pool : items/.test(body), "no fallback to recently shown results");
+  assert.ok(
+    /schedulePrefetch\(PREFETCH_RETRY_MS\)/.test(body),
+    "a skipped or failed prefetch is never retried",
+  );
+  // Refilled everywhere the queue starts empty, not only after a rotation.
+  const startup = SRC.slice(SRC.indexOf("app.whenReady()"), SRC.indexOf("app.whenReady()") + 1500);
+  assert.ok(/schedulePrefetch\(\)/.test(startup), "nothing fills the queue at startup");
+  const save = SRC.slice(
+    SRC.indexOf('ipcMain.handle("config:set"'),
+    SRC.indexOf('ipcMain.handle("config:set"') + 1500,
+  );
+  assert.ok(
+    /prefetched\.length = 0;[\s\S]*?schedulePrefetch\(\)/.test(save),
+    "a settings save empties the queue and never refills it",
+  );
+  const rule = extract("applyScheduleRule");
+  assert.ok(
+    /prefetched\.length = 0;[\s\S]*?schedulePrefetch\(\)/.test(rule),
+    "a timetable switch empties the queue and never refills it",
+  );
+});
+
 // ---------------------------------------------------------------- tray reactions
 
 console.log("tray reactions");
