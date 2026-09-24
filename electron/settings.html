@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>WallRaven - Settings</title>
+    <title>WallRaven</title>
     <link rel="stylesheet" href="settings.css" />
   </head>
   <body>
@@ -26,12 +26,44 @@
           title="The wallpaper on screen now. Click to open Now playing."
           aria-label="Current wallpaper"
         ></button>
-        <button class="btn secondary icon-btn" id="hdr-like" title="Like this wallpaper">👍</button>
-        <button class="btn secondary icon-btn" id="hdr-dislike" title="Dislike and skip">👎</button>
-        <button class="btn secondary icon-btn" id="hdr-prev" title="Previous wallpaper">◄</button>
-        <button class="btn secondary icon-btn" id="btn-next" title="Next wallpaper">►</button>
-        <button class="btn secondary" id="hdr-playpause" title="Pause automatic changes">
-          Playing
+        <button
+          class="btn secondary icon-btn"
+          id="hdr-like"
+          title="Like this wallpaper"
+          aria-label="Like this wallpaper"
+        >
+          👍
+        </button>
+        <button
+          class="btn secondary icon-btn"
+          id="hdr-dislike"
+          title="Dislike and skip"
+          aria-label="Dislike and skip"
+        >
+          👎
+        </button>
+        <button
+          class="btn secondary icon-btn"
+          id="hdr-prev"
+          title="Previous wallpaper"
+          aria-label="Previous wallpaper"
+        >
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg>
+        </button>
+        <button
+          class="btn secondary icon-btn"
+          id="btn-next"
+          title="Next wallpaper"
+          aria-label="Next wallpaper"
+        >
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+        </button>
+        <button
+          class="btn secondary"
+          id="hdr-playpause"
+          title="Wallpaper changes automatically. Click to pause."
+        >
+          Pause
         </button>
         <button class="btn" id="btn-save">Save</button>
         <button
@@ -79,7 +111,6 @@
           <h2></h2>
           <p></p>
         </div>
-        <div id="quick-actions"></div>
         <div id="subnav"></div>
         <div id="cards"></div>
 
@@ -132,19 +163,13 @@
           </span>
         </div>
         <div class="meta" id="meta">
-          No wallpaper yet - press <strong>►</strong> in the top bar.
+          No wallpaper yet. Press <strong>Next</strong> (the right arrow in the top bar).
         </div>
       </div>
       <div class="why" id="why" hidden></div>
       <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center">
-        <button class="btn secondary" id="btn-back" title="Previous wallpaper (Back)">◄</button>
-        <button class="btn secondary" id="btn-forward" title="Next in history (Forward)">►</button>
         <button class="btn secondary" id="btn-open">Open page</button>
         <button class="btn secondary" id="btn-folder">Show file</button>
-        <button class="btn secondary" id="btn-like" title="Add to Liked playlist">👍 Like</button>
-        <button class="btn secondary" id="btn-dislike" title="Never show again; pick next now">
-          👎 Dislike &amp; skip
-        </button>
       </div>
     </template>
 

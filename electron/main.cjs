@@ -3342,7 +3342,7 @@ function openSettings() {
   settingsWindow = new BrowserWindow({
     width: 820,
     height: 760,
-    title: "WallRaven - Settings",
+    title: "WallRaven", // the whole app lives in this window, not just settings
     icon: process.platform === "win32" ? ICO_PATH : ICON_PATH,
     autoHideMenuBar: true,
     backgroundColor: "#0f1015",
@@ -4302,6 +4302,28 @@ ipcMain.handle("wp:dislike", () => {
 // hold ids and are what the picker filters on; config.dislikedItems and the
 // Liked playlist hold the full records the Library shows. Clearing only the id
 // list left the entries on screen with nothing behind them.
+// Undo for "Dislike & skip": clear the dislike and put the wallpaper back.
+// The replacement may still be downloading. Retiring its generation makes it
+// discard its result instead of landing on top of the undo, and because a
+// retired fetch deliberately leaves isFetching alone (whoever retired it owns
+// the flag), it is cleared here, or automatic changes would stall behind it.
+ipcMain.handle("wp:undoDislike", async (_e, item) => {
+  const id = item && item.id != null ? String(item.id) : "";
+  if (!id) return { ok: false, reason: "Nothing to undo" };
+  startFetchGeneration();
+  isFetching = false;
+  setWallpaperReaction(item, "neutral");
+  let idx = -1;
+  for (let i = history.items.length - 1; i >= 0; i--) {
+    if (history.items[i] && String(history.items[i].id) === id) {
+      idx = i;
+      break;
+    }
+  }
+  if (idx === -1) return { ok: false, reason: "That wallpaper is no longer in your history" };
+  const info = await gotoHistory(idx);
+  return { ok: true, info };
+});
 ipcMain.handle("wp:clearDislikes", () => {
   config.dislikes = [];
   config.dislikedItems = [];

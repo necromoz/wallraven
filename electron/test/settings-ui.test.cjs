@@ -247,14 +247,6 @@ check("every pair of thumbs toggles through the same path as the Library", () =>
       `${id} is not wired to ${fn}`,
     );
   }
-  assert.ok(
-    hasCode(JS, '($("#btn-like").onclick = reactLikeCurrent)'),
-    "card Like has its own handler",
-  );
-  assert.ok(
-    hasCode(JS, '($("#btn-dislike").onclick = reactDislikeCurrent)'),
-    "card Dislike has its own handler",
-  );
 });
 
 check("Now playing says why this wallpaper was chosen", () => {
@@ -434,6 +426,134 @@ check("the Why line follows the picture being looked at", () => {
     /cfFocusedItem\(\)/.test(w),
     "Why keeps describing the desktop's picture while browsing",
   );
+});
+
+check("each control exists once", () => {
+  // The title bar's like, dislike and arrows were repeated on the Now playing
+  // card, and the four buttons across the top of Home repeated the sidebar.
+  // The like bug existed in two copies because of it.
+  for (const id of ["btn-like", "btn-dislike", "btn-back", "btn-forward", "quick-actions"]) {
+    assert.ok(!new RegExp(`id="${id}"`).test(HTML), `#${id} is back`);
+  }
+  assert.ok(!/HOME_ACTIONS/.test(JS), "the Home shortcut buttons are back");
+  for (const id of ["hdr-like", "hdr-dislike", "hdr-prev", "btn-next"]) {
+    assert.ok(new RegExp(`id="${id}"`).test(HTML), `the title bar lost #${id}`);
+  }
+});
+
+check("the pause button says what it will do", () => {
+  const r = extractFrom(JS, "renderPlayPause");
+  assert.ok(
+    /cyclePaused \? "Resume" : "Pause"/.test(r),
+    "the button shows the state, not the action",
+  );
+  assert.ok(!/textContent = [^;]*"(Playing|Paused)"/.test(r), "state words are back on the button");
+  assert.ok(
+    /classList\.toggle\("on", cyclePaused\)/.test(r),
+    "the paused state is no longer shown",
+  );
+});
+
+check("Save says whether there is anything to save", () => {
+  assert.ok(
+    /const SAVES_ITSELF = \["theme", "uiAccent"\]/.test(JS),
+    "self-saving settings count as unsaved",
+  );
+  // Moving between pages is not an unsaved change.
+  assert.ok(
+    /const WINDOW_STATE = \[[^\]]*"uiPage"/.test(JS),
+    "changing page marks the form unsaved",
+  );
+  assert.ok(
+    /\.\.\.WINDOW_STATE/.test(extractFrom(JS, "formSnapshot")),
+    "window state is compared as a setting",
+  );
+  const r = extractFrom(JS, "renderSaveState");
+  assert.ok(
+    /"Save changes" : "Saved"/.test(r) && /b\.disabled = !dirty/.test(r),
+    "the button does not show the state",
+  );
+  const h = extractFrom(JS, "hydrateInputs");
+  assert.ok(
+    /setTimeout\(markFormSaved, 0\)/.test(h),
+    "loading settings does not reset the baseline",
+  );
+  const at = JS.indexOf('$("#btn-save").onclick');
+  assert.ok(/markFormSaved\(\)/.test(JS.slice(at, at + 300)), "saving does not reset the baseline");
+});
+
+check("Dislike & skip can be undone", () => {
+  const f = extractFrom(JS, "flash");
+  assert.ok(/toast-action/.test(f) && /action\.run\(\)/.test(f), "toasts cannot carry an Undo");
+  const d = extractFrom(JS, "reactDislikeCurrent");
+  assert.ok(
+    /label: "Undo"/.test(d) && /api\.undoDislike\(item\)/.test(d),
+    "no Undo after a dislike",
+  );
+  // Captured before the dislike moves the desktop on, or Undo restores the wrong one.
+  assert.ok(
+    d.indexOf("const item = { ...currentWp }") < d.indexOf("await api.dislike()"),
+    "Undo would restore the wrong wallpaper",
+  );
+});
+
+check("the wheel only moves the carousel when meant to", () => {
+  const at = JS.indexOf('"wheel"');
+  const w = JS.slice(at, at + 1000);
+  assert.ok(
+    /if \(!sideways && !e\.shiftKey && document\.activeElement !== stage\) return;/.test(w),
+    "the wheel is hijacked whenever the pointer passes over",
+  );
+  assert.ok(
+    /stage\.focus\(\{ preventScroll: true \}\)/.test(JS),
+    "clicking the carousel does not give it the wheel",
+  );
+});
+
+check("keyboard focus on the carousel is visible", () => {
+  assert.ok(
+    /\.coverflow:focus-visible\s*\{[^}]*outline:\s*2px solid/.test(CSS),
+    "no visible focus ring",
+  );
+  const at = CSS.indexOf(".coverflow {");
+  assert.ok(
+    !/outline:\s*none/.test(CSS.slice(at, CSS.indexOf("}", at))),
+    "the focus outline is switched off again",
+  );
+});
+
+check("the full size view can be moved through and set from", () => {
+  const o = extractFrom(JS, "cfOpenViewer");
+  for (const cls of ["cf-viewer-prev", "cf-viewer-next", "cf-viewer-set", "cf-viewer-close"]) {
+    assert.ok(o.includes(cls), `the view has no ${cls}`);
+  }
+  // Clicking the picture or a control must not close it.
+  assert.ok(/if \(t === v \|\|/.test(o), "any click closes the view");
+  const at = JS.indexOf('document.addEventListener("keydown"');
+  const kd = JS.slice(at, at + 700);
+  assert.ok(
+    /ArrowLeft"\) cfViewerStep\(-1\)/.test(kd) && /ArrowRight"\) cfViewerStep\(1\)/.test(kd),
+    "arrows do not move through the view",
+  );
+  assert.ok(
+    /cfSetFocused\(\)/.test(extractFrom(JS, "cfViewerSet")),
+    "Set in the view does not use the one setting path",
+  );
+});
+
+check("small things: dislike colour, icons, names, window title", () => {
+  assert.ok(
+    /#hdr-dislike\.on,[\s\S]{0,80}background:\s*var\(--danger\)/.test(CSS),
+    "a lit dislike looks like a lit like",
+  );
+  assert.ok(!/>◄<|>►</.test(HTML), "text-glyph arrows are back in the title bar");
+  assert.ok(/<title>WallRaven<\/title>/.test(HTML), "the window is still called Settings");
+  for (const id of ["hdr-like", "hdr-dislike", "hdr-prev", "btn-next"]) {
+    assert.ok(
+      new RegExp(`id="${id}"[^>]*aria-label=`).test(HTML_FLAT),
+      `#${id} has no accessible name`,
+    );
+  }
 });
 
 console.log();

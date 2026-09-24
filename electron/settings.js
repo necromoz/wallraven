@@ -148,13 +148,6 @@ const CARD_META = {
   cereal: { title: "🥣", page: "settings", sec: "help" },
 };
 
-// Quick actions on Home — one click to the page that does the thing.
-const HOME_ACTIONS = [
-  { label: "🖼 Browse wallpapers", page: "browse" },
-  { label: "✨ Choose a preset", page: "presets" },
-  { label: "⏱ Change schedule", page: "schedule" },
-  { label: "📚 My library", page: "library" },
-];
 const DEFAULT_ORDER = [
   "current",
   "search",
@@ -488,20 +481,6 @@ function renderPageHead() {
       }
     }
   }
-  const qa = $("#quick-actions");
-  if (qa) {
-    qa.innerHTML = "";
-    if (uiPage === "home") {
-      for (const a of HOME_ACTIONS) {
-        const b = document.createElement("button");
-        b.className = "btn secondary";
-        b.type = "button";
-        b.textContent = a.label;
-        b.onclick = () => goPage(a.page);
-        qa.appendChild(b);
-      }
-    }
-  }
 }
 
 function applyPageVisibility() {
@@ -759,6 +738,9 @@ function hydrateInputs(c) {
   chk("#scheduleEnabled", c.schedule?.enabled);
   renderScheduleRules(c.schedule?.rules || []);
   updateScheduleStatus();
+  // Whatever the form now shows is, by definition, what is saved. Deferred so
+  // anything that renders after hydrating has settled first.
+  setTimeout(markFormSaved, 0);
 }
 
 function collect() {
@@ -909,20 +891,6 @@ function wireAllCards() {
   $("#btn-folder") &&
     ($("#btn-folder").onclick = () => {
       if (currentWp) api.showInFolder(currentWp.file);
-    });
-  $("#btn-back") &&
-    ($("#btn-back").onclick = async () => {
-      flash("Back…");
-      const info = await api.wpBack();
-      await loadHistory();
-      refreshInfoFrom(info);
-      flash("Previous wallpaper", "ok");
-    });
-  $("#btn-forward") &&
-    ($("#btn-forward").onclick = async () => {
-      const info = await api.wpForward();
-      await loadHistory();
-      refreshInfoFrom(info);
     });
   $("#btn-apikey-validate") &&
     ($("#btn-apikey-validate").onclick = async () => {
@@ -1085,11 +1053,6 @@ function wireAllCards() {
       renderPlaylistUI();
       flash("Likes cleared", "ok");
     });
-  // Same handlers as the title bar, so the two pairs of thumbs can never
-  // disagree. These had the same fault the header did: a click that cleared a
-  // like still marked the wallpaper as liked.
-  $("#btn-like") && ($("#btn-like").onclick = reactLikeCurrent);
-  $("#btn-dislike") && ($("#btn-dislike").onclick = reactDislikeCurrent);
   $("#pauseOnFullscreen")?.addEventListener("change", syncFullscreenRows);
   $("#pauseFullscreenMode")?.addEventListener("change", syncFullscreenRows);
   // Pick from what is actually running. The old button probed the foreground
@@ -2943,7 +2906,9 @@ function wireCommunity() {
 // Show a status message. All feedback goes to the single header toast
 // slot (next to Fade/Next/Save) — never inline inside cards, which caused
 // the current-wallpaper module to elongate/shrink on every update.
-function flash(msg, kind /* , ctx (ignored, kept for call-site compatibility) */) {
+// action: optional { label, run } for a button in the toast, used for Undo.
+// A toast with an action stays up longer, long enough to reach for it.
+function flash(msg, kind, action) {
   const stack = document.getElementById("toast-stack");
   if (!stack || !msg) return;
   clearTimeout(stack._fadeTimer);
@@ -2951,14 +2916,34 @@ function flash(msg, kind /* , ctx (ignored, kept for call-site compatibility) */
   const t = document.createElement("div");
   t.className = "toast " + (kind || "");
   t.textContent = msg;
+  const hasAction = action && typeof action === "object" && typeof action.run === "function";
+  if (hasAction) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "toast-action";
+    b.textContent = action.label || "Undo";
+    b.onclick = async () => {
+      b.disabled = true;
+      clearTimeout(stack._fadeTimer);
+      clearTimeout(stack._removeTimer);
+      t.remove();
+      try {
+        await action.run();
+      } catch (e) {
+        flash((e && e.message) || "That did not work", "err");
+      }
+    };
+    t.appendChild(b);
+  }
   stack.replaceChildren(t);
+  const life = hasAction ? 9000 : 4200;
   stack._fadeTimer = setTimeout(() => {
     t.style.transition = "opacity .25s";
     t.style.opacity = "0";
-  }, 4200);
+  }, life);
   stack._removeTimer = setTimeout(() => {
     if (stack.firstElementChild === t) t.remove();
-  }, 4600);
+  }, life + 400);
 }
 
 async function refreshInfo() {
@@ -2966,13 +2951,9 @@ async function refreshInfo() {
   currentWp = info.current || null;
   const has = !!currentWp;
   const bo = $("#btn-open"),
-    bf = $("#btn-folder"),
-    bb = $("#btn-back"),
-    bfw = $("#btn-forward");
+    bf = $("#btn-folder");
   if (bo) bo.disabled = !has;
   if (bf) bf.disabled = !has;
-  if (bb) bb.disabled = !info.canBack;
-  if (bfw) bfw.disabled = !info.canForward;
   const hp = document.getElementById("hdr-prev");
   if (hp) hp.disabled = !info.canBack;
   if (typeof info.paused === "boolean") {
@@ -2994,7 +2975,8 @@ async function refreshInfo() {
       meta.innerHTML = `<strong>${currentWp.id}</strong>${currentWp.resolution || ""} • cached ${formatSize(info.cacheMB)} of ${formatSize(config?.cacheMaxMB || 0)}${pinnedTxt} • ${info.historyCount} in history`;
     } else {
       thumb.style.backgroundImage = "";
-      meta.innerHTML = "No wallpaper yet - press <strong>►</strong> in the top bar.";
+      meta.innerHTML =
+        "No wallpaper yet. Press <strong>Next</strong> (the right arrow in the top bar).";
     }
   }
   renderHeaderThumb();
@@ -3307,6 +3289,12 @@ function drawCarousel() {
       d === 0
         ? `${name}${why ? "\n" + why : ""}\nDouble-click to view full size.`
         : `${name}${why ? "\n" + why : ""}`;
+    // The same words for anything that does not hover: keyboards, screen readers.
+    el.setAttribute("role", "img");
+    el.setAttribute(
+      "aria-label",
+      `${d === 0 ? "In the middle: " : ""}${name}${why ? ". " + why : ""}`,
+    );
   });
   for (const [key, el] of existing) if (!used.has(key)) el.remove();
 
@@ -3354,7 +3342,7 @@ function drawCarousel() {
     if (!browsing) {
       text.innerHTML =
         cfStrip.length > 1
-          ? "On your desktop now. Scroll, drag, or use ← → to browse."
+          ? "On your desktop now. Drag it, use the slider, or click it and use ← → or the wheel."
           : "On your desktop now.";
     } else if (c.kind === "history") {
       const n = cfCurrent - cfFocus;
@@ -3371,6 +3359,7 @@ function drawCarousel() {
     const settable = browsing && (c.kind === "upcoming" || (c.kind === "history" && c.reachable));
     setBtn.hidden = !settable;
   }
+  cfUpdateViewer();
 }
 
 function cfMove(to) {
@@ -3412,29 +3401,78 @@ async function cfSetFocused() {
   }
 }
 
+// Full size view. It follows the carousel's focus, so moving through it here
+// (arrow keys, the side buttons) is the same as moving the carousel, and Set
+// as wallpaper sets whatever is showing.
 function cfOpenViewer() {
-  const c = cfStrip[cfFocus];
-  if (!c) return;
-  const src = cfImageFor(c.kind === "current" ? { ...currentWp } : c, true);
-  if (!src) return;
+  if (!cfStrip[cfFocus]) return;
   let v = document.getElementById("cf-viewer");
   if (!v) {
     v = document.createElement("div");
     v.id = "cf-viewer";
     v.className = "cf-viewer";
     v.innerHTML =
-      '<button class="cf-viewer-close" type="button" aria-label="Close" title="Close (Esc)">\u2715</button>' +
-      '<img alt="" /><div class="cf-viewer-caption"></div>';
-    v.addEventListener("click", () => (v.hidden = true));
+      '<button class="cf-viewer-close" type="button" aria-label="Close" title="Close (Esc)">✕</button>' +
+      '<button class="cf-viewer-nav cf-viewer-prev" type="button" aria-label="Previous wallpaper" title="Previous (←)">' +
+      '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg></button>' +
+      '<img alt="" />' +
+      '<button class="cf-viewer-nav cf-viewer-next" type="button" aria-label="Next wallpaper" title="Next (→)">' +
+      '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg></button>' +
+      '<div class="cf-viewer-foot"><span class="cf-viewer-caption"></span>' +
+      '<button class="btn cf-viewer-set" type="button">Set as wallpaper</button></div>';
+    // Only the backdrop and the close button close it: clicking the picture
+    // or a control must not.
+    v.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t === v || (t.closest && t.closest(".cf-viewer-close"))) v.hidden = true;
+      else if (t.closest && t.closest(".cf-viewer-prev")) cfViewerStep(-1);
+      else if (t.closest && t.closest(".cf-viewer-next")) cfViewerStep(1);
+      else if (t.closest && t.closest(".cf-viewer-set")) cfViewerSet();
+    });
     document.body.appendChild(v);
   }
-  v.querySelector("img").src = src;
-  const small = !c.file && c.kind !== "current";
-  v.querySelector(".cf-viewer-caption").textContent =
-    `${c.id || ""}${c.resolution ? " · " + c.resolution : ""}` +
-    (small ? " · Wallhaven's preview; the full image downloads when you set it" : "") +
-    " · Click or press Esc to close";
   v.hidden = false;
+  cfUpdateViewer();
+}
+
+function cfViewerStep(n) {
+  cfMove(cfFocus + n);
+  cfUpdateViewer();
+}
+
+let cfViewerStatus = "";
+async function cfViewerSet() {
+  cfViewerStatus = "Setting…";
+  cfUpdateViewer();
+  await cfSetFocused();
+  // The toast sits underneath this view, so say it here.
+  cfViewerStatus = "Set as your wallpaper";
+  cfUpdateViewer();
+  setTimeout(() => {
+    cfViewerStatus = "";
+    cfUpdateViewer();
+  }, 2500);
+}
+
+function cfUpdateViewer() {
+  const v = document.getElementById("cf-viewer");
+  if (!v || v.hidden) return;
+  const c = cfStrip[cfFocus];
+  if (!c) return;
+  const src = cfImageFor(c.kind === "current" ? { ...currentWp } : c, true);
+  const img = v.querySelector("img");
+  if (img.getAttribute("src") !== src) img.src = src || "";
+  const small = !c.file && c.kind !== "current";
+  const where =
+    c.kind === "current" ? "On your desktop" : c.kind === "upcoming" ? "Coming up" : "Earlier";
+  v.querySelector(".cf-viewer-caption").textContent =
+    `${where} · ${c.id || ""}${c.resolution ? " · " + c.resolution : ""}` +
+    (small ? " · Wallhaven's preview; the full image downloads when you set it" : "") +
+    (cfViewerStatus ? ` · ${cfViewerStatus}` : "");
+  v.querySelector(".cf-viewer-prev").disabled = cfFocus <= 0;
+  v.querySelector(".cf-viewer-next").disabled = cfFocus >= cfStrip.length - 1;
+  const settable = c.kind === "upcoming" || (c.kind === "history" && c.reachable);
+  v.querySelector(".cf-viewer-set").hidden = !settable;
 }
 
 // Input. Everything funnels into cfMove; nothing here touches the desktop.
@@ -3444,6 +3482,12 @@ function cfOpenViewer() {
     (e) => {
       const stage = e.target && e.target.closest && e.target.closest("#coverflow");
       if (!stage || !cfStrip.length) return;
+      // An ordinary wheel over the carousel scrolls the page, as it does
+      // everywhere else. Only a sideways scroll, Shift+wheel, or the wheel
+      // once the carousel has been clicked moves it. Taking over the wheel
+      // whenever the pointer passed over it was scroll hijacking.
+      const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (!sideways && !e.shiftKey && document.activeElement !== stage) return;
       e.preventDefault();
       stage._acc =
         (stage._acc || 0) + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY);
@@ -3457,8 +3501,12 @@ function cfOpenViewer() {
 
   document.addEventListener("keydown", (e) => {
     const v = document.getElementById("cf-viewer");
-    if (e.key === "Escape" && v && !v.hidden) {
-      v.hidden = true;
+    if (v && !v.hidden) {
+      if (e.key === "Escape") v.hidden = true;
+      else if (e.key === "ArrowLeft") cfViewerStep(-1);
+      else if (e.key === "ArrowRight") cfViewerStep(1);
+      else return;
+      e.preventDefault();
       return;
     }
     const stage = document.getElementById("coverflow");
@@ -3480,6 +3528,9 @@ function cfOpenViewer() {
     const stage = e.target && e.target.closest && e.target.closest("#coverflow");
     if (!stage || e.button !== 0 || !cfStrip.length) return;
     const h = stage.clientHeight || 150;
+    try {
+      stage.focus({ preventScroll: true }); // the wheel and arrow keys now mean the carousel
+    } catch {}
     drag = {
       stage,
       x: e.clientX,
@@ -3557,9 +3608,6 @@ function renderHeaderReactions() {
   const like = document.getElementById("hdr-like");
   const dislike = document.getElementById("hdr-dislike");
   const state = currentWp && currentWp.id ? wallpaperState(currentWp.id) : "neutral";
-  // The Now playing card has its own pair; light them the same way.
-  document.getElementById("btn-like")?.classList.toggle("on", state === "liked");
-  document.getElementById("btn-dislike")?.classList.toggle("on", state === "disliked");
   if (!like && !dislike) return;
   const has = !!(currentWp && currentWp.id);
   if (like) {
@@ -3590,13 +3638,9 @@ function refreshInfoFrom(info) {
   renderWhy();
   renderCarousel();
   const bo = $("#btn-open"),
-    bf = $("#btn-folder"),
-    bb = $("#btn-back"),
-    bfw = $("#btn-forward");
+    bf = $("#btn-folder");
   if (bo) bo.disabled = !has;
   if (bf) bf.disabled = !has;
-  if (bb) bb.disabled = !info.canBack;
-  if (bfw) bfw.disabled = !info.canForward;
   const thumb = $("#thumb"),
     meta = $("#meta");
   if (thumb && meta && has) {
@@ -5062,11 +5106,67 @@ api.onAppToast?.((t) => {
   if (t?.stats) renderStats?.();
 });
 
+// ---------- Unsaved changes ----------
+//
+// Two saving models lived side by side with nothing to tell them apart: theme
+// and accent colour save the moment they are picked, everything else waits
+// for Save. So the Save button now says which state you are in: "Saved" and
+// greyed out when there is nothing pending, "Save changes" when there is.
+//
+// Dirty means "the form differs from what it showed when last loaded or
+// saved", compared against a snapshot of the form itself rather than against
+// config, because the form and config spell some values differently and a
+// direct comparison would call a freshly loaded page dirty.
+const SAVES_ITSELF = ["theme", "uiAccent"];
+// Where you are in the window, not settings: collect() carries them so a save
+// remembers the layout, but moving between pages or folding a card is not an
+// unsaved change. Found by driving it: without this, visiting any page other
+// than the one you started on lit up Save changes.
+const WINDOW_STATE = ["uiPage", "uiTabs", "sectionsOpen", "collapsed", "cardOrder"];
+let formBaseline = null;
+function formSnapshot() {
+  try {
+    const c = collect();
+    for (const k of [...SAVES_ITSELF, ...WINDOW_STATE]) delete c[k];
+    return JSON.stringify(c);
+  } catch {
+    return null;
+  }
+}
+function markFormSaved() {
+  formBaseline = formSnapshot();
+  renderSaveState();
+}
+function formDirty() {
+  return formBaseline !== null && formSnapshot() !== formBaseline;
+}
+function renderSaveState() {
+  const b = document.getElementById("btn-save");
+  if (!b) return;
+  const dirty = formDirty();
+  b.disabled = !dirty;
+  b.textContent = dirty ? "Save changes" : "Saved";
+  b.classList.toggle("dirty", dirty);
+  b.title = dirty
+    ? "You have changes that are not saved yet."
+    : "Everything is saved. Theme and colour save as soon as you pick them.";
+}
+{
+  let t = null;
+  const later = () => {
+    clearTimeout(t);
+    t = setTimeout(renderSaveState, 150);
+  };
+  // Clicks too: some settings are buttons (the timetable's day chips), not inputs.
+  for (const ev of ["input", "change", "click"]) document.addEventListener(ev, later, true);
+}
+
 $("#btn-save").onclick = async () => {
   const c = collect();
   config = await api.setConfig(c);
   applyAccent(config.uiAccent);
   applyTheme(config.theme);
+  markFormSaved();
   flash("Settings saved", "ok");
 };
 $("#btn-next").onclick = async () => {
@@ -5083,8 +5183,14 @@ var cyclePaused = false;
 function renderPlayPause() {
   const b = document.getElementById("hdr-playpause");
   if (!b) return;
-  b.textContent = cyclePaused ? "Paused" : "Playing";
-  b.title = cyclePaused ? "Resume automatic changes" : "Pause automatic changes";
+  // The label is what the button will do; the highlight shows the state. It
+  // used to say "Playing" or "Paused", which reads equally well as a state or
+  // as an instruction.
+  b.textContent = cyclePaused ? "Resume" : "Pause";
+  b.title = cyclePaused
+    ? "Wallpaper changes are paused. Click to resume."
+    : "Wallpaper changes automatically. Click to pause.";
+  b.setAttribute("aria-pressed", String(cyclePaused));
   b.classList.toggle("on", cyclePaused);
 }
 document.getElementById("hdr-thumb")?.addEventListener("click", () => goPage("home"));
@@ -5113,13 +5219,27 @@ async function reactDislikeCurrent() {
     }
     return;
   }
+  // Permanent, and it moves on straight away, so it gets an Undo rather than
+  // a confirmation box: the cheap action stays one click, the mistake stays
+  // one click to reverse.
+  const item = { ...currentWp };
   const r = await api.dislike();
-  flash(r.ok ? "Skipping — never showing again" : r.reason, r.ok ? "ok" : "err");
-  if (r.ok) {
-    dislikedIds.add(String(r.id));
-    config = await api.getConfig();
-    renderHeaderReactions();
-  }
+  if (!r.ok) return flash(r.reason, "err");
+  dislikedIds.add(String(r.id));
+  config = await api.getConfig();
+  renderHeaderReactions();
+  flash("Disliked. It won't be shown again.", "ok", {
+    label: "Undo",
+    run: async () => {
+      const u = await api.undoDislike(item);
+      if (!u || !u.ok) return flash((u && u.reason) || "Could not undo that", "err");
+      dislikedIds.delete(String(item.id));
+      config = await api.getConfig();
+      await loadHistory();
+      refreshInfoFrom(u.info);
+      flash("Undone. It's back on your desktop.", "ok");
+    },
+  });
 }
 document.getElementById("hdr-like")?.addEventListener("click", reactLikeCurrent);
 document.getElementById("hdr-dislike")?.addEventListener("click", reactDislikeCurrent);

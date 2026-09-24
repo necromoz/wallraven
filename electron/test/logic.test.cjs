@@ -1130,6 +1130,23 @@ check("the prefetch queue is kept filled, so Next does not stick on 'being found
   );
 });
 
+check("undoing a dislike retires the replacement and frees the fetch lock", () => {
+  const at = SRC.indexOf('ipcMain.handle("wp:undoDislike"');
+  assert.ok(at !== -1, "there is no undo for a dislike");
+  const body = SRC.slice(at, at + 900);
+  // Without the first, the replacement lands on top of the undo. Without the
+  // second, a retired fetch leaves isFetching set and rotations stall.
+  assert.ok(
+    /startFetchGeneration\(\);\s*isFetching = false;/.test(body),
+    "undo does not retire the in-flight replacement cleanly",
+  );
+  assert.ok(
+    /setWallpaperReaction\(item, "neutral"\)/.test(body),
+    "undo does not clear the dislike",
+  );
+  assert.ok(/gotoHistory\(idx\)/.test(body), "undo does not put the wallpaper back");
+});
+
 // ---------------------------------------------------------------- tray reactions
 
 console.log("tray reactions");
