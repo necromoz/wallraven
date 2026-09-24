@@ -1,5 +1,15 @@
 # Wallraven changelog
 
+## v1.3.0-beta.2 — 24 Sep 2026
+
+### New
+
+- **Now playing is a carousel.** The wallpaper on screen sits in the middle, the ones before it angle away to the left and what comes next to the right. Click an earlier one to go straight back to it, or the next one to show it now. The right-hand side only shows what is genuinely next: in modes that pick at random when it is time, it says so instead of guessing.
+
+### Fixed
+
+- **A timetable switch starts with the new search.** The first wallpaper after a timetable entry took over could still come from the previous search.
+
 ## v1.3.0-beta.1 — 24 Sep 2026
 
 ### New
