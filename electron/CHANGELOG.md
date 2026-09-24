@@ -1,5 +1,12 @@
 # Wallraven changelog
 
+## v1.3.0-beta.5 — 24 Sep 2026
+
+### Fixed
+
+- **The full size view closes.** Esc, clicking anywhere, or the new close button.
+- **The carousel slides smoothly.** A picture moving into the middle no longer passes behind the one it is replacing.
+
 ## v1.3.0-beta.4 — 24 Sep 2026
 
 ### New
