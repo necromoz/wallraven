@@ -1,5 +1,11 @@
 # Wallraven changelog
 
+## v1.3.0-beta.3 — 24 Sep 2026
+
+### Fixed
+
+- **Next shows up.** The carousel could sit on "The next one is being found" until the wallpaper changed. The app now always has the next one ready within a few seconds, including straight after starting up, saving a change or a timetable switch.
+
 ## v1.3.0-beta.2 — 24 Sep 2026
 
 ### New
