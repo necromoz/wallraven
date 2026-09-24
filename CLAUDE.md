@@ -101,7 +101,11 @@ A beta goes like this:
    `usr/bin` on PATH (NSIS comes from `apt-get download nsis nsis-common` plus
    `dpkg-deb -x`). Flags are `-DOUTFILE=... -DAPP_VERSION=... installer.nsi`.
 5. Copy the installer, a README with its SHA-256 and a test list into
-   `Documents\Claude\Projects`.
+   `Documents\Claude\Projects`. **Copy in a call of its own and compare the
+   hash of the copy with the build's.** Writing 112 MB through the mount can
+   take over a minute; run after makensis in the same call, it hit the time
+   limit once and left an 85 MB truncated installer in Steve's folder, which
+   would have looked like a normal file until it failed to run.
 
 Every `device_bash` call has a three-minute ceiling and **background
 processes are killed when the call returns**, so each step has to finish in
