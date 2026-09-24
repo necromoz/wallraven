@@ -1,5 +1,20 @@
 # Wallraven changelog
 
+## v1.3.0-beta.1 — 24 Sep 2026
+
+### New
+
+- **Why this one.** Now playing says how the wallpaper on screen was chosen: the timetable entry that was in charge, the preset it switched to, and the search, playlist, folder or collection it came from. If nothing matched your filters and the app had to loosen them, it says which one it dropped.
+- **The thumbs show where you stand.** The like and dislike buttons in the title bar and in Now playing light up when the wallpaper on screen is already liked or disliked, and pressing a lit one undoes it.
+- **Clear likes**, next to Clear dislikes. It asks first, because a Liked collection is something you built on purpose.
+
+### Fixed
+
+- **Like and dislike can be undone from the tray.** Both went grey the moment you pressed them, so a mistake meant opening the settings window. The tray now uses the same thumbs as everywhere else.
+- **A preset switched on by the timetable matches your screen.** "Match my screen" was ignored on that route, so it searched every resolution and aspect ratio.
+- **The app only names a preset while it is really in use.** It used to go on naming the last preset you loaded after you had changed its settings.
+- **Clearing likes or dislikes clears them properly.** The Library kept showing entries that nothing else remembered.
+
 ## v1.2.1 — 18 Sep 2026
 
 ### Fixed
