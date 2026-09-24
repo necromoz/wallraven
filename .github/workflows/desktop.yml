@@ -131,29 +131,30 @@ jobs:
           shopt -s nullglob
           sha256sum *.exe *.msix | tee SHA256SUMS.txt
 
-      # Artifacts, and why this keeps almost nothing.
+      # Artifacts, and why there are none by default.
       #
       # The installer is 112 MB and the Store package another 110 MB. Uploading
       # both on every push, kept for a fortnight, filled the 0.5 GB of Actions
-      # storage the plan includes in about two pushes, at which point further
-      # uploads are blocked and the build fails at this step. Nobody ever
-      # downloaded one: a tagged build publishes the installer to the release,
-      # which does not count against this quota, and anything else is tested by
-      # running from source.
+      # storage the plan includes in about two pushes. Nobody ever downloaded
+      # one: a tagged build publishes the installer to the release, which does
+      # not count against this quota, and anything else is tested by running
+      # from source.
       #
-      # So the checksums are kept, because they are bytes rather than
-      # megabytes, and the installer only when someone explicitly asks for it
-      # by running the workflow by hand with "Keep the installer" ticked.
-      - name: Keep the checksums
-        uses: actions/upload-artifact@v4
-        with:
-          name: SHA256SUMS-v${{ steps.version.outputs.version }}
-          path: dist/SHA256SUMS.txt
-          retention-days: 7
-          if-no-files-found: error
-
+      # An earlier version of this kept just the checksum file, on the grounds
+      # that it is bytes rather than megabytes. That was wrong. Storage is
+      # metered in GB-hours over the month and deleting artifacts does not give
+      # back what has already accrued, so once the allowance is spent every
+      # upload is refused regardless of size, and with a zero budget a refused
+      # upload fails the job. That included tag builds, before they reached the
+      # release steps. The checksums are printed in the log by the step above,
+      # and published with every release, so nothing is lost.
+      #
+      # The installer is uploaded only when someone asks for it by running the
+      # workflow by hand with "Keep the installer" ticked, and even then a full
+      # allowance only loses the artifact, never the build.
       - name: Keep the installer (only when asked)
         if: inputs.keep_installer
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: Wallraven-Setup-v${{ steps.version.outputs.version }}
