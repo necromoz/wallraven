@@ -3124,6 +3124,7 @@ function renderWhy() {
 // card positioned by its distance from the focus, so a move only changes
 // transforms and the CSS transition does the sliding.
 const CF_VISIBLE = 4; // cards drawn each side of the centre; the rest wait off stage
+const CF_PERSPECTIVE = 700; // per card; see .cf-track in the stylesheet
 let carouselSeq = 0;
 let carouselData = null;
 let cfStrip = []; // oldest first: earlier..., the desktop's, ahead...
@@ -3272,13 +3273,16 @@ function drawCarousel() {
     const ad = Math.abs(d);
     el.classList.toggle("cf-focus", d === 0);
     el.classList.toggle("cf-far", ad > CF_VISIBLE);
-    if (d === 0) {
-      el.style.transform = "translateX(-50%)";
-    } else {
-      const dir = Math.sign(d);
-      const k = Math.min(ad, CF_VISIBLE + 1) - 1;
-      el.style.transform = `translateX(calc(-50% + ${dir * (first + k * step)}px)) translateZ(-70px) rotateY(${dir * -62}deg)`;
-    }
+    // The same list of functions in every state, so the browser interpolates
+    // each one directly instead of falling back to blending whole matrices.
+    const dir = Math.sign(d);
+    const k = d === 0 ? 0 : Math.min(ad, CF_VISIBLE + 1) - 1;
+    const x = d === 0 ? 0 : dir * (first + k * step);
+    const z = d === 0 ? 0 : -70;
+    const r = d === 0 ? 0 : dir * -62;
+    const sc = d === 0 ? 1 : 0.78;
+    el.style.transform = `translateX(calc(-50% + ${x}px)) perspective(${CF_PERSPECTIVE}px) translateZ(${z}px) rotateY(${r}deg) scale(${sc})`;
+
     el.style.zIndex = String(50 - ad);
 
     // Only the cards on screen hold an image; each decoded wallpaper is tens
@@ -3418,7 +3422,9 @@ function cfOpenViewer() {
     v = document.createElement("div");
     v.id = "cf-viewer";
     v.className = "cf-viewer";
-    v.innerHTML = '<img alt="" /><div class="cf-viewer-caption"></div>';
+    v.innerHTML =
+      '<button class="cf-viewer-close" type="button" aria-label="Close" title="Close (Esc)">\u2715</button>' +
+      '<img alt="" /><div class="cf-viewer-caption"></div>';
     v.addEventListener("click", () => (v.hidden = true));
     document.body.appendChild(v);
   }

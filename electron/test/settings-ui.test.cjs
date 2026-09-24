@@ -304,18 +304,74 @@ check("the carousel cannot be painted by a stale answer", () => {
   );
 });
 
-check("the carousel's cards are actually angled, and cannot escape the card", () => {
-  // perspective only reaches direct children. Put on the wrong element once,
-  // and every card drew flat.
+check("the carousel's cards are layered by z-index, not by 3D depth", () => {
+  // Found testing beta.4: with perspective on the shared track, the cards were
+  // one 3D scene sorted by depth, so a card sliding into the centre started
+  // behind the old centre and only came in front halfway through.
   const at = CSS.indexOf(".cf-track {");
   const track = CSS.slice(at, CSS.indexOf("}", at));
-  assert.ok(/perspective:\s*\d+px/.test(track), "the track has no perspective, so cards draw flat");
+  assert.ok(!/perspective\s*:/.test(track), "the track has a shared perspective again");
+  assert.ok(
+    !/preserve-3d/.test(CSS.slice(CSS.indexOf(".coverflow {"))),
+    "a preserve-3d context would depth-sort them too",
+  );
+  const d = extractFrom(JS, "drawCarousel");
+  assert.ok(
+    /perspective\(\$\{CF_PERSPECTIVE\}px\)/.test(d),
+    "cards do not carry their own perspective",
+  );
+  assert.ok(/el\.style\.zIndex = String\(50 - ad\)/.test(d), "nothing orders the cards");
   const s0 = CSS.indexOf(".coverflow {");
   assert.ok(
     /isolation:\s*isolate/.test(CSS.slice(s0, CSS.indexOf("}", s0))),
     "the stage is not isolated",
   );
-  assert.ok(/class="cf-item cf-card"|cf-item cf-card/.test(JS), "cards are not cf-items");
+});
+
+check("the slide animates only what the compositor can, with one shape of transform", () => {
+  // Height and top were animated too, which meant a layout pass every frame.
+  const at = CSS.indexOf(".coverflow .cf-item,");
+  const rule = CSS.slice(at, CSS.indexOf("}", at));
+  const transition = (rule.match(/transition:([^;]+);/) || [])[1] || "";
+  assert.ok(transition, "no transition found on the cards");
+  assert.ok(
+    !/\b(top|height|width|left)\b/.test(transition),
+    `layout properties are animated: ${transition}`,
+  );
+  // Same functions in the same order for the centre and the sides, so each
+  // interpolates directly.
+  const d = extractFrom(JS, "drawCarousel");
+  const t = (d.match(/el\.style\.transform = `([^`]+)`/) || [])[1] || "";
+  const fns = t.match(/[a-zA-Z]+\(/g) || [];
+  assert.deepStrictEqual(
+    fns,
+    ["translateX(", "calc(", "perspective(", "translateZ(", "rotateY(", "scale("],
+    `transform shape changed: ${t}`,
+  );
+  assert.ok(
+    !/el\.style\.transform = "translateX\(-50%\)";\n\s*\} else/.test(d),
+    "the centre still uses a different transform shape",
+  );
+});
+
+check("hidden really hides the carousel's own pieces", () => {
+  // The full size view set display:flex, which beats the hidden attribute, so
+  // it could not be closed. The same was true of the bar.
+  const rule = CSS.slice(
+    CSS.indexOf(".cf-viewer[hidden]"),
+    CSS.indexOf("}", CSS.indexOf(".cf-viewer[hidden]")),
+  );
+  for (const sel of [
+    ".cf-viewer[hidden]",
+    ".cf-bar[hidden]",
+    ".cf-scroll[hidden]",
+    ".cf-note[hidden]",
+  ]) {
+    assert.ok(rule.includes(sel), `${sel} is not forced hidden`);
+  }
+  assert.ok(/display:\s*none\s*!important/.test(rule), "hidden pieces are not display:none");
+  const v = extractFrom(JS, "cfOpenViewer");
+  assert.ok(/cf-viewer-close/.test(v), "the full size view has no close button");
 });
 
 check("browsing never changes the desktop; only Set as wallpaper does", () => {

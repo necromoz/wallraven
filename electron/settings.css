@@ -1902,45 +1902,48 @@ html[data-mascot="raven-fire"] #view-bar {
 #cards.page-home > .card[data-id="current"] .coverflow {
   height: clamp(160px, 20vw, 260px);
 }
-/* perspective only reaches direct children, so it sits on the track that
-   holds the cards, not on the stage. */
+/* No shared perspective here, deliberately. With perspective on the track the
+   cards formed one 3D scene and were layered by depth, not by z-index: a card
+   sliding into the centre started behind the old centre (the side cards sit
+   further back) and only passed in front of it halfway through the move.
+   Each card carries perspective() in its own transform instead, so it is
+   flattened on its own and z-index alone decides what is in front. */
 .cf-track {
   position: absolute;
   inset: 0;
-  perspective: 560px;
-  perspective-origin: 50% 50%;
 }
+/* Every card is the centre's size; side cards are scaled down in the
+   transform. Animating height and top instead meant a layout pass every
+   frame, which is where the slide stuttered. Transform, filter and opacity
+   are all the compositor has to animate. */
 .coverflow .cf-item,
 #cards.page-home > .card[data-id="current"] .preview .coverflow .thumb {
   position: absolute;
   left: 50%;
-  top: 11%;
-  height: 78%;
+  top: 0;
+  height: 100%;
   width: auto;
   max-width: none;
   min-width: 0;
   aspect-ratio: 16 / 9;
   flex: none;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background-color: var(--panel-2);
   background-size: cover;
   background-position: center;
   filter: brightness(0.62);
+  will-change: transform;
   transition:
-    transform 0.35s ease,
-    top 0.35s ease,
-    height 0.35s ease,
-    filter 0.2s ease,
-    opacity 0.2s ease;
+    transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+    filter 0.25s ease,
+    opacity 0.25s ease,
+    box-shadow 0.25s ease;
   -webkit-box-reflect: below 3px linear-gradient(transparent 62%, rgba(255, 255, 255, 0.14));
 }
 .coverflow .cf-item.cf-focus,
 #cards.page-home > .card[data-id="current"] .preview .coverflow .thumb.cf-focus {
-  top: 0;
-  height: 100%;
   filter: none;
-  border-radius: 8px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   -webkit-box-reflect: below 3px linear-gradient(transparent 62%, rgba(255, 255, 255, 0.2));
 }
@@ -2037,6 +2040,32 @@ html[data-mascot="raven-fire"] #view-bar {
 #cards.page-home > .card[data-id="current"] .preview .meta {
   flex: 1 1 100%;
   text-align: center;
+}
+/* These set display, which beats the browser's own rule for the hidden
+   attribute, so without this, hiding them did nothing. The full size view
+   could not be closed: Esc and clicking set it hidden and it stayed. */
+.cf-viewer[hidden],
+.cf-bar[hidden],
+.cf-scroll[hidden],
+.cf-note[hidden] {
+  display: none !important;
+}
+.cf-viewer .cf-viewer-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cf-viewer .cf-viewer-close:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 /* Full size view. On the body, above everything, including the themes'
    lifted header and shell. */
