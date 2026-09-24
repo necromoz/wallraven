@@ -70,54 +70,54 @@ Edits to `electron/` take effect on restart; there is no build step for the app
 itself. `npm test` after every change -- it is a few seconds and covers the
 logic that is awkward to reach by hand.
 
-## Where the work happens (18 Sep)
+## Where the work happens (24 Sep)
 
-The Linux workspace on Steve's PC stopped starting: a Windows update from
-8 September blocks it, and `device_bash` now fails outright. Until that is
-fixed, nothing can be run on his machine. What still works:
+Two machines, and neither can do everything:
 
-- `device_stage_files` to read his files, `device_commit_files` to write them
-  back, 20 MB per file.
-- A clone of this repo in the cloud container, which is where edits, tests and
-  builds now happen.
+- **A clone in the cloud container** is where code is edited, tested and
+  screenshot-checked (`scripts/shoot-settings.mjs` with
+  `CHROMIUM=/opt/pw-browsers/chromium`). It cannot push: the git proxy refuses
+  credentials for `necromoz/wallraven`, and its `origin/main` never updates on
+  its own. After Steve publishes, move it by hand with
+  `git update-ref refs/remotes/origin/main <sha>` so the unpushed count is
+  honest. It fell behind once before and nearly had old code copied out of it
+  over new: always build from a bundle, never copy files out of it.
+- **Steve's Linux workspace** (`device_bash`) builds the installers. It was
+  down from 8 to 23 September after a Windows update and is working again.
 
-Two things that does not cover:
+A beta goes like this:
 
-1. **Pushing.** The container's git proxy refuses to carry credentials for
-   `necromoz/wallraven` because it is not in the session's authorised
-   repository set, so commits pile up locally. Either Steve adds the repo to
-   this session's sources, or the work waits for his workspace to come back.
-2. **Delivering an installer.** 107 MB, against a 30 MB chat limit and a 20 MB
-   per-file write limit. Running from source is the way to test until CI can
-   publish again.
+1. Commit in the container, bump `electron/VERSION`, `package.json` and
+   `package-lock.json`, add a CHANGELOG entry (the What's new panel parses it).
+2. `git bundle create` from the last pushed commit to HEAD, and write it to
+   `Documents\Claude\Projects` with `device_commit_files`. Give each bundle a
+   **new filename**: rewriting an existing path once delivered a stale copy.
+3. In the workspace: clone `~/mnt/Claude/Projects/wallraven` to `~/build/wr`
+   (local disk, never the mount: the packaged app is ~370 MB), fetch the
+   bundle, `npm ci --ignore-scripts --prefer-offline`.
+4. `node scripts/build-desktop.mjs --platform win32 --arch x64` with makensis
+   **off** PATH, so it packs and stops. Then run makensis separately from
+   `electron/` with `NSISDIR=~/build/nsis/prefix/usr/share/nsis` and that
+   `usr/bin` on PATH (NSIS comes from `apt-get download nsis nsis-common` plus
+   `dpkg-deb -x`). Flags are `-DOUTFILE=... -DAPP_VERSION=... installer.nsi`.
+5. Copy the installer, a README with its SHA-256 and a test list into
+   `Documents\Claude\Projects`.
 
-Building in the container needs two workarounds, both proven:
+Every `device_bash` call has a three-minute ceiling and **background
+processes are killed when the call returns**, so each step has to finish in
+the foreground. With warm caches the whole build is about two minutes, most
+of it NSIS compression.
 
-- NSIS: `apt-get download nsis nsis-common`, `dpkg-deb -x` into a prefix, then
-  `NSISDIR=<prefix>/usr/share/nsis` with that `usr/bin` on PATH.
-- Electron: the packager's own download dies on this proxy with an assertion
-  inside undici. Fetch `electron-v<version>-win32-x64.zip` from GitHub with
-  curl, unzip it, and point `ELECTRON_OVERRIDE_DIST_PATH` at the directory.
+Steve tests the beta, then runs `Publish WallRaven.bat`, which applies every
+`*.bundle` beside it, renames them `.applied` and pushes. One publish per beta,
+not per change: each push costs him a step. Pushing publishes nothing to users
+unless there is a `v*` tag, because the public update manifest is only moved
+by hand.
 
-## Building without a Windows machine
-
-The installer can be built from Linux: NSIS cross-compiles, and
-`scripts/build-desktop.mjs` now uses `-D` off Windows and `/D` on it. That is
-how 1.2.0-beta.1 was produced from the desktop Linux VM, which is the only
-shell this session can actually run a build in.
-
-Two things that matter if it is done again:
-
-- Build on local disk, not in the mounted folder. The packaged app is ~360 MB
-  and writing that through the mount is slow enough to look hung. Copy the
-  repo out (no `node_modules`, symlink it instead), build there, copy back only
-  the installer.
-- NSIS is not installed in that VM and there is no root. `apt-get download nsis
-nsis-common`, `dpkg-deb -x` each into a prefix, then run it with `NSISDIR`
-  pointing at `usr/share/nsis` and that `usr/bin` on PATH.
-
-A build made this way is unsigned, exactly like the CI one, and is not
-published anywhere: the update manifest still points at the last real release.
+GitHub Actions storage on the private repo is 0.5 GB a month, metered in
+GB-hours, and deleting artifacts does not give back what has accrued. With a
+zero budget, a refused upload fails the whole job, so the workflow uploads no
+artifacts on an ordinary build. Keep it that way.
 
 ## Release gates
 
@@ -220,10 +220,6 @@ the Store, and the updater is what serves them.
   patch it in place.
 - `src/routes/__root.tsx:108` fails `tsc` on a fresh install: a newer
   `@tanstack/react-router` tightened `ErrorComponentProps.error` to `unknown`.
-- There is no scratch checkout in the cloud container, deliberately. One existed,
-  could not reach GitHub, silently fell behind and nearly had old code copied out
-  of it over new. Work on the copy on Steve's PC via the device shell; it is the
-  only one that can push.
 - The site URL is hardcoded in five places across `cloud.cjs` and `main.cjs`, split
   between `wallraven.lovable.app` and `wallraven.app`.
 - ~~The JSON helpers have no timeouts, so one stalled request wedges every
@@ -279,7 +275,8 @@ on paid). Pages render fine under light use but this has never been under load.
 If pages start returning Cloudflare error 1102, pre-render the pages that do not
 need a server rather than paying.
 
-Google sign-in still goes through `oauth.lovable.app` and will break when the
-database moves for real, because those tokens are only valid for Lovable's
-project. Email and password sign-in is unaffected. Fixing it needs a Google
-OAuth client configured against the new Supabase project.
+Google sign-in was removed from the site on 18 Sep (the reason is in a comment
+in `src/routes/auth.tsx`): it depended on an OAuth route only Lovable's hosting
+served. Email and password is the only method, on the site and in the app.
+Bringing Google back, or adding Microsoft, Discord or GitHub, means
+configuring each as a real provider on the Supabase project.
