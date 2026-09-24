@@ -1,5 +1,12 @@
 # Wallraven changelog
 
+## v1.3.0-beta.4 — 24 Sep 2026
+
+### New
+
+- **Browse before you choose.** Scroll over the carousel, drag it, use the arrow keys or the slider underneath to look through your wallpapers without changing your desktop. Press Set as wallpaper to use the one in the middle, or Back to current to return. Double-click the middle one to see it full size.
+- **Further back.** The carousel now holds your last 25 wallpapers.
+
 ## v1.3.0-beta.3 — 24 Sep 2026
 
 ### Fixed
