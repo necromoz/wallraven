@@ -98,7 +98,11 @@
     <!-- ============================ Card templates ============================ -->
     <template id="tpl-current">
       <div class="preview">
-        <div class="thumb" id="thumb"></div>
+        <div class="coverflow" id="coverflow">
+          <div class="cf-side" id="cf-back" aria-label="Earlier wallpapers"></div>
+          <div class="thumb" id="thumb"></div>
+          <div class="cf-side" id="cf-fwd" aria-label="Coming up"></div>
+        </div>
         <div class="meta" id="meta">
           No wallpaper yet - press <strong>►</strong> in the top bar.
         </div>

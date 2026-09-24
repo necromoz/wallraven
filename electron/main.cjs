@@ -1561,6 +1561,7 @@ async function doPrefetch() {
     if (fs.existsSync(dest)) return;
     await downloadFile(choice.path, dest);
     prefetched.push({ item: choice, file: dest, query: res.query, usedFallback: res.usedFallback });
+    notifySettings("carousel-changed", true);
     while (prefetched.length > 5) prefetched.shift(); // never let candidates pile up
   } catch (e) {
     console.warn("prefetch failed", e.message);
@@ -1635,6 +1636,169 @@ async function restoreHistoryFile(item) {
 // next press skipped further back than the user expected. Now a pruned entry is
 // downloaded again, and only an entry that cannot be recovered at all is
 // stepped over.
+// ---------- Carousel: what is either side of the wallpaper on screen ----------
+//
+// Behind is history, which is certain. Ahead is history too if you have gone
+// Back, and after that whatever the next rotation will actually use, which is
+// only knowable in some modes:
+//
+//   search      the prefetch queue: already chosen and already downloaded,
+//               taken strictly in order by the next rotation
+//   playlist    strictly sequential on a stored index
+//   folder      only when set to play in order
+//
+// Folders on random, Wallhaven collections and offline mode pick at the moment
+// of rotating, so for those the carousel says so rather than draws a guess.
+// A picture of "next" that turns out not to be next is worse than none.
+const CAROUSEL_SIDE = 3;
+
+function carouselCard(item, extra = {}) {
+  if (!item) return null;
+  const file = item.file && fileExistsSafe(item.file) ? item.file : "";
+  return {
+    id: String(item.id || ""),
+    file,
+    thumb: wallpaperThumb(item),
+    resolution: item.resolution || "",
+    why: item.why || null,
+    // A Wallhaven entry whose file was pruned can be downloaded again; a local
+    // one whose file is gone cannot, and clicking it would do nothing.
+    reachable: !!file || historyRestorable(item),
+    ...extra,
+  };
+}
+
+function localFileId(file) {
+  return "local:" + Buffer.from(String(file)).toString("base64").slice(0, 24);
+}
+
+function upcomingCards(n) {
+  if (n <= 0) return { cards: [], note: "" };
+  const offline = !!(
+    config.offlineCachedOnlyManual ||
+    (config.offlineCachedOnly && offlineNotified)
+  );
+  const mode = config.sourceMode || "search";
+  if (offline && (mode === "search" || mode === "collection")) {
+    return {
+      cards: [],
+      note: "Offline, so the next one is picked at random from downloaded wallpapers",
+    };
+  }
+  if (mode === "search") {
+    const cards = prefetched
+      .filter((p) => p && p.file && fileExistsSafe(p.file))
+      .slice(0, n)
+      .map((p) =>
+        carouselCard(
+          { ...p.item, file: p.file, why: { mode: "search", ref: p.query || "" } },
+          { kind: "upcoming" },
+        ),
+      );
+    let note = "";
+    if (!cards.length) {
+      note =
+        config.prefetchEnabled === false
+          ? "The next one is found when it is time (prefetch is off)"
+          : "The next one is being found";
+    }
+    return { cards, note };
+  }
+  if (mode === "playlist") {
+    const name = config.activePlaylist;
+    const pl = config.playlists && config.playlists[name];
+    const list = ((pl && pl.items) || []).filter((it) => it && it.file && fileExistsSafe(it.file));
+    if (!list.length) return { cards: [], note: "" };
+    const start = (Number(config.playlistIndex) || 0) % list.length;
+    const cards = [];
+    for (let k = 0; k < Math.min(n, list.length); k++) {
+      const it = list[(start + k) % list.length];
+      cards.push(
+        carouselCard({ ...it, why: { mode: "playlist", ref: name } }, { kind: "upcoming" }),
+      );
+    }
+    return { cards, note: "" };
+  }
+  if (mode === "folder") {
+    if ((config.folderOrder || "random") !== "sequential") {
+      return { cards: [], note: "The next one is picked at random from your folders" };
+    }
+    let files = [];
+    try {
+      files = localFolderFiles();
+    } catch {}
+    if (!files.length) return { cards: [], note: "" };
+    const start = (Number(config.folderIndex) || 0) % files.length;
+    const cards = [];
+    for (let k = 0; k < Math.min(n, files.length); k++) {
+      const f = files[(start + k) % files.length];
+      cards.push(
+        carouselCard(
+          {
+            id: localFileId(f),
+            file: f,
+            why: { mode: "folder", ref: whyRefFor("folder", { file: f }) },
+          },
+          { kind: "upcoming" },
+        ),
+      );
+    }
+    return { cards, note: "" };
+  }
+  if (mode === "collection") {
+    return { cards: [], note: "The next one is picked at random from your Wallhaven collection" };
+  }
+  return { cards: [], note: "" };
+}
+
+function carouselInfo() {
+  const items = history.items;
+  const pos = navPos >= 0 && navPos < items.length ? navPos : items.length - 1;
+  const back = [];
+  for (let i = pos - 1; i >= 0 && back.length < CAROUSEL_SIDE; i--) {
+    back.push(carouselCard(items[i], { index: i, kind: "history" }));
+  }
+  const forward = [];
+  for (let i = pos + 1; i < items.length && forward.length < CAROUSEL_SIDE; i++) {
+    forward.push(carouselCard(items[i], { index: i, kind: "history" }));
+  }
+  // Pressing Forward at the end of history fetches a new wallpaper, so what
+  // the rotation will use comes straight after any history still ahead.
+  const up = upcomingCards(CAROUSEL_SIDE - forward.length);
+  forward.push(...up.cards);
+  return { back, forward, note: forward.length ? "" : up.note };
+}
+
+// Jump straight to a history entry, which is what clicking a card in the
+// carousel means. Back and Forward only ever move one step.
+async function gotoHistory(index) {
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= history.items.length) return currentInfo();
+  cancelSaveFetch();
+  const item = history.items[i];
+  let file = historyFileUsable(item, fileExistsSafe) ? item.file : null;
+  if (!file) {
+    try {
+      file = await restoreHistoryFile(item);
+    } catch {}
+  }
+  if (!file) {
+    notifySettings("app-toast", {
+      msg: "That wallpaper is no longer cached and could not be downloaded again",
+      kind: "err",
+    });
+    return currentInfo();
+  }
+  navPos = i;
+  await applyWallpaper(file, null);
+  item.file = file;
+  history.currentId = item.id;
+  saveHistory();
+  updateTrayMenu();
+  notifyRenderer();
+  return currentInfo();
+}
+
 async function navigateHistory(dir) {
   if (!history.items.length) return;
   // Going back is a deliberate choice; do not let a queued save undo it.
@@ -2359,7 +2523,14 @@ function applyScheduleRule(rule) {
     config.activePresetValues = snap;
     dirty = true;
   }
-  if (dirty) saveConfig();
+  if (dirty) {
+    // The prefetch queue was chosen under the old rule. Left alone, the first
+    // wallpaper after a timetable switch came from the previous search, and
+    // its recorded reason named the new preset beside the old search term.
+    prefetched.length = 0;
+    saveConfig();
+    notifySettings("carousel-changed", true);
+  }
 }
 function effectiveCycleMinutes() {
   const rule = activeScheduleRule();
@@ -3205,6 +3376,7 @@ ipcMain.handle("config:set", (_e, next) => {
   if (filtersMoved) {
     prefetched.length = 0;
     lastHealReason = null;
+    notifySettings("carousel-changed", true);
   }
   // Keep activePreset honest. A save that names a preset is taken at its word:
   // it is the load or the save-as itself, and save-as snapshots the form, which
@@ -3854,6 +4026,8 @@ ipcMain.handle("playlist:setActive", (_e, { name }) => {
   return { active: config.activePlaylist, index: config.playlistIndex };
 });
 ipcMain.handle("history:get", () => history.items.slice().reverse());
+ipcMain.handle("carousel:get", () => carouselInfo());
+ipcMain.handle("history:goto", (_e, index) => gotoHistory(index));
 ipcMain.handle("history:setFromFile", async (_e, { file, id, url, resolution }) => {
   // Clicking a thumbnail in the history card used to fail outright once the
   // cache had pruned that file, which is routine. Fetch it again first, the

@@ -105,5 +105,8 @@ contextBridge.exposeInMainWorld("api", {
   presetCopied: (opts) => ipcRenderer.invoke("presets:copied", opts || {}),
   presetShareable: () => ipcRenderer.invoke("presets:shareable"),
   onChanged: (cb) => ipcRenderer.on("wallpaper-changed", (_e, info) => cb(info)),
+  carousel: () => ipcRenderer.invoke("carousel:get"),
+  historyGoto: (index) => ipcRenderer.invoke("history:goto", index),
+  onCarouselChanged: (cb) => ipcRenderer.on("carousel-changed", () => cb()),
   onConfigChanged: (cb) => ipcRenderer.on("config-changed", (_e, cfg) => cb(cfg)),
 });

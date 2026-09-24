@@ -896,6 +896,198 @@ check("every history entry the app writes carries a reason", () => {
     assert.ok(/why:/.test(p), `a history push has no reason:\n${p.slice(0, 160)}`);
 });
 
+// ---------------------------------------------------------------- carousel
+
+console.log("carousel");
+
+const cf = new Function(`
+  let config = {};
+  let history = { items: [] };
+  let navPos = -1;
+  let prefetched = [];
+  let offlineNotified = false;
+  let present = new Set();
+  let folderFiles = [];
+  function fileExistsSafe(f) { return present.has(f); }
+  function localFolderFiles() { return folderFiles; }
+  function activeScheduleRule() { return null; }
+  ${extractConst("CAROUSEL_SIDE")}
+  ${extract("historyRestorable")}
+  ${extract("samePathKey")}
+  ${extract("wallpaperThumb")}
+  ${extract("whyRefFor")}
+  ${extract("carouselCard")}
+  ${extract("localFileId")}
+  ${extract("upcomingCards")}
+  ${extract("carouselInfo")}
+  return {
+    carouselInfo,
+    set: (o) => {
+      if ("config" in o) config = o.config;
+      if ("items" in o) history = { items: o.items };
+      if ("navPos" in o) navPos = o.navPos;
+      if ("prefetched" in o) prefetched = o.prefetched;
+      if ("offline" in o) offlineNotified = o.offline;
+      if ("present" in o) present = new Set(o.present);
+      if ("folderFiles" in o) folderFiles = o.folderFiles;
+    },
+  };
+`)();
+
+const hist = (n) =>
+  Array.from({ length: n }, (_, i) => ({ id: `h${i}abc`, file: `C:/c/h${i}.jpg`, thumb: `t${i}` }));
+
+check("behind is history, nearest first, three at most", () => {
+  cf.set({
+    config: { sourceMode: "search" },
+    items: hist(6),
+    navPos: -1,
+    prefetched: [],
+    present: [],
+    offline: false,
+  });
+  const { back } = cf.carouselInfo();
+  assert.deepStrictEqual(
+    back.map((c) => c.id),
+    ["h4abc", "h3abc", "h2abc"],
+  );
+  assert.deepStrictEqual(
+    back.map((c) => c.index),
+    [4, 3, 2],
+  );
+});
+
+check("ahead in search mode is the prefetch queue, in the order it will be used", () => {
+  cf.set({
+    config: { sourceMode: "search" },
+    items: hist(2),
+    navPos: -1,
+    prefetched: [
+      { item: { id: "p1", thumbs: { small: "s1" } }, file: "C:/c/p1.jpg", query: "rain" },
+      { item: { id: "p2", thumbs: { small: "s2" } }, file: "C:/c/p2.jpg", query: "cars" },
+    ],
+    present: ["C:/c/p1.jpg", "C:/c/p2.jpg"],
+  });
+  const { forward, note } = cf.carouselInfo();
+  assert.deepStrictEqual(
+    forward.map((c) => c.id),
+    ["p1", "p2"],
+  );
+  // Each says which group of the search actually produced it.
+  assert.deepStrictEqual(
+    forward.map((c) => c.why.ref),
+    ["rain", "cars"],
+  );
+  assert.ok(forward.every((c) => c.kind === "upcoming"));
+  assert.strictEqual(note, "");
+});
+
+check("an empty queue says so rather than showing nothing", () => {
+  cf.set({ config: { sourceMode: "search" }, items: hist(2), prefetched: [], present: [] });
+  assert.match(cf.carouselInfo().note, /being found/);
+  cf.set({ config: { sourceMode: "search", prefetchEnabled: false } });
+  assert.match(cf.carouselInfo().note, /prefetch is off/);
+});
+
+check("a playlist shows exactly what its index will play, wrapping round", () => {
+  const items = ["a", "b", "c"].map((x) => ({ id: x, file: `C:/p/${x}.jpg` }));
+  cf.set({
+    config: {
+      sourceMode: "playlist",
+      activePlaylist: "Gym",
+      playlists: { Gym: { items } },
+      playlistIndex: 2,
+    },
+    items: hist(1),
+    navPos: -1,
+    present: items.map((i) => i.file),
+  });
+  assert.deepStrictEqual(
+    cf.carouselInfo().forward.map((c) => c.id),
+    ["c", "a", "b"],
+  );
+});
+
+check("modes that choose at random draw no guesses", () => {
+  cf.set({
+    config: { sourceMode: "folder", folderOrder: "random", folderPaths: ["C:/w"] },
+    folderFiles: ["C:/w/1.jpg"],
+    present: ["C:/w/1.jpg"],
+  });
+  let r = cf.carouselInfo();
+  assert.strictEqual(r.forward.length, 0);
+  assert.match(r.note, /at random from your folders/);
+  cf.set({ config: { sourceMode: "collection" } });
+  assert.match(cf.carouselInfo().note, /collection/);
+  cf.set({
+    config: { sourceMode: "search", offlineCachedOnly: true },
+    offline: true,
+    prefetched: [{ item: { id: "p1" }, file: "C:/c/p1.jpg" }],
+    present: ["C:/c/p1.jpg"],
+  });
+  r = cf.carouselInfo();
+  // Offline, the rotation ignores the queue, so the queue must not be shown.
+  assert.strictEqual(r.forward.length, 0);
+  assert.match(r.note, /Offline/);
+});
+
+check("a sequential folder shows the files in the order they will play", () => {
+  cf.set({
+    config: {
+      sourceMode: "folder",
+      folderOrder: "sequential",
+      folderPaths: ["C:/w"],
+      folderIndex: 1,
+    },
+    items: hist(1),
+    offline: false,
+    folderFiles: ["C:/w/1.jpg", "C:/w/2.jpg"],
+    present: ["C:/w/1.jpg", "C:/w/2.jpg"],
+  });
+  assert.deepStrictEqual(
+    cf.carouselInfo().forward.map((c) => c.file),
+    ["C:/w/2.jpg", "C:/w/1.jpg"],
+  );
+});
+
+check("after going Back, ahead starts with the history you came from", () => {
+  cf.set({
+    config: { sourceMode: "search" },
+    items: hist(5),
+    navPos: 2,
+    prefetched: [{ item: { id: "p1" }, file: "C:/c/p1.jpg", query: "" }],
+    present: ["C:/c/p1.jpg"],
+  });
+  const { forward } = cf.carouselInfo();
+  assert.deepStrictEqual(
+    forward.map((c) => c.id),
+    ["h3abc", "h4abc", "p1"],
+  );
+  assert.deepStrictEqual(
+    forward.map((c) => c.kind),
+    ["history", "history", "upcoming"],
+  );
+});
+
+check("a local picture that has been deleted cannot be clicked back to", () => {
+  cf.set({
+    config: { sourceMode: "search" },
+    items: [
+      { id: "local:abc", file: "C:/gone.jpg" },
+      { id: "wh1234", file: "C:/also-gone.jpg" },
+      { id: "now1", file: "C:/n.jpg" },
+    ],
+    navPos: -1,
+    prefetched: [],
+    present: ["C:/n.jpg"],
+  });
+  const { back } = cf.carouselInfo();
+  const byId = Object.fromEntries(back.map((c) => [c.id, c.reachable]));
+  assert.strictEqual(byId["local:abc"], false);
+  // A Wallhaven one can be downloaded again.
+  assert.strictEqual(byId["wh1234"], true);
+});
+
 // ---------------------------------------------------------------- tray reactions
 
 console.log("tray reactions");

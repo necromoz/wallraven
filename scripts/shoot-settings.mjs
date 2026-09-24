@@ -100,8 +100,38 @@ const CONFIG = {
   lastSeenVersion: lastSeen,
 };
 
+// Sample wallpapers for the carousel: the site's own feature images, so the
+// shot looks like a real library rather than one icon repeated.
+const SAMPLE = (n) => path.join(ROOT, "src", "assets", `feat-${String(n).padStart(2, "0")}.jpg`);
+const sampleWhy = { mode: "search", ref: "misty forest", preset: "Moody", rule: "a" };
+const CAROUSEL = {
+  back: [3, 4, 5].map((n, k) => ({
+    id: `back${k}`,
+    file: SAMPLE(n),
+    resolution: "3840x2160",
+    why: sampleWhy,
+    reachable: true,
+    index: 197 - k,
+    kind: "history",
+  })),
+  forward: [6, 8].map((n, k) => ({
+    id: `next${k}`,
+    file: SAMPLE(n),
+    resolution: "3840x2160",
+    why: sampleWhy,
+    reachable: true,
+    kind: "upcoming",
+  })),
+  note: "",
+};
+
 const INFO = {
-  current: { id: "gwq6me", file: path.join(ELECTRON_DIR, "icon.png"), resolution: "5126x2883" },
+  current: {
+    id: "gwq6me",
+    file: SAMPLE(1),
+    resolution: "5126x2883",
+    why: { ...sampleWhy, fallback: "without aspect ratio" },
+  },
   cacheMB: 5058,
   pinnedMB: 33,
   historyCount: 200,
@@ -118,7 +148,7 @@ const browser = await chromium.launch(
 const tab = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
 
 await tab.addInitScript(
-  ({ config, info, changelogText }) => {
+  ({ config, info, changelogText, carousel }) => {
     const reply =
       (value) =>
       (...args) =>
@@ -137,6 +167,8 @@ await tab.addInitScript(
       changelog: reply(changelogText),
       portableInfo: reply({ portable: false, dir: "C:/Program Files/WallRaven" }),
       likes: reply([]),
+      carousel: reply(carousel),
+      historyGoto: reply(info),
       schedulePreview: reply({ activeRuleId: "a", effectiveIntervalMin: 30, enabled: true }),
     };
     // Anything not modelled answers with something harmlessly shaped like data.
@@ -150,7 +182,7 @@ await tab.addInitScript(
       has: () => true,
     });
   },
-  { config: CONFIG, info: INFO, changelogText: changelog },
+  { config: CONFIG, info: INFO, changelogText: changelog, carousel: CAROUSEL },
 );
 
 await tab.goto(`file://${path.join(ELECTRON_DIR, "settings.html")}`);

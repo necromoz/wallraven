@@ -2999,6 +2999,7 @@ async function refreshInfo() {
   }
   renderHeaderThumb();
   renderWhy();
+  renderCarousel();
   renderHistory();
   const sub = document.querySelector('[data-id="history"] [data-role="sub"]');
   if (sub) sub.textContent = historyItems.length ? `- ${historyItems.length}` : "";
@@ -3107,6 +3108,139 @@ function renderWhy() {
     d.notes.map((n) => `<span class="why-note">${n}</span>`).join("");
 }
 
+// ---------- Carousel ----------
+//
+// Earlier wallpapers to the left of Now playing, what comes next to the right.
+// Main decides what is genuinely known to be next (see carouselInfo); this
+// only draws it. Where the next one is picked at the moment of rotating, main
+// sends a sentence instead of cards and that is what is shown.
+const CAROUSEL_STEPS = 3;
+let carouselSeq = 0;
+let carouselData = null;
+
+async function renderCarousel() {
+  if (!api.carousel || !document.getElementById("coverflow")) return;
+  const seq = ++carouselSeq;
+  let data;
+  try {
+    data = await api.carousel();
+  } catch {
+    return;
+  }
+  // Two redraws can be in flight at once (a rotation and a prefetch landing
+  // together); only the newest may paint.
+  if (seq !== carouselSeq) return;
+  carouselData = data;
+  drawCarousel();
+}
+
+function carouselImage(c) {
+  if (c.file) return `url("file://${String(c.file).replace(/\\/g, "/")}")`;
+  if (c.thumb && /^https:\/\//.test(c.thumb)) return `url("${c.thumb.replace(/"/g, "%22")}")`;
+  return "";
+}
+
+function carouselWhyText(c) {
+  const d = describeWhy(c, config);
+  if (!d) return "";
+  const tmp = document.createElement("div");
+  tmp.innerHTML = d.chain.join(" › ");
+  return tmp.textContent || "";
+}
+
+function drawCarousel() {
+  const stage = document.getElementById("coverflow");
+  const back = document.getElementById("cf-back");
+  const fwd = document.getElementById("cf-fwd");
+  if (!stage || !back || !fwd) return;
+  back.innerHTML = "";
+  fwd.innerHTML = "";
+  if (!currentWp) return;
+  const raw = carouselData || {};
+  const data = {
+    back: Array.isArray(raw.back) ? raw.back : [],
+    forward: Array.isArray(raw.forward) ? raw.forward : [],
+    note: typeof raw.note === "string" ? raw.note : "",
+  };
+
+  // Geometry from the stage itself, so it holds on any window size: the first
+  // card tucks just behind the centre's edge and the rest stack outwards,
+  // closer together when there is less room.
+  const h = stage.clientHeight || 150;
+  const half = (stage.clientWidth || 600) / 2;
+  const centreW = (h * 16) / 9;
+  const cardW = (h * 0.78 * 16) / 9;
+  const first = centreW / 2 + cardW * 0.12;
+  const room = half - first - cardW * 0.3;
+  const step = Math.max(cardW * 0.08, Math.min(cardW * 0.3, room / (CAROUSEL_STEPS - 1)));
+  const place = (el, dir, k) => {
+    el.style.transform = `translateX(calc(-50% + ${dir * (first + k * step)}px)) translateZ(-70px) rotateY(${dir * -62}deg)`;
+    el.style.zIndex = String(9 - k);
+  };
+
+  const firstUpcoming = data.forward.findIndex((c) => c && c.kind === "upcoming");
+  const make = (c, dir, k) => {
+    const el = document.createElement("div");
+    el.className = "cf-card";
+    const img = carouselImage(c);
+    if (img) el.style.backgroundImage = img;
+    else {
+      const e = document.createElement("div");
+      e.className = "cf-empty";
+      e.textContent = "No longer cached";
+      el.appendChild(e);
+    }
+    const upcoming = c.kind === "upcoming";
+    const isNext = upcoming && k === firstUpcoming;
+    if (isNext) {
+      const tag = document.createElement("span");
+      tag.className = "cf-tag";
+      tag.textContent = "Next";
+      el.appendChild(tag);
+    }
+    const why = carouselWhyText(c);
+    const name = `${c.id || "Wallpaper"}${c.resolution ? " · " + c.resolution : ""}`;
+    if (upcoming && !isNext) {
+      el.classList.add("cf-later");
+      el.title = `Coming up after that: ${name}${why ? "\n" + why : ""}`;
+    } else if (upcoming) {
+      el.title = `Next up: ${name}${why ? "\n" + why : ""}\nClick to show it now.`;
+      el.addEventListener("click", async () => {
+        await api.next();
+      });
+    } else if (!c.reachable) {
+      el.classList.add("cf-dead");
+      el.title = `${name}\nNo longer cached, and not from Wallhaven, so it cannot be shown again.`;
+    } else {
+      el.title = `${dir < 0 ? "Earlier" : "Later"}: ${name}${why ? "\n" + why : ""}\nClick to go back to it.`;
+      el.addEventListener("click", async () => {
+        const info = await api.historyGoto(c.index);
+        await loadHistory();
+        refreshInfoFrom(info);
+      });
+    }
+    place(el, dir, k);
+    return el;
+  };
+  data.back.forEach((c, k) => c && back.appendChild(make(c, -1, k)));
+  data.forward.forEach((c, k) => c && fwd.appendChild(make(c, 1, k)));
+  if (!data.forward.length && data.note) {
+    const n = document.createElement("div");
+    n.className = "cf-note";
+    n.textContent = data.note;
+    n.style.left = `calc(50% + ${centreW / 2 + 18}px)`;
+    fwd.appendChild(n);
+  }
+}
+api.onCarouselChanged?.(() => renderCarousel());
+{
+  let t = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(drawCarousel, 120);
+  });
+}
+
 // The two thumbs in the title bar show whether the wallpaper on screen is
 // already liked or disliked, the same way the Paused button shows its state.
 // Without this the only way to find out was to scroll the Library and look,
@@ -3146,6 +3280,7 @@ function refreshInfoFrom(info) {
   const has = !!currentWp;
   renderHeaderThumb();
   renderWhy();
+  renderCarousel();
   const bo = $("#btn-open"),
     bf = $("#btn-folder"),
     bb = $("#btn-back"),

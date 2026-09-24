@@ -280,6 +280,60 @@ check("Now playing says why this wallpaper was chosen", () => {
   assert.strictEqual(calls, 2, "renderWhy is not called beside both header redraws");
 });
 
+check("Now playing is a carousel around the wallpaper on screen", () => {
+  assert.ok(/id="coverflow"/.test(HTML), "no carousel stage in the card");
+  assert.ok(
+    /id="cf-back"/.test(HTML) && /id="cf-fwd"/.test(HTML),
+    "missing a side of the carousel",
+  );
+  // #thumb stays inside the stage: every existing redraw writes to it.
+  const stage = HTML.slice(HTML.indexOf('id="coverflow"'), HTML.indexOf('id="cf-fwd"'));
+  assert.ok(/id="thumb"/.test(stage), "the centre image is not in the stage");
+  // Redrawn beside both header redraws, or it goes stale after Back/Forward.
+  const calls = JS.split("renderWhy();\n  renderCarousel();").length - 1;
+  assert.strictEqual(calls, 2, "renderCarousel is not called beside both redraws");
+  assert.ok(
+    hasCode(JS, "api.onCarouselChanged?.(() => renderCarousel());"),
+    "a prefetch landing never redraws it",
+  );
+});
+
+check("the carousel cannot be painted by a stale answer", () => {
+  const r = extractFrom(JS, "renderCarousel");
+  assert.ok(/seq !== carouselSeq/.test(r), "an older reply can overwrite a newer one");
+  // Anything not shaped like the expected data must draw nothing, not throw.
+  const d = extractFrom(JS, "drawCarousel");
+  assert.ok(
+    /Array\.isArray\(raw\.back\)/.test(d) && /Array\.isArray\(raw\.forward\)/.test(d),
+    "unguarded data shape",
+  );
+});
+
+check("the carousel's cards are actually angled", () => {
+  // perspective only reaches direct children. It was first put on the stage,
+  // whose grandchildren are the cards, and every card drew flat.
+  const side = CSS.slice(CSS.indexOf(".cf-side {"), CSS.indexOf("}", CSS.indexOf(".cf-side {")));
+  assert.ok(
+    /perspective:\s*\d+px/.test(side),
+    "the side containers have no perspective, so cards draw flat",
+  );
+  // Its own stacking context, so angled cards cannot escape above the header
+  // or under a theme backdrop, the way #intro-panel did in beta.2.
+  const stageCss = CSS.slice(
+    CSS.indexOf(".coverflow {"),
+    CSS.indexOf("}", CSS.indexOf(".coverflow {")),
+  );
+  assert.ok(/isolation:\s*isolate/.test(stageCss), "the stage is not isolated");
+});
+
+check("only the first card ahead can be clicked, because only it is certain", () => {
+  const d = extractFrom(JS, "drawCarousel");
+  assert.ok(/cf-later/.test(d), "later upcoming cards are not marked unclickable");
+  assert.ok(/api\.next\(\)/.test(d), "the next card does not show it now");
+  assert.ok(/api\.historyGoto\(c\.index\)/.test(d), "history cards do not jump to their entry");
+  assert.ok(/cf-dead/.test(d), "unrecoverable history is not marked");
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);
