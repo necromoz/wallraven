@@ -1,5 +1,21 @@
 # Wallraven changelog
 
+## v1.3.0-beta.6 — 24 Sep 2026
+
+### New
+
+- **The full size view has its own controls.** Arrow keys or the buttons at the sides move through your wallpapers, and Set as wallpaper works from inside it.
+- **Undo a dislike.** Dislike & skip leaves a notice with Undo, which brings the wallpaper back.
+
+### Changed
+
+- **Save tells you when there is something to save.** It says Saved when there is nothing pending and Save changes when there is. Theme and colour still save the moment you pick them.
+- **Pause says Pause.** The button names what it will do, and lights up while paused.
+- **Less repetition.** The Now playing card no longer repeats the title bar's buttons, and Home no longer repeats the sidebar.
+- **The wheel scrolls the page again** when the pointer happens to be over the carousel. Click the carousel first, or scroll sideways, to move it with the wheel.
+- **Easier to read** in the Nord, Glass and Raven themes.
+- A lit dislike is a different colour from a lit like, and the window is called WallRaven.
+
 ## v1.3.0-beta.5 — 24 Sep 2026
 
 ### Fixed
