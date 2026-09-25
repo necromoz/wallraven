@@ -117,6 +117,11 @@ const DEFAULT_CONFIG = {
   atleastResolution: "__current__",
   colors: [], // wallhaven palette hex (no #)
   aiArtFilter: 1, // 1 = exclude AI, 0 = include
+  // A "4K" upload can still be a shorter picture centred on a 2160px canvas
+  // with solid bars filling the rest — Wallhaven's resolution filter matches
+  // the file, not what is actually drawn inside it. Checked after download,
+  // since nothing in the search API can tell bars from real content.
+  skipLetterboxed: true,
   cycleMinutes: 30,
   cacheMaxMB: 1024,
   autoStart: true,
@@ -165,6 +170,7 @@ const DEFAULT_CONFIG = {
   likes: [], // wallhaven ids the user liked
   dislikes: [], // wallhaven ids excluded from future rotation
   dislikedItems: [], // wallpaper details used by the Disliked gallery
+  letterboxedIds: [], // wallhaven ids confirmed to have baked-in bars — skipped without re-checking
   blacklistTagIds: [], // wallhaven tag ids appended as -id:N to every search
   schedule: {
     // timetable engine
@@ -984,6 +990,123 @@ function downloadFile(url, dest, depth = 0) {
   });
 }
 
+// ---------- Letterbox / pillarbox detection ----------
+// A wallpaper can carry solid bars baked into the picture itself — the file is
+// genuinely 3840x2160, but the artwork inside it only fills the centre
+// 3840x1600, with flat colour padding out the rest. Wallhaven's resolution and
+// ratio filters match the file, not what is actually drawn, so this has to be
+// caught after the image is on disk.
+//
+// The approach is the same one video tools use to find black bars
+// (ffmpeg's cropdetect): walk in from each edge and measure how many rows or
+// columns stay a flat, matching colour before real picture content starts.
+// Generalised to any bar colour, not just black, because Wallhaven bars are as
+// often white or a brand colour. Like any such heuristic it can be fooled by a
+// genuinely flat, edge-to-edge sky or backdrop — that trade-off is why the
+// setting can be turned off.
+// Odd, so one sample sits on the exact centre.
+const LETTERBOX_SAMPLE_LINES = 7;
+// Max channel spread allowed within one row/column for it to count as flat.
+const LETTERBOX_FLAT_TOLERANCE = 14;
+// Max drift from the bar's own running colour before a line no longer counts
+// as part of it.
+const LETTERBOX_MATCH_TOLERANCE = 18;
+// Ignore a run shorter than this — compression noise at the very edge, not a bar.
+const LETTERBOX_MIN_BAR_PX = 6;
+// Bars have to cover at least this much of the dimension, either axis, to flag the image.
+const LETTERBOX_DEFAULT_THRESHOLD = 0.03;
+
+// Evenly spaced sample positions across [0, size), inset from both ends so a
+// single-pixel edge artefact cannot dominate the reading.
+function letterboxSamplePositions(size) {
+  const n = Math.max(1, Math.min(LETTERBOX_SAMPLE_LINES, size));
+  const positions = [];
+  for (let i = 0; i < n; i++) {
+    positions.push(Math.min(size - 1, Math.round(((i + 1) * size) / (n + 1))));
+  }
+  return [...new Set(positions)];
+}
+
+// How many lines deep, starting at `line = 0` on one edge, stay a flat and
+// mutually-consistent colour. `pixelAt(line, samplePos)` returns [r,g,b] for
+// the sample at that depth. Stops at the first line that either has real
+// variation across its own samples, or has drifted from the bar's colour so
+// far it can no longer be the same bar. Returns 0 if the run is shorter than
+// LETTERBOX_MIN_BAR_PX, treating a thin edge as noise rather than a bar.
+function letterboxEdgeDepth(count, samplePositions, pixelAt) {
+  let depth = 0;
+  let barColor = null;
+  for (let line = 0; line < count; line++) {
+    const samples = samplePositions.map((p) => pixelAt(line, p));
+    let minC = [255, 255, 255];
+    let maxC = [0, 0, 0];
+    for (const [r, g, b] of samples) {
+      minC = [Math.min(minC[0], r), Math.min(minC[1], g), Math.min(minC[2], b)];
+      maxC = [Math.max(maxC[0], r), Math.max(maxC[1], g), Math.max(maxC[2], b)];
+    }
+    const flat =
+      maxC[0] - minC[0] <= LETTERBOX_FLAT_TOLERANCE &&
+      maxC[1] - minC[1] <= LETTERBOX_FLAT_TOLERANCE &&
+      maxC[2] - minC[2] <= LETTERBOX_FLAT_TOLERANCE;
+    if (!flat) break;
+    const avg = [0, 1, 2].map((c) => samples.reduce((s, px) => s + px[c], 0) / samples.length);
+    if (barColor) {
+      const drift = Math.max(...avg.map((v, c) => Math.abs(v - barColor[c])));
+      if (drift > LETTERBOX_MATCH_TOLERANCE) break;
+    } else {
+      barColor = avg;
+    }
+    depth = line + 1;
+  }
+  return depth >= LETTERBOX_MIN_BAR_PX ? depth : 0;
+}
+
+// Pure analysis over a pixel accessor — no file or Electron access, so this is
+// the part covered by unit tests. `pixelAt(x, y)` returns [r,g,b] for one
+// pixel. Returns null when nothing crosses the threshold, or a detail object
+// naming which axis the bars run on.
+function analyzeLetterbox(width, height, pixelAt, threshold = LETTERBOX_DEFAULT_THRESHOLD) {
+  if (!width || !height) return null;
+  const cols = letterboxSamplePositions(width);
+  const rows = letterboxSamplePositions(height);
+  const top = letterboxEdgeDepth(height, cols, (line, x) => pixelAt(x, line));
+  const bottom = letterboxEdgeDepth(height, cols, (line, x) => pixelAt(x, height - 1 - line));
+  const left = letterboxEdgeDepth(width, rows, (line, y) => pixelAt(line, y));
+  const right = letterboxEdgeDepth(width, rows, (line, y) => pixelAt(width - 1 - line, y));
+  const vFraction = (top + bottom) / height; // top/bottom bars = letterbox
+  const hFraction = (left + right) / width; // left/right bars = pillarbox
+  if (vFraction < threshold && hFraction < threshold) return null;
+  return {
+    axis: vFraction >= hFraction ? "horizontal" : "vertical",
+    top,
+    bottom,
+    left,
+    right,
+    fraction: Math.max(vFraction, hFraction),
+  };
+}
+
+// Reads a downloaded wallpaper off disk with Electron's own image decoder (no
+// extra dependency) and reports whether it has bars baked in. Never throws —
+// a wallpaper that can't be measured should still be usable — so a decode
+// failure is treated the same as "no bars found".
+function detectLetterbox(filePath, threshold = LETTERBOX_DEFAULT_THRESHOLD) {
+  try {
+    const img = nativeImage.createFromPath(filePath);
+    const { width, height } = img.getSize();
+    if (!width || !height) return null;
+    const bitmap = img.toBitmap(); // BGRA, width*height*4, per Electron's nativeImage
+    const pixelAt = (x, y) => {
+      const i = (y * width + x) * 4;
+      return [bitmap[i + 2], bitmap[i + 1], bitmap[i]]; // r, g, b
+    };
+    return analyzeLetterbox(width, height, pixelAt, threshold);
+  } catch (e) {
+    console.warn("[wallraven] letterbox check failed", filePath, e.message);
+    return null;
+  }
+}
+
 // ---------- Cache management ----------
 function getPinnedFiles() {
   const set = new Set();
@@ -1502,8 +1625,73 @@ function pickCachedWallpaper() {
   } catch {}
   const cur = navPos >= 0 && navPos < history.items.length ? history.items[navPos] : null;
   if (cur) files = files.filter((p) => p !== cur.file);
+  if (config.skipLetterboxed !== false && (config.letterboxedIds || []).length) {
+    const letterboxed = new Set(config.letterboxedIds.map(String));
+    const clean = files.filter((f) => !letterboxed.has(path.basename(f, path.extname(f))));
+    if (clean.length) files = clean; // only narrow it down if that leaves something to pick
+  }
   if (!files.length) return null;
   return files[Math.floor(Math.random() * files.length)];
+}
+
+// Pick one wallpaper from `items`, downloading it if needed, skipping recent
+// and disliked ids the same way the rotation always has, plus — unless the
+// setting is off — anything already known or now found to have bars baked in.
+// A candidate that turns out to be letterboxed is remembered in
+// config.letterboxedIds so it is skipped instantly next time, no re-download
+// or re-decode needed. Shared by the rotation's own fetch and the prefetcher,
+// so both apply the same rule the same way.
+//
+// Gives up after LETTERBOX_MAX_ATTEMPTS distinct downloads rather than
+// refusing forever — a narrow search running out of clean candidates is worse
+// served by an endless retry loop than by the occasional letterboxed picture.
+// Returns null only when nothing at all could be selected (an empty pool on
+// the very first attempt); otherwise it returns the best candidate it found,
+// which may still be letterboxed if that is all there was.
+const LETTERBOX_MAX_ATTEMPTS = 4;
+async function selectAndDownload(items, { extraExclude = new Set() } = {}) {
+  const recentIds = new Set(history.items.slice(-30).map((i) => i.id));
+  const disliked = new Set((config.dislikes || []).map(String));
+  const checkLetterbox = config.skipLetterboxed !== false;
+  const letterboxed = new Set((config.letterboxedIds || []).map(String));
+
+  let lastDownloaded = null;
+  for (let attempt = 0; attempt < LETTERBOX_MAX_ATTEMPTS; attempt++) {
+    const excluded = (w) =>
+      disliked.has(String(w.id)) ||
+      extraExclude.has(String(w.id)) ||
+      (checkLetterbox && letterboxed.has(String(w.id)));
+    const pool = items.filter((w) => !recentIds.has(w.id) && !excluded(w));
+    const src = pool.length ? pool : items.filter((w) => !excluded(w));
+    if (!src.length) return lastDownloaded;
+
+    const choice = src[Math.floor(Math.random() * src.length)];
+    const ext = choice.file_type && choice.file_type.includes("png") ? "png" : "jpg";
+    const dest = path.join(CACHE_DIR, `${choice.id}.${ext}`);
+    let servedFromCache = false;
+    if (!fs.existsSync(dest)) {
+      try {
+        await downloadFile(choice.path, dest);
+      } catch {
+        await new Promise((r) => setTimeout(r, 1500));
+        await downloadFile(choice.path, dest);
+      }
+    } else {
+      servedFromCache = true;
+    }
+    lastDownloaded = { choice, dest, servedFromCache };
+    if (!checkLetterbox) return lastDownloaded;
+
+    const bars = detectLetterbox(dest);
+    if (!bars) return lastDownloaded;
+
+    config.letterboxedIds = [...new Set([...(config.letterboxedIds || []), String(choice.id)])];
+    if (config.letterboxedIds.length > 500) config.letterboxedIds = config.letterboxedIds.slice(-500);
+    saveConfig();
+    extraExclude.add(String(choice.id));
+    letterboxed.add(String(choice.id));
+  }
+  return lastDownloaded;
 }
 
 // Statistics: lightweight counters persisted in config.stats (machine-local).
@@ -1565,20 +1753,13 @@ async function doPrefetch() {
     if (await useCachedOnly()) return; // offline: the rotation will not use the queue
     const res = await searchWithFallback();
     const current = currentItem();
-    const recentIds = new Set(history.items.slice(-30).map((i) => i.id));
-    const disliked = new Set((config.dislikes || []).map(String));
-    const items = (res.items || []).filter(
-      (w) => !disliked.has(String(w.id)) && !(current && String(current.id) === String(w.id)),
-    );
-    // The same fallback the rotation uses: prefer something not seen recently,
-    // but a narrow search that has shown everything lately still gets a next.
-    const pool = items.filter((w) => !recentIds.has(w.id));
-    const src = pool.length ? pool : items;
-    if (!src.length) return;
-    const choice = src[Math.floor(Math.random() * src.length)];
-    const ext = choice.file_type && choice.file_type.includes("png") ? "png" : "jpg";
-    const dest = path.join(CACHE_DIR, `${choice.id}.${ext}`);
-    if (!fs.existsSync(dest)) await downloadFile(choice.path, dest);
+    const extraExclude = new Set(current ? [String(current.id)] : []);
+    // selectAndDownload applies the same recent/disliked/letterboxed rules the
+    // rotation itself uses, so the queue never hands over a candidate the
+    // rotation would have skipped.
+    const picked = await selectAndDownload(res.items || [], { extraExclude });
+    if (!picked) return;
+    const { choice, dest } = picked;
     prefetched.push({ item: choice, file: dest, query: res.query, usedFallback: res.usedFallback });
     while (prefetched.length > 5) prefetched.shift(); // never let candidates pile up
     notifySettings("carousel-changed", true);
@@ -2208,25 +2389,16 @@ async function fetchAndSetWallpaper(manual = false) {
       dest = playlistChoice.file;
       servedFromCache = true; // local file — no download needed
     } else {
-      const recentIds = new Set(history.items.slice(-30).map((i) => i.id));
-      const disliked = new Set((config.dislikes || []).map(String));
-      const pool = items.filter((w) => !recentIds.has(w.id) && !disliked.has(String(w.id)));
-      const src = pool.length ? pool : items.filter((w) => !disliked.has(String(w.id)));
-      if (!src.length)
+      // Covers both a prefetched single candidate (already downloaded and
+      // already checked, so this resolves on its first pass) and a live
+      // search, where it downloads, checks and retries the same way the
+      // prefetcher does.
+      const picked = await selectAndDownload(items);
+      if (!picked)
         throw new Error("All results were disliked — clear dislikes or widen filters");
-      choice = src[Math.floor(Math.random() * src.length)];
-      const ext = choice.file_type && choice.file_type.includes("png") ? "png" : "jpg";
-      dest = path.join(CACHE_DIR, `${choice.id}.${ext}`);
-      if (!fs.existsSync(dest)) {
-        try {
-          await downloadFile(choice.path, dest);
-        } catch {
-          await new Promise((r) => setTimeout(r, 1500));
-          await downloadFile(choice.path, dest);
-        }
-      } else {
-        servedFromCache = true; // already cached — no download this rotation
-      }
+      choice = picked.choice;
+      dest = picked.dest;
+      servedFromCache = picked.servedFromCache;
     }
     // Last check before anything the user can see. A download can take a long
     // time, and the lock may have been taken away while it ran.
@@ -3399,8 +3571,14 @@ ipcMain.handle("config:set", (_e, next) => {
   const filtersMoved = SEARCH_AFFECTING.some(
     (k) => k in patch && JSON.stringify(patch[k]) !== JSON.stringify(before[k]),
   );
+  // Not a search filter, but flipping it changes which prefetched candidate is
+  // acceptable — most importantly, turning it on should drop a queued
+  // candidate that has since turned out to be letterboxed, immediately rather
+  // than at the next rotation.
+  const letterboxSettingMoved =
+    "skipLetterboxed" in patch && patch.skipLetterboxed !== before.skipLetterboxed;
   config = { ...config, ...next };
-  if (filtersMoved) {
+  if (filtersMoved || letterboxSettingMoved) {
     prefetched.length = 0;
     lastHealReason = null;
     notifySettings("carousel-changed", true);
@@ -4340,6 +4518,14 @@ ipcMain.handle("wp:clearLikes", () => {
   updateTrayMenu();
   notifyRenderer();
   return config.likes;
+});
+// The letterbox list is a guess, not a choice the user made — offer a way
+// back for anything flagged wrongly, the same way dislikes and likes can be
+// cleared.
+ipcMain.handle("wp:clearLetterboxed", () => {
+  config.letterboxedIds = [];
+  saveConfig();
+  return config.letterboxedIds;
 });
 ipcMain.handle("schedule:preview", () => {
   const rule = activeScheduleRule();

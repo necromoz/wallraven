@@ -724,6 +724,9 @@ function hydrateInputs(c) {
   chk("#folderRecursive", c.folderRecursive !== false);
   chk("#offlineCachedOnlyManual", c.offlineCachedOnlyManual);
   chk("#prefetchEnabled", c.prefetchEnabled !== false);
+  chk("#skipLetterboxed", c.skipLetterboxed !== false);
+  const lbc = $("#letterboxCount");
+  if (lbc) lbc.textContent = (c.letterboxedIds || []).length;
   set("#folderOrder", c.folderOrder || "random");
   syncFullscreenRows();
 
@@ -822,6 +825,7 @@ function collect() {
     },
     offlineCachedOnlyManual: chk("#offlineCachedOnlyManual"),
     prefetchEnabled: chk("#prefetchEnabled"),
+    skipLetterboxed: chk("#skipLetterboxed"),
   };
 }
 
@@ -1052,6 +1056,13 @@ function wireAllCards() {
       renderHistory();
       renderPlaylistUI();
       flash("Likes cleared", "ok");
+    });
+  $("#btn-clear-letterboxed") &&
+    ($("#btn-clear-letterboxed").onclick = async () => {
+      await api.clearLetterboxed();
+      config = await api.getConfig();
+      hydrateInputs(config);
+      flash("Letterbox list cleared", "ok");
     });
   $("#pauseOnFullscreen")?.addEventListener("change", syncFullscreenRows);
   $("#pauseFullscreenMode")?.addEventListener("change", syncFullscreenRows);

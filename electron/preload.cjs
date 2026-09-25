@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld("api", {
   dislike: () => ipcRenderer.invoke("wp:dislike"),
   clearDislikes: () => ipcRenderer.invoke("wp:clearDislikes"),
   clearLikes: () => ipcRenderer.invoke("wp:clearLikes"),
+  clearLetterboxed: () => ipcRenderer.invoke("wp:clearLetterboxed"),
   undoDislike: (item) => ipcRenderer.invoke("wp:undoDislike", item),
   schedulePreview: () => ipcRenderer.invoke("schedule:preview"),
   updateCheck: () => ipcRenderer.invoke("update:check"),

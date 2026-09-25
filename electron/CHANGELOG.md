@@ -1,5 +1,11 @@
 # Wallraven changelog
 
+## v1.3.1-beta.1 — 25 Sep 2026
+
+### New
+
+- **Skip letterboxed images.** Some "4K" uploads are really a shorter picture padded out with solid bars to reach the resolution. Wallpapers are now checked after downloading, and a barred one is quietly swapped for another. On by default; turn it off, or clear the list of ones it has flagged, under Resolution.
+
 ## v1.3.0 — 24 Sep 2026
 
 ### New

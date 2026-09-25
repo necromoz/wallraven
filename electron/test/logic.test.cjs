@@ -1095,22 +1095,26 @@ check("a local picture that has been deleted cannot be clicked back to", () => {
 
 check("the prefetch queue is kept filled, so Next does not stick on 'being found'", () => {
   const body = extract("doPrefetch");
-  // Found in beta.2 testing: a candidate already in the cache was dropped, not
-  // queued. With a big cache and a narrow search that was most picks.
-  assert.ok(
-    !/if \(fs\.existsSync\(dest\)\) return;/.test(body),
-    "a cached candidate is dropped instead of queued",
-  );
-  assert.ok(
-    /if \(!fs\.existsSync\(dest\)\) await downloadFile/.test(body),
-    "a cached candidate should skip only the download",
-  );
-  // The rotation's own fallback, or a narrow search that has shown everything
-  // recently never gets a next.
-  assert.ok(/pool\.length \? pool : items/.test(body), "no fallback to recently shown results");
+  assert.ok(/selectAndDownload\(/.test(body), "doPrefetch no longer picks via selectAndDownload");
   assert.ok(
     /schedulePrefetch\(PREFETCH_RETRY_MS\)/.test(body),
     "a skipped or failed prefetch is never retried",
+  );
+  // The picking logic itself moved into selectAndDownload, shared with the
+  // rotation, but the same two beta.2 regressions still apply to it.
+  const picker = extract("selectAndDownload");
+  assert.ok(
+    !/if \(fs\.existsSync\(dest\)\) return;/.test(picker),
+    "a cached candidate is dropped instead of used",
+  );
+  assert.ok(
+    /if \(!fs\.existsSync\(dest\)\) \{[\s\S]*?await downloadFile/.test(picker),
+    "a cached candidate should skip only the download",
+  );
+  // A narrow search that has shown everything recently should still give a next.
+  assert.ok(
+    /pool\.length \? pool : items\.filter/.test(picker),
+    "no fallback to recently shown results",
   );
   // Refilled everywhere the queue starts empty, not only after a rotation.
   const startup = SRC.slice(SRC.indexOf("app.whenReady()"), SRC.indexOf("app.whenReady()") + 1500);
@@ -1200,6 +1204,130 @@ check("clearing either reaction empties both lists behind it", () => {
   const clearL = SRC.slice(at, at + 400);
   assert.ok(/config\.likes = \[\]/.test(clearL), "like ids not cleared");
   assert.ok(/liked\.items = \[\]/.test(clearL), "the Liked playlist is not emptied");
+});
+
+// ---------------------------------------------------------------- letterbox detection
+
+console.log("letterbox detection");
+
+const lb = new Function(`
+  ${extractConst("LETTERBOX_SAMPLE_LINES")}
+  ${extractConst("LETTERBOX_FLAT_TOLERANCE")}
+  ${extractConst("LETTERBOX_MATCH_TOLERANCE")}
+  ${extractConst("LETTERBOX_MIN_BAR_PX")}
+  ${extractConst("LETTERBOX_DEFAULT_THRESHOLD")}
+  ${extract("letterboxSamplePositions")}
+  ${extract("letterboxEdgeDepth")}
+  ${extract("analyzeLetterbox")}
+  return { letterboxSamplePositions, letterboxEdgeDepth, analyzeLetterbox };
+`)();
+
+// A deterministic "photo": enough variance between sample points that no run
+// of rows/columns reads as flat, so it never gets mistaken for a bar.
+function noisyPixel(x, y) {
+  return [(x * 53 + y * 7) % 256, (x * 29 + y * 113) % 256, (x * 97 + y * 41) % 256];
+}
+
+check("sample positions stay in bounds and spread across the dimension", () => {
+  for (const size of [3, 40, 200, 3840]) {
+    const pos = lb.letterboxSamplePositions(size);
+    assert.ok(pos.length > 0, `no sample positions for size ${size}`);
+    for (const p of pos) assert.ok(p >= 0 && p < size, `${p} out of bounds for size ${size}`);
+    // No duplicate positions — small sizes can collapse the spread, dedup handles it.
+    assert.strictEqual(new Set(pos).size, pos.length, "sample positions are not unique");
+  }
+});
+
+check("edge depth reads a solid bar and stops where real content starts", () => {
+  const barDepth = 25;
+  const height = 120;
+  const cols = [10, 50, 90];
+  const pixelAt = (line, x) => (line < barDepth ? [20, 20, 20] : noisyPixel(x, barDepth + line));
+  const depth = lb.letterboxEdgeDepth(height, cols, pixelAt);
+  assert.strictEqual(depth, barDepth, `expected the bar to read as ${barDepth}px deep, got ${depth}`);
+});
+
+check("edge depth ignores a run shorter than the minimum bar", () => {
+  const cols = [10, 50, 90];
+  // Only 2px of solid colour before real content — compression noise, not a bar.
+  const pixelAt = (line, x) => (line < 2 ? [20, 20, 20] : noisyPixel(x, 2 + line));
+  const depth = lb.letterboxEdgeDepth(40, cols, pixelAt);
+  assert.strictEqual(depth, 0, "a 2px run should not count as a bar");
+});
+
+check("edge depth treats a drift to a different flat colour as the content starting", () => {
+  const cols = [10, 50, 90];
+  // Flat black for 10 rows, then flat white for the rest — two different bars,
+  // not one 40px bar, so this should stop at 10.
+  const pixelAt = (line) => (line < 10 ? [0, 0, 0] : [255, 255, 255]);
+  const depth = lb.letterboxEdgeDepth(40, cols, pixelAt);
+  assert.strictEqual(depth, 10, "a colour change should end the run, not extend it");
+});
+
+check("detects a horizontal letterbox (bars top and bottom)", () => {
+  const width = 200,
+    height = 120,
+    bar = 20;
+  const pixelAt = (x, y) => {
+    if (y < bar || y >= height - bar) return [0, 0, 0];
+    return noisyPixel(x, y);
+  };
+  const result = lb.analyzeLetterbox(width, height, pixelAt);
+  assert.ok(result, "a 33%-deep top+bottom bar should be flagged");
+  assert.strictEqual(result.axis, "horizontal");
+  assert.strictEqual(result.top, bar);
+  assert.strictEqual(result.bottom, bar);
+});
+
+check("detects a vertical pillarbox (bars left and right)", () => {
+  const width = 200,
+    height = 120,
+    bar = 15;
+  const pixelAt = (x, y) => {
+    if (x < bar || x >= width - bar) return [255, 255, 255];
+    return noisyPixel(x, y);
+  };
+  const result = lb.analyzeLetterbox(width, height, pixelAt);
+  assert.ok(result, "a 15%-deep left+right bar should be flagged");
+  assert.strictEqual(result.axis, "vertical");
+  assert.strictEqual(result.left, bar);
+  assert.strictEqual(result.right, bar);
+});
+
+check("a full-bleed picture with no bars is left alone", () => {
+  const result = lb.analyzeLetterbox(200, 120, noisyPixel);
+  assert.strictEqual(result, null, "a noisy edge-to-edge picture should not be flagged");
+});
+
+check("a bar thinner than the threshold is left alone", () => {
+  const width = 200,
+    height = 120,
+    bar = 2; // well under both LETTERBOX_MIN_BAR_PX and the 3% threshold
+  const pixelAt = (x, y) => (y < bar || y >= height - bar ? [0, 0, 0] : noisyPixel(x, y));
+  const result = lb.analyzeLetterbox(width, height, pixelAt);
+  assert.strictEqual(result, null, "a 2px sliver should not be enough to flag the image");
+});
+
+check("skipLetterboxed defaults on, with a way back for a wrong guess", () => {
+  const cfgSrc = SRC.slice(SRC.indexOf("const DEFAULT_CONFIG"), SRC.indexOf("let config = loadConfig()"));
+  assert.ok(/skipLetterboxed:\s*true/.test(cfgSrc), "skipLetterboxed is not on by default");
+  assert.ok(/letterboxedIds:\s*\[\]/.test(cfgSrc), "no letterboxedIds default in config");
+  const at = SRC.indexOf('ipcMain.handle("wp:clearLetterboxed"');
+  assert.ok(at !== -1, "there is no wp:clearLetterboxed handler");
+  const handler = SRC.slice(at, at + 200);
+  assert.ok(/config\.letterboxedIds = \[\]/.test(handler), "the handler does not clear the list");
+});
+
+check("the prefetcher and the rotation share one selection path", () => {
+  // Both must run the same recent/disliked/letterboxed rules, or the queue can
+  // hand over a candidate the rotation itself would have rejected.
+  const prefetchBody = extract("doPrefetch");
+  assert.ok(/selectAndDownload\(/.test(prefetchBody), "doPrefetch no longer calls selectAndDownload");
+  const rotationBody = extract("fetchAndSetWallpaper");
+  assert.ok(
+    /selectAndDownload\(items\)/.test(rotationBody),
+    "fetchAndSetWallpaper no longer calls selectAndDownload",
+  );
 });
 
 // ---------------------------------------------------------------- summary

@@ -499,6 +499,25 @@
         <label>Exact resolutions <span class="help">(optional)</span></label>
         <input id="resolutions" type="text" placeholder="e.g. 1920x1080,2560x1440" />
       </div>
+      <div class="row">
+        <label>Letterboxing</label>
+        <label class="check"
+          ><input type="checkbox" id="skipLetterboxed" /> Skip letterboxed images</label
+        >
+      </div>
+      <div class="help help-indent">
+        Some "4K" uploads are really a shorter picture padded out with solid bars to reach the
+        resolution. This checks each download for bars and quietly tries another — occasionally
+        it will misjudge a picture with a genuinely flat, edge-to-edge sky or backdrop.
+        <button
+          class="btn secondary"
+          id="btn-clear-letterboxed"
+          title="Forget every image flagged this way, so they can be picked again"
+          style="display: block; margin-top: 8px"
+        >
+          Clear letterbox list (<span id="letterboxCount">0</span>)
+        </button>
+      </div>
     </template>
 
     <template id="tpl-colors">
