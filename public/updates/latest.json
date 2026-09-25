@@ -1,9 +1,9 @@
 {
-  "version": "1.2.1",
-  "releasedAt": "2026-09-18",
-  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.2.1/Wallraven-Setup-v1.2.1.exe",
-  "sha256": "0e8928748f257960fc9c00f588c8721c02dc3d07fc989986373154b6c2f8d5f9",
-  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.2.1",
-  "sizeBytes": 112693496,
-  "notes": "One wallpaper per action when you apply a preset, themes stick as soon as you pick them, Fade no longer pins the window invisible, and the thumbnail in the title bar matches the buttons beside it."
+  "version": "1.3.0",
+  "releasedAt": "2026-09-24",
+  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.3.0/Wallraven-Setup-v1.3.0.exe",
+  "sha256": "acd4d767219be67d5ac476ac0f17757b7106bf86990ebeecb4f37e41676626e9",
+  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.3.0",
+  "sizeBytes": 112709307,
+  "notes": "Browse your wallpapers in a carousel without changing your desktop, see why each one was chosen, undo a dislike, clear likes, and a Save button that tells you when there is something to save."
 }
