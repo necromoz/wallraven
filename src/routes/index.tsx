@@ -48,15 +48,27 @@ export const Route = createFileRoute("/")({
 
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      // Used to be hotlinked straight from Lovable's own R2 bucket (a
+      // preview-build URL with their domain baked into the filename), so
+      // what people saw sharing wallraven.app depended on Lovable's
+      // infrastructure staying up indefinitely. public/og-image.png is
+      // rendered from the site's own brand assets (scripts/og-image.mjs) and
+      // served from our own domain.
       {
         property: "og:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/dd65d7f3-42ef-4fec-b807-ef256cae4b30/id-preview-3ea2f649--83217dbf-e2de-40b7-838c-7579bfa4d41f.lovable.app-1783517153126.png",
+        content: "https://wallraven.app/og-image.png",
+      },
+      {
+        property: "og:image:width",
+        content: "1200",
+      },
+      {
+        property: "og:image:height",
+        content: "630",
       },
       {
         name: "twitter:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/dd65d7f3-42ef-4fec-b807-ef256cae4b30/id-preview-3ea2f649--83217dbf-e2de-40b7-838c-7579bfa4d41f.lovable.app-1783517153126.png",
+        content: "https://wallraven.app/og-image.png",
       },
     ],
   }),
