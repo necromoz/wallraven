@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
@@ -47,7 +47,6 @@ type State = "checking" | "entry" | "confirm" | "linking" | "done";
 
 export function LinkPage() {
   const { pair } = Route.useSearch();
-  const navigate = useNavigate();
   const [state, setState] = useState<State>("checking");
   const [code, setCode] = useState("");
   const [deviceName, setDeviceName] = useState<string | null>(null);
@@ -62,8 +61,19 @@ export function LinkPage() {
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
-        // link=1 so that signing in comes back here rather than to the account page.
-        navigate({ to: "/auth", search: { link: "1" } as never });
+        // link=1 so that signing in comes back here rather than to the account
+        // page. A plain navigate({ search: { link: "1" } }) goes through
+        // TanStack's own search serializer, which -- because /auth has no
+        // validateSearch for this key -- JSON-encodes the value, producing
+        // ?link=%221%22 (a quoted "1") rather than ?link=1. auth.tsx reads the
+        // query string directly and checks for an unquoted "1" (matching how
+        // signInWithProvider's own OAuth redirect builds this same param), so
+        // that mismatch silently broke the flag on every linking sign-in: it
+        // reads as "signed in", not "signed in to link a device", and lands
+        // on /account with the pairing code never asked for. A real browser
+        // navigation sidesteps the router's serializer entirely and matches
+        // the plain format the rest of this flow already expects.
+        window.location.assign(new URL("/auth?link=1", window.location.origin).toString());
         return;
       }
       // A code in the URL means an app old enough to use the flow that is being
@@ -71,7 +81,7 @@ export function LinkPage() {
       if (pair) setLegacy(true);
       setState("entry");
     })();
-  }, [pair, navigate]);
+  }, [pair]);
 
   async function onCheckCode(event: React.FormEvent) {
     event.preventDefault();
