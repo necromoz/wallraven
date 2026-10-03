@@ -75,3 +75,8 @@ electron/dist/
 
 # Lovable leftovers: plan files from the tool this started in.
 .lovable/
+
+# Supabase CLI's own cache, created the moment it runs (e.g. `supabase
+# --version`). Not project config.
+supabase/.temp/
+supabase/.branches/

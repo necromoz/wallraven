@@ -1,0 +1,99 @@
+<!--
+  Reauthentication. Not configurable via config.toml's auth.email.template
+  (Supabase's docs list confirmation/recovery/invite/magic_link/email_change
+  only) -- this file exists to paste into the Dashboard directly. Not
+  triggered anywhere in src/ today; branded for when a sensitive action
+  (changing email, deleting the account) asks for re-verification.
+
+  Unlike the others this is a one-time code, not a link: there is no
+  browser session on the other end of this email to click a button into.
+  Variables: https://supabase.com/docs/guides/auth/auth-email-templates
+-->
+<!doctype html>
+<html>
+  <body style="margin: 0; padding: 0; background: #f4f5fa">
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      style="background: #f4f5fa; padding: 32px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="480"
+            cellpadding="0"
+            cellspacing="0"
+            style="max-width: 480px; width: 100%; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb"
+          >
+            <tr>
+              <td style="padding: 32px 32px 24px 32px">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding-right: 10px; vertical-align: middle">
+                      <img
+                        src="https://wallraven.app/favicon.png"
+                        width="28"
+                        height="28"
+                        alt=""
+                        style="display: block; border-radius: 7px"
+                      />
+                    </td>
+                    <td style="font-size: 17px; font-weight: 700; color: #111318; vertical-align: middle">
+                      WallRaven
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 0 32px 8px 32px">
+                <h1 style="margin: 0; font-size: 21px; line-height: 1.3; color: #111318; font-weight: 700">
+                  Confirm it's you
+                </h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 32px 28px 32px">
+                <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #5b6472">
+                  Enter this code to confirm this action on your WallRaven account.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 0 32px 32px 32px">
+                <span
+                  style="
+                    display: inline-block;
+                    background: #f4f5fa;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 8px;
+                    padding: 14px 22px;
+                    font-size: 24px;
+                    font-weight: 700;
+                    letter-spacing: 0.3em;
+                    color: #111318;
+                    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+                  "
+                  >{{ .Token }}</span
+                >
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width: 480px; width: 100%">
+            <tr>
+              <td style="padding: 20px 32px; text-align: center">
+                <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #9da5b4">
+                  WallRaven — an unofficial companion for Wallhaven.cc<br />
+                  Didn't try to do this? You can ignore this email.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
