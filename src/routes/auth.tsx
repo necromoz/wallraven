@@ -13,10 +13,16 @@ const LINKING_KEY = "wallraven.linking";
 // went through Lovable's platform, via a /~oauth/initiate route their
 // hosting provided rather than anything in this codebase, so it returned a
 // 404 anywhere else. A button that cannot work is worse than no button: it
-// reads as the whole app being broken. It only works again once each
-// provider below is configured for real on the Supabase project -- client
-// ID and secret entered directly into the Supabase dashboard, never through
-// this repo.
+// reads as the whole app being broken. It only works again once a provider
+// is configured for real on the Supabase project -- client ID and secret
+// entered directly into the Supabase dashboard, never through this repo.
+//
+// Microsoft and Discord were built the same way as Google below (see the
+// repo history around 0acd215 for the Microsoft/Discord entries and their
+// icon markup) but pulled from here until those two are actually
+// registered -- a button for an unconfigured provider errors on click,
+// same problem as the old Google one. Re-add an entry here, matching
+// Google's shape, once its provider is set up in Supabase.
 const OAUTH_PROVIDERS = [
   {
     id: "google" as const,
@@ -38,30 +44,6 @@ const OAUTH_PROVIDERS = [
         <path
           fill="#EA4335"
           d="M12 4.77c1.76 0 3.34.61 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.27 6.61l4 3.11C6.22 6.88 8.87 4.77 12 4.77Z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "azure" as const,
-    label: "Microsoft",
-    icon: (
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <rect x="1" y="1" width="10" height="10" fill="#F25022" />
-        <rect x="13" y="1" width="10" height="10" fill="#7FBA00" />
-        <rect x="1" y="13" width="10" height="10" fill="#00A4EF" />
-        <rect x="13" y="13" width="10" height="10" fill="#FFB900" />
-      </svg>
-    ),
-  },
-  {
-    id: "discord" as const,
-    label: "Discord",
-    icon: (
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path
-          fill="#5865F2"
-          d="M20.32 4.77A19.8 19.8 0 0 0 15.3 3.1a.07.07 0 0 0-.08.04c-.21.39-.46.9-.63 1.3a18.3 18.3 0 0 0-5.18 0 13 13 0 0 0-.64-1.3.08.08 0 0 0-.08-.04 19.7 19.7 0 0 0-5.02 1.67.07.07 0 0 0-.03.03C.6 9.32-.36 13.75.11 18.13a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 6.05 3.13.08.08 0 0 0 .09-.03c.47-.66.88-1.35 1.24-2.08a.08.08 0 0 0-.04-.11 13 13 0 0 1-1.9-.94.08.08 0 0 1-.01-.13c.13-.1.25-.2.37-.3a.08.08 0 0 1 .08-.01c3.99 1.87 8.31 1.87 12.25 0a.08.08 0 0 1 .08.01c.12.1.24.2.37.3a.08.08 0 0 1-.01.13c-.6.36-1.24.67-1.9.94a.08.08 0 0 0-.04.11c.37.73.78 1.42 1.24 2.08a.08.08 0 0 0 .09.03 19.9 19.9 0 0 0 6.06-3.13.08.08 0 0 0 .03-.06c.56-5.07-.94-9.46-3.96-13.36a.06.06 0 0 0-.03-.03Zm-12.34 10.7c-1.2 0-2.19-1.16-2.19-2.58 0-1.42.97-2.58 2.19-2.58 1.23 0 2.21 1.17 2.19 2.58 0 1.42-.97 2.58-2.19 2.58Zm7.06 0c-1.2 0-2.19-1.16-2.19-2.58 0-1.42.97-2.58 2.19-2.58 1.23 0 2.2 1.17 2.19 2.58 0 1.42-.96 2.58-2.19 2.58Z"
         />
       </svg>
     ),
@@ -140,7 +122,7 @@ function AuthPage() {
   // the return URL, and in sessionStorage in case a provider's redirect
   // drops query strings (Google's used to, going through Lovable's old
   // /~oauth/initiate route).
-  async function signInWithProvider(provider: "google" | "azure" | "discord") {
+  async function signInWithProvider(provider: "google") {
     setBusy(true);
     setError(null);
     const redirect = new URL("/auth", window.location.origin);
