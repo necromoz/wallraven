@@ -37,6 +37,8 @@ function AccountPage() {
   const [uBusy, setUBusy] = useState(false);
   const [uMsg, setUMsg] = useState<string | null>(null);
   const [uErr, setUErr] = useState<string | null>(null);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [nextChangeAt, setNextChangeAt] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -45,14 +47,25 @@ function AccountPage() {
         return;
       }
       setEmail(data.user.email ?? null);
-      const { data: profile } = await supabase
+      // Before the cooldown migration is applied the column is missing and the
+      // query errors; fall back to the username alone rather than show nothing.
+      let { data: profile, error: pErr } = await supabase
         .from("profiles")
-        .select("username")
+        .select("username, username_changed_at")
         .eq("id", data.user.id)
         .maybeSingle();
+      if (pErr) {
+        const fallback = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", data.user.id)
+          .maybeSingle();
+        profile = fallback.data ? { ...fallback.data, username_changed_at: null } : null;
+      }
       if (profile?.username) {
         setSavedUsername(profile.username);
         setUsername(profile.username);
+        setNextChangeAt(nextUsernameChange(profile.username_changed_at));
       }
       setLoading(false);
     });
@@ -62,11 +75,30 @@ function AccountPage() {
     e.preventDefault();
     setUErr(null);
     setUMsg(null);
+    if (savedUsername && !editingUsername) {
+      setEditingUsername(true);
+      setUMsg("Pick carefully: after this change you cannot change it again for 30 days.");
+      return;
+    }
     const wanted = username.trim();
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{2,23}$/.test(wanted)) {
       setUErr("3–24 characters: letters, numbers, dot, dash or underscore.");
       return;
     }
+    if (savedUsername && wanted === savedUsername) {
+      setEditingUsername(false);
+      setUMsg(null);
+      return;
+    }
+    if (
+      savedUsername &&
+      !window.confirm(
+        `Change your username from \u201c${savedUsername}\u201d to \u201c${wanted}\u201d?\n\n` +
+          "Presets you have shared will show the new name, and you will not be able to change it " +
+          "again for 30 days. Your old name becomes free for anyone to claim.",
+      )
+    )
+      return;
     setUBusy(true);
     const { data: userData } = await supabase.auth.getUser();
     const id = userData.user?.id;
@@ -75,15 +107,29 @@ function AccountPage() {
       setUErr("Session expired — sign in again.");
       return;
     }
-    const { error } = await supabase.from("profiles").upsert({ id, username: wanted });
+    const { data: row, error } = await supabase
+      .from("profiles")
+      .upsert({ id, username: wanted })
+      .select("username_changed_at")
+      .maybeSingle();
     setUBusy(false);
     if (error) {
+      const cooldown = /username_cooldown until ([0-9T:.Z-]+)/.exec(error.message);
+      if (cooldown) {
+        setNextChangeAt(cooldown[1]);
+        setEditingUsername(false);
+        setUsername(savedUsername ?? "");
+        setUErr(`You can change your username again on ${longDate(cooldown[1])}.`);
+        return;
+      }
       setUErr(
         /duplicate|unique/i.test(error.message) ? "That username is already taken." : error.message,
       );
       return;
     }
     setSavedUsername(wanted);
+    setEditingUsername(false);
+    setNextChangeAt(nextUsernameChange(row?.username_changed_at ?? null));
     setUMsg("Username saved. Shared presets now show \u201cby " + wanted + "\u201d.");
   }
 
@@ -105,6 +151,9 @@ function AccountPage() {
     await supabase.auth.signOut({ scope });
     navigate({ to: "/auth" });
   }
+
+  const locked = !!savedUsername && !editingUsername;
+  const waiting = !!nextChangeAt && Date.parse(nextChangeAt) > Date.now();
 
   if (loading) {
     return (
@@ -142,22 +191,56 @@ function AccountPage() {
               spellCheck={false}
               placeholder="yourname"
               value={username}
+              readOnly={locked}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className={
+                locked
+                  ? "w-full rounded-md border border-transparent bg-transparent px-0 py-2 text-sm outline-none"
+                  : "w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              }
             />
             <p className="text-xs text-muted-foreground">
-              Public handle shown on presets you share. Separate from your email address.
+              {waiting
+                ? `Changed recently. You can change it again on ${longDate(nextChangeAt!)}.`
+                : savedUsername
+                  ? "Public handle shown on presets you share. Changing it is limited to once every 30 days."
+                  : "Public handle shown on presets you share. Separate from your email address."}
             </p>
           </div>
           {uErr && <p className="text-sm text-destructive">{uErr}</p>}
           {uMsg && <p className="text-sm text-muted-foreground">{uMsg}</p>}
-          <button
-            type="submit"
-            disabled={uBusy || username.trim() === (savedUsername ?? "")}
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
-          >
-            {uBusy ? "Saving…" : savedUsername ? "Update username" : "Claim username"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={
+                uBusy ||
+                (locked ? waiting : username.trim() === (savedUsername ?? "") && !editingUsername)
+              }
+              className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {uBusy
+                ? "Saving…"
+                : !savedUsername
+                  ? "Claim username"
+                  : locked
+                    ? "Change username…"
+                    : "Save username"}
+            </button>
+            {savedUsername && editingUsername ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingUsername(false);
+                  setUsername(savedUsername);
+                  setUErr(null);
+                  setUMsg(null);
+                }}
+                className="rounded-md border border-input px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
         </form>
 
         <form
@@ -207,4 +290,24 @@ function AccountPage() {
       </main>
     </div>
   );
+}
+
+// The database enforces this (supabase/migrations/20261006120000); the page only
+// reports it. Keep in step with USERNAME_COOLDOWN_DAYS in electron/cloud.cjs.
+const USERNAME_COOLDOWN_DAYS = 30;
+
+function nextUsernameChange(changedAt: string | null): string | null {
+  if (!changedAt) return null;
+  const t = Date.parse(changedAt);
+  if (!Number.isFinite(t)) return null;
+  const next = t + USERNAME_COOLDOWN_DAYS * 86400000;
+  return next > Date.now() ? new Date(next).toISOString() : null;
+}
+
+function longDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
