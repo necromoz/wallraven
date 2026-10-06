@@ -115,6 +115,12 @@ function PrivacyPage() {
             is what keeps you signed in; there are no tracking cookies, so there is no cookie
             banner.
           </p>
+          <p>
+            I can see totals worked out from what the service already holds, such as how many
+            accounts there are, how many were active this week and how often each release was
+            downloaded. Nothing extra is recorded to produce them, and they never show who anyone
+            is.
+          </p>
         </Section>
 
         <Section title="Why, legally">
