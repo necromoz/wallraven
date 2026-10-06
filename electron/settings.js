@@ -2819,26 +2819,82 @@ function wireCommunity() {
   const usernameHint = $("#usernameHint");
   const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{2,23}$/;
 
+  // Changing the username is deliberate: the field is locked until Change is
+  // pressed, a change asks first, and the database allows one change every 30
+  // days after the first (see supabase/migrations/20261006120000). Claiming a
+  // name for the first time needs none of that.
+  const cancelAuthorBtn = $("#btn-cancel-author");
+  const saveAuthorBtn = $("#btn-save-author");
+  let account = { username: null, nextChangeAt: null, signedIn: false };
+  let editingUsername = false;
+
+  const longDate = (iso) =>
+    new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+
+  function renderUsername() {
+    if (!authorInput || !saveAuthorBtn) return;
+    const claimed = account.signedIn && !!account.username;
+    const locked = claimed && !editingUsername;
+    authorInput.readOnly = locked;
+    authorInput.classList.toggle("readonly", locked);
+    if (cancelAuthorBtn) cancelAuthorBtn.hidden = !(claimed && editingUsername);
+    if (!claimed) {
+      saveAuthorBtn.textContent = account.signedIn ? "Claim username" : "Save username";
+      saveAuthorBtn.disabled = false;
+      saveAuthorBtn.title = "Save your username — it lives on your account and applies on every machine";
+      return;
+    }
+    if (editingUsername) {
+      saveAuthorBtn.textContent = "Save username";
+      saveAuthorBtn.disabled = false;
+      saveAuthorBtn.title = "Change your username";
+      return;
+    }
+    saveAuthorBtn.textContent = "Change…";
+    const waiting = account.nextChangeAt && Date.parse(account.nextChangeAt) > Date.now();
+    saveAuthorBtn.disabled = !!waiting;
+    saveAuthorBtn.title = waiting
+      ? "You can change your username again on " + longDate(account.nextChangeAt)
+      : "Change your username";
+    if (usernameHint)
+      usernameHint.textContent = waiting
+        ? "Changed recently. You can change it again on " + longDate(account.nextChangeAt) + "."
+        : "This is the name shown on presets you share. Changing it is limited to once every 30 days.";
+  }
+
   async function loadUsername() {
     if (!authorInput) return;
     const res = await api.accountGetUsername();
-    if (res && res.ok && res.username) {
-      authorInput.value = res.username;
+    if (res && res.ok) {
+      account = { username: res.username || null, nextChangeAt: res.nextChangeAt || null, signedIn: true };
+      authorInput.value = res.username || "";
     } else if (res && res.reason === "signed_out") {
+      account = { username: null, nextChangeAt: null, signedIn: false };
       authorInput.value = config.communityAuthor || "";
       if (usernameHint) usernameHint.textContent = "Sign in to claim a username for your account.";
     }
+    editingUsername = false;
+    renderUsername();
   }
   loadUsername();
+  // Signing in or out mid-session changes whose username this is.
+  api.onAccountChanged?.((st) => {
+    if (!!st?.signedIn !== account.signedIn) loadUsername();
+  });
 
   let checkTimer = null;
   if (authorInput)
     authorInput.oninput = () => {
+      if (authorInput.readOnly) return;
       const v = (authorInput.value || "").trim();
       clearTimeout(checkTimer);
       if (!usernameHint) return;
       if (!USERNAME_RE.test(v)) {
         usernameHint.textContent = "3–24 characters: letters, numbers, dot, dash or underscore.";
+        return;
+      }
+      if (account.username && v === account.username) {
+        usernameHint.textContent = "That is your current username.";
         return;
       }
       usernameHint.textContent = "Checking availability…";
@@ -2854,22 +2910,71 @@ function wireCommunity() {
       }, 400);
     };
 
-  const saveAuthorBtn = $("#btn-save-author");
+  if (cancelAuthorBtn && authorInput)
+    cancelAuthorBtn.onclick = () => {
+      clearTimeout(checkTimer);
+      editingUsername = false;
+      authorInput.value = account.username || "";
+      renderUsername();
+    };
+
   if (saveAuthorBtn && authorInput)
     saveAuthorBtn.onclick = async () => {
-      const wanted = (authorInput.value || "").trim();
+      const claimed = account.signedIn && !!account.username;
+      if (claimed && !editingUsername) {
+        editingUsername = true;
+        renderUsername();
+        if (usernameHint)
+          usernameHint.textContent =
+            "Pick carefully: after this change you cannot change it again for 30 days.";
+        authorInput.focus();
+        authorInput.select();
+        return;
+      }
 
+      const wanted = (authorInput.value || "").trim();
       if (!USERNAME_RE.test(wanted)) {
         flash("Usernames are 3–24 characters: letters, numbers, dot, dash or underscore", "err");
         return;
       }
+      if (claimed && wanted === account.username) {
+        editingUsername = false;
+        renderUsername();
+        return;
+      }
+      if (
+        claimed &&
+        !confirm(
+          "Change your username from “" +
+            account.username +
+            "” to “" +
+            wanted +
+            "”?\n\nPresets you have shared will show the new name, and you will not be able to change it again for 30 days. Your old name becomes free for anyone to claim.",
+        )
+      )
+        return;
+
+      saveAuthorBtn.disabled = true;
       const res = await api.accountSetUsername(wanted);
+      saveAuthorBtn.disabled = false;
       if (res && res.ok) {
+        account = { username: res.username, nextChangeAt: res.nextChangeAt || null, signedIn: true };
+        editingUsername = false;
         authorInput.value = res.username;
         config = await api.setConfig({ communityAuthor: res.username });
-        if (usernameHint) usernameHint.textContent = "Username saved to your account.";
+        renderUsername();
         flash("Username saved — shared presets now show “by " + res.username + "”", "ok");
         refreshLibList();
+      } else if (res && res.reason === "cooldown") {
+        account.nextChangeAt = res.nextChangeAt || account.nextChangeAt;
+        editingUsername = false;
+        authorInput.value = account.username || "";
+        renderUsername();
+        flash(
+          "You can change your username again on " +
+            (res.nextChangeAt ? longDate(res.nextChangeAt) : "a later date"),
+          "err",
+        );
       } else if (res && res.reason === "taken") {
         flash("That username is already taken", "err");
       } else if (res && res.reason === "signed_out") {

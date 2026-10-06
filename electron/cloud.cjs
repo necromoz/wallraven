@@ -368,18 +368,39 @@ function normalizeUsername(name) {
     .replace(/\s+/g, "");
 }
 
+// Changing a username is limited by a trigger on profiles (migration
+// 20261006120000): claiming is free, the first change after that is free, then
+// one change every 30 days. The app only reports the rule; the database enforces it.
+const USERNAME_COOLDOWN_DAYS = 30;
+
+function nextUsernameChange(changedAt) {
+  if (!changedAt) return null;
+  const t = Date.parse(changedAt);
+  if (!Number.isFinite(t)) return null;
+  const next = t + USERNAME_COOLDOWN_DAYS * 86400000;
+  return next > Date.now() ? new Date(next).toISOString() : null;
+}
+
 async function getUsername() {
   const token = await accessToken().catch(() => null);
   const a = currentAuth();
   if (!token || !a?.user_id) return { ok: false, reason: "signed_out", username: null };
-  const res = await request(
-    `${SUPABASE_URL}/rest/v1/profiles?select=username&id=eq.${encodeURIComponent(a.user_id)}`,
-    { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } },
-  );
+  const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` };
+  const base = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(a.user_id)}&select=`;
+  let res = await request(base + "username,username_changed_at", { headers });
+  // Before the migration is applied the column does not exist and PostgREST
+  // answers 400. Fall back rather than losing the username altogether.
+  if (res.status === 400) res = await request(base + "username", { headers });
   if (res.status !== 200 || !Array.isArray(res.body))
     return { ok: false, reason: "read_failed", username: null };
-  USERNAME_CACHE = res.body[0]?.username || null;
-  return { ok: true, username: USERNAME_CACHE };
+  const row = res.body[0] || {};
+  USERNAME_CACHE = row.username || null;
+  return {
+    ok: true,
+    username: USERNAME_CACHE,
+    changedBefore: !!row.username_changed_at,
+    nextChangeAt: nextUsernameChange(row.username_changed_at),
+  };
 }
 
 async function setUsername(name) {
@@ -403,9 +424,17 @@ async function setUsername(name) {
   ) {
     return { ok: false, reason: "taken" };
   }
+  const cooldown = /username_cooldown until ([0-9T:.Z-]+)/.exec(JSON.stringify(res.body || ""));
+  if (cooldown) return { ok: false, reason: "cooldown", nextChangeAt: cooldown[1] };
   if (res.status >= 300) return { ok: false, reason: "write_failed" };
   USERNAME_CACHE = clean;
-  return { ok: true, username: clean };
+  const row = Array.isArray(res.body) ? res.body[0] : null;
+  return {
+    ok: true,
+    username: clean,
+    changedBefore: !!row?.username_changed_at,
+    nextChangeAt: nextUsernameChange(row?.username_changed_at),
+  };
 }
 
 async function isUsernameAvailable(name) {
@@ -884,6 +913,8 @@ module.exports = {
   getUsername,
   setUsername,
   isUsernameAvailable,
+  nextUsernameChange,
+  USERNAME_COOLDOWN_DAYS,
   startSignIn,
   pollSignIn,
   cancelSignIn,

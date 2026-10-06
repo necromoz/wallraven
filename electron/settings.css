@@ -584,6 +584,24 @@ input[type="password"]:focus,
 select:focus {
   border-color: var(--accent);
 }
+/* A value you read rather than edit (the username until Change is pressed).
+   html[data-theme] beats the per-theme input rules, which also use it. */
+html input[type="text"].readonly,
+html[data-theme] input[type="text"].readonly,
+html input[type="text"].readonly:focus,
+html[data-theme] input[type="text"].readonly:focus {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding-left: 0;
+  cursor: default;
+}
+#btn-save-author:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .check {
   display: inline-flex;
   align-items: center;
