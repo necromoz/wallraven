@@ -240,6 +240,16 @@ function AuthPage() {
           {error && <p className="text-sm text-destructive">{error}</p>}
           {message && <p className="text-sm text-muted-foreground">{message}</p>}
 
+          {mode === "signup" && (
+            <p className="text-xs text-muted-foreground">
+              Your email address is used to sign you in and nothing else. See{" "}
+              <Link to="/privacy" className="underline">
+                what is kept and why
+              </Link>
+              .
+            </p>
+          )}
+
           <button
             type="submit"
             disabled={busy}

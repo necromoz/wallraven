@@ -55,9 +55,12 @@ export function SiteShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <span className="mt-auto px-3 text-xs text-muted-foreground/70">
-            {latest ? `v${latest.version}` : ""}
-          </span>
+          <div className="mt-auto flex items-center gap-3 px-3 text-xs text-muted-foreground/70">
+            <span>{latest ? `v${latest.version}` : ""}</span>
+            <Link to="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+          </div>
         </aside>
 
         <div className="min-w-0 flex-1 pb-20">
@@ -99,6 +102,11 @@ export function SiteShell({ children }: { children: ReactNode }) {
             </nav>
           </header>
           <div className="min-w-0">{children}</div>
+          <footer className="mt-16 text-center text-xs text-muted-foreground/70 lg:hidden">
+            <Link to="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+          </footer>
         </div>
       </div>
     </div>

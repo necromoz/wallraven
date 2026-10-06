@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as LinkRouteImport } from './routes/link'
 import { Route as PresetsRouteImport } from './routes/presets'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ApiPublicFeedbackRouteImport } from './routes/api/public/feedback'
 import { Route as ApiPublicPairPollRouteImport } from './routes/api/public/pair/poll'
@@ -51,6 +52,11 @@ const LinkRoute = LinkRouteImport.update({
 const PresetsRoute = PresetsRouteImport.update({
   id: '/presets',
   path: '/presets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/changelog': typeof ChangelogRoute
   '/link': typeof LinkRoute
   '/presets': typeof PresetsRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/public/feedback': typeof ApiPublicFeedbackRoute
   '/api/public/pair/poll': typeof ApiPublicPairPollRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByTo {
   '/changelog': typeof ChangelogRoute
   '/link': typeof LinkRoute
   '/presets': typeof PresetsRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/public/feedback': typeof ApiPublicFeedbackRoute
   '/api/public/pair/poll': typeof ApiPublicPairPollRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/changelog': typeof ChangelogRoute
   '/link': typeof LinkRoute
   '/presets': typeof PresetsRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/api/public/feedback': typeof ApiPublicFeedbackRoute
   '/api/public/pair/poll': typeof ApiPublicPairPollRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/link'
     | '/presets'
+    | '/privacy'
     | '/reset-password'
     | '/api/public/feedback'
     | '/api/public/pair/poll'
@@ -159,6 +169,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/link'
     | '/presets'
+    | '/privacy'
     | '/reset-password'
     | '/api/public/feedback'
     | '/api/public/pair/poll'
@@ -174,6 +185,7 @@ export interface FileRouteTypes {
     | '/changelog'
     | '/link'
     | '/presets'
+    | '/privacy'
     | '/reset-password'
     | '/api/public/feedback'
     | '/api/public/pair/poll'
@@ -190,6 +202,7 @@ export interface RootRouteChildren {
   ChangelogRoute: typeof ChangelogRoute
   LinkRoute: typeof LinkRoute
   PresetsRoute: typeof PresetsRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiPublicFeedbackRoute: typeof ApiPublicFeedbackRoute
   ApiPublicPairPollRoute: typeof ApiPublicPairPollRoute
@@ -241,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/presets'
       fullPath: '/presets'
       preLoaderRoute: typeof PresetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -302,6 +322,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChangelogRoute: ChangelogRoute,
   LinkRoute: LinkRoute,
   PresetsRoute: PresetsRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiPublicFeedbackRoute: ApiPublicFeedbackRoute,
   ApiPublicPairPollRoute: ApiPublicPairPollRoute,
