@@ -55,6 +55,24 @@ BrandingText "WallRaven ${APP_VERSION}"
 
 !insertmacro MUI_LANGUAGE "English"
 
+; File details on the installer itself. Without them the exe has no product,
+; company or version in its properties, which is what a throwaway dropper looks
+; like, and Defender's reputation model scores it accordingly. This does not
+; replace signing; it removes one of the signals. VIProductVersion must be four
+; numbers, so the build passes APP_VERSION_NUM (1.3.1-beta.2 becomes 1.3.1.2).
+!ifndef APP_VERSION_NUM
+  !define APP_VERSION_NUM "0.0.0.0"
+!endif
+VIProductVersion "${APP_VERSION_NUM}"
+VIFileVersion "${APP_VERSION_NUM}"
+VIAddVersionKey "ProductName" "${APP_NAME}"
+VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"
+VIAddVersionKey "FileDescription" "${APP_NAME} installer"
+VIAddVersionKey "FileVersion" "${APP_VERSION}"
+VIAddVersionKey "ProductVersion" "${APP_VERSION}"
+VIAddVersionKey "LegalCopyright" "Copyright (c) WallRaven"
+VIAddVersionKey "Comments" "Wallpaper manager for Wallhaven. https://wallraven.app"
+
 Section "Install"
   SetOutPath "$INSTDIR"
 

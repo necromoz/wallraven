@@ -114,6 +114,14 @@ function stage(version) {
   log(`staged ${copied} entries into electron/_pkg/src`);
 }
 
+// Windows version resources want four numbers. 1.3.1 becomes 1.3.1.0 and
+// 1.3.1-beta.2 becomes 1.3.1.2; anything unparseable becomes 0.0.0.0 rather
+// than failing the build.
+export function numericVersion(version) {
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:-[a-z]+\.?(\d+))?/i.exec(String(version || ""));
+  return m ? `${m[1]}.${m[2]}.${m[3]}.${m[4] || 0}` : "0.0.0.0";
+}
+
 async function pack(version, platform, arch) {
   const paths = await packager({
     dir: STAGE_DIR,
@@ -124,6 +132,15 @@ async function pack(version, platform, arch) {
     executableName: EXECUTABLE_NAME,
     appVersion: version,
     appCopyright: `Copyright (c) ${new Date().getFullYear()} WallRaven`,
+    // Product and company in the exe's properties. An executable with none is
+    // one of the things Defender's reputation model holds against a new file.
+    win32metadata: {
+      CompanyName: "WallRaven",
+      ProductName: "WallRaven",
+      FileDescription: "WallRaven",
+      InternalName: "WallRaven",
+      OriginalFilename: `${EXECUTABLE_NAME}.exe`,
+    },
     // Without an explicit icon Windows pins the default Electron logo onto the
     // exe and every shortcut made from it.
     icon: path.join(ELECTRON_DIR, "icon"),
@@ -274,7 +291,12 @@ function buildInstaller(version) {
   // the working directory: `app\*.*`, `icon.ico`.
   const res = spawnSync(
     makensis,
-    [`${NSIS_FLAG}DOUTFILE=${outFile}`, `${NSIS_FLAG}DAPP_VERSION=${version}`, "installer.nsi"],
+    [
+      `${NSIS_FLAG}DOUTFILE=${outFile}`,
+      `${NSIS_FLAG}DAPP_VERSION=${version}`,
+      `${NSIS_FLAG}DAPP_VERSION_NUM=${numericVersion(version)}`,
+      "installer.nsi",
+    ],
     { cwd: ELECTRON_DIR, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
 
