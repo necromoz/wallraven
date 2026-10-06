@@ -157,18 +157,21 @@ export type Database = {
           id: string;
           updated_at: string;
           username: string;
+          username_changed_at: string | null;
         };
         Insert: {
           created_at?: string;
           id: string;
           updated_at?: string;
           username: string;
+          username_changed_at?: string | null;
         };
         Update: {
           created_at?: string;
           id?: string;
           updated_at?: string;
           username?: string;
+          username_changed_at?: string | null;
         };
         Relationships: [];
       };
