@@ -1,5 +1,16 @@
 # Wallraven changelog
 
+## v1.3.1-beta.2 — 6 Oct 2026
+
+### New
+
+- **The timetable is a week you can see.** Schedule shows each day as a row of blocks: what plays when, the stretch before the first entry striped where the previous one carries on, and a line for now. Click a block to edit that entry, double-click a day to add one at that time. It shows the same rules as before; nothing about how they behave has changed.
+- **Credit for the picture on screen.** Now playing names the original artwork's source as given on Wallhaven, who uploaded it, and links to its Wallhaven page.
+
+### Changed
+
+- **Changing your username is deliberate.** It shows locked with a Change button, asks before saving, and can be changed once every 30 days after the first change.
+
 ## v1.3.1-beta.1 — 25 Sep 2026
 
 ### New
