@@ -68,6 +68,11 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # The action's own default is Wrangler 3, which does not follow the
+          # .wrangler/deploy redirect the build writes to .output/server, and
+          # fails with "Missing entry-point". Version 4 is what npx gave the
+          # old batch file.
+          wranglerVersion: "4.148.0"
           command: deploy
 
       - name: Check the live site answers
