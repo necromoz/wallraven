@@ -1,6 +1,6 @@
 import { useLatestRelease } from "@/lib/latest-release";
 import { Link } from "@tanstack/react-router";
-import { History, Home, Image as ImageIcon } from "lucide-react";
+import { Feather, History, Home, Image as ImageIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import iconUrl from "@/assets/wallraven-icon.png";
@@ -10,6 +10,7 @@ const SIDE_NAV = [
   { to: "/", label: "Home", icon: Home },
   { to: "/presets", label: "Presets", icon: ImageIcon },
   { to: "/changelog", label: "What's new", icon: History },
+  { to: "/about", label: "About", icon: Feather },
 ] as const;
 
 export function SiteShell({ children }: { children: ReactNode }) {
@@ -86,7 +87,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
               </Link>
             </div>
             <nav
-              className="mt-3 grid grid-cols-3 gap-1 rounded-xl border border-border bg-card/45 p-1 text-center text-xs lg:hidden"
+              className="mt-3 grid grid-cols-4 gap-1 rounded-xl border border-border bg-card/45 p-1 text-center text-xs lg:hidden"
               aria-label="Mobile navigation"
             >
               {SIDE_NAV.map((item) => (
