@@ -106,6 +106,12 @@ function PrivacyPage() {
             to your account. Your email address is only attached if you type it in so that you can
             get a reply.
           </p>
+          <p>
+            The website is different: if a page breaks, it reports that itself, because a broken
+            page has nowhere to ask you. The report holds only the error, the technical trace that
+            goes with it and which page it happened on. Nothing about you or your account goes with
+            it.
+          </p>
         </Section>
 
         <Section title="What is never collected">
@@ -132,10 +138,11 @@ function PrivacyPage() {
             <Item name="Legitimate interests">
               Briefly holding IP addresses in memory to stop scripted abuse of the public pages, and
               sending you the emails your account needs (confirming your address and resetting your
-              password).
+              password), and the website reporting its own errors so they can be fixed.
             </Item>
             <Item name="Your consent">
-              Crash reports and feedback, which are only sent when you choose to send them.
+              The app's crash reports and feedback, which are only sent when you choose to send
+              them.
             </Item>
           </ul>
         </Section>
