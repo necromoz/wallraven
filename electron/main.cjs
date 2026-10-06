@@ -3646,6 +3646,63 @@ ipcMain.handle("wp:next", () => {
   cancelSaveFetch();
   return fetchAndSetWallpaper(true);
 });
+// ---------- Credits: who made the picture on screen ----------
+//
+// Wallhaven's per-wallpaper endpoint names the uploader and, when the uploader
+// gave one, the original source: usually the artist's own page. The uploader is
+// often not the artist, so the two are reported separately and never merged.
+// Both come from strangers, so the source is only passed on if it is an
+// http(s) URL, and it is only ever opened through openExternalSafe.
+const CREDITS_CACHE = new Map();
+const CREDITS_CACHE_MAX = 300;
+
+function parseCredits(data) {
+  if (!data || typeof data !== "object") return null;
+  const uploader =
+    data.uploader && typeof data.uploader.username === "string"
+      ? data.uploader.username.slice(0, 64)
+      : null;
+  let source = null;
+  let sourceHost = null;
+  try {
+    const u = new URL(String(data.source || "").trim());
+    if (u.protocol === "http:" || u.protocol === "https:") {
+      source = u.toString();
+      sourceHost = u.hostname.replace(/^www\./, "");
+    }
+  } catch {}
+  const id = typeof data.id === "string" ? data.id : null;
+  return {
+    uploader,
+    uploaderUrl: uploader ? `https://wallhaven.cc/user/${encodeURIComponent(uploader)}` : null,
+    source,
+    sourceHost,
+    page: id ? `https://wallhaven.cc/w/${encodeURIComponent(id)}` : null,
+  };
+}
+
+ipcMain.handle("wp:credits", async (_e, id) => {
+  const wid = String(id || "");
+  if (!/^[a-z0-9]{1,16}$/i.test(wid)) return null; // local files have no credits
+  if (CREDITS_CACHE.has(wid)) return CREDITS_CACHE.get(wid);
+  try {
+    const key = config.apiKey ? `?apikey=${encodeURIComponent(config.apiKey)}` : "";
+    // Low priority: a credit line must never hold up a wallpaper change.
+    const info = await httpsGetJSON(`https://wallhaven.cc/api/v1/w/${encodeURIComponent(wid)}${key}`, {
+      priority: false,
+    });
+    const credits = parseCredits(info && info.data);
+    if (credits) {
+      if (CREDITS_CACHE.size >= CREDITS_CACHE_MAX)
+        CREDITS_CACHE.delete(CREDITS_CACHE.keys().next().value);
+      CREDITS_CACHE.set(wid, credits);
+    }
+    return credits;
+  } catch {
+    return null;
+  }
+});
+
 ipcMain.handle("wp:info", () => currentInfo());
 ipcMain.handle("wp:back", async () => {
   await setPreviousWallpaper();

@@ -2375,3 +2375,15 @@ html[data-mascot="raven-fire"] #view-bar {
 .cf-viewer .cf-viewer-set[hidden] {
   display: none;
 }
+
+/* Credit line under "Why this one". Links open in the browser, through main's
+   http(s)-only opener. */
+.why.credits a.credit-link {
+  color: var(--fg);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--fg) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.why.credits a.credit-link:hover {
+  text-decoration-color: var(--accent);
+}

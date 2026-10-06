@@ -3334,6 +3334,7 @@ async function refreshInfo() {
   }
   renderHeaderThumb();
   renderWhy();
+  renderCredits();
   renderCarousel();
   renderHistory();
   const sub = document.querySelector('[data-id="history"] [data-role="sub"]');
@@ -3446,6 +3447,48 @@ function renderWhy() {
     d.notes.map((n) => `<span class="why-note">${n}</span>`).join("");
 }
 
+// Credit for the picture on screen: the original source the uploader gave on
+// Wallhaven (usually the artist), and who uploaded it. Fetched on demand and
+// cached by main; a stale answer for a picture no longer in view is dropped.
+let creditsFor = null;
+function creditsHtml(c) {
+  if (!c) return "";
+  const link = (url, text) =>
+    `<a href="#" class="credit-link" data-href="${escapeHtml(url)}">${escapeHtml(text)}</a>`;
+  const parts = [];
+  parts.push(
+    c.source
+      ? `Original artwork: ${link(c.source, c.sourceHost)}`
+      : '<span class="why-muted">Wallhaven lists no original source for this one</span>',
+  );
+  if (c.uploader) parts.push(`Uploaded by ${link(c.uploaderUrl, c.uploader)}`);
+  if (c.page) parts.push(link(c.page, "View on Wallhaven"));
+  return '<span class="why-label">Credit</span>' + parts.join('<span class="why-sep">\u00b7</span>');
+}
+async function renderCredits() {
+  const el = document.getElementById("credits");
+  if (!el || !api.credits) return;
+  const wp = (typeof cfFocusedItem === "function" && cfFocusedItem()) || currentWp;
+  const id = wp && wp.id && !String(wp.id).startsWith("local:") ? String(wp.id) : null;
+  if (id === creditsFor) return;
+  creditsFor = id;
+  if (!id) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const c = await api.credits(id).catch(() => null);
+  if (creditsFor !== id) return;
+  el.innerHTML = creditsHtml(c);
+  el.hidden = !c;
+}
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest("#credits .credit-link");
+  if (!a) return;
+  e.preventDefault();
+  api.openExternal(a.dataset.href);
+});
+
 // ---------- Carousel ----------
 //
 // Earlier wallpapers to the left of Now playing, what comes next to the right.
@@ -3483,6 +3526,7 @@ async function renderCarousel() {
   buildStrip();
   drawCarousel();
   renderWhy();
+  renderCredits();
 }
 
 function cfFocusKeyOf(c) {
@@ -3723,6 +3767,7 @@ function cfMove(to) {
   cfFocusKey = n === cfCurrent ? null : cfFocusKeyOf(cfStrip[n]);
   drawCarousel();
   renderWhy();
+  renderCredits();
 }
 
 // The one action that changes the desktop.
@@ -3989,6 +4034,7 @@ function refreshInfoFrom(info) {
   const has = !!currentWp;
   renderHeaderThumb();
   renderWhy();
+  renderCredits();
   renderCarousel();
   const bo = $("#btn-open"),
     bf = $("#btn-folder");

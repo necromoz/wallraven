@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("api", {
   setConfig: (cfg) => ipcRenderer.invoke("config:set", cfg),
   next: () => ipcRenderer.invoke("wp:next"),
   info: () => ipcRenderer.invoke("wp:info"),
+  credits: (id) => ipcRenderer.invoke("wp:credits", id),
   clearCache: () => ipcRenderer.invoke("cache:clear"),
   cacheInfo: () => ipcRenderer.invoke("cache:info"),
   cacheOpenDir: () => ipcRenderer.invoke("cache:openDir"),
