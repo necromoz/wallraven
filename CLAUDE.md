@@ -21,8 +21,12 @@ does not write code. So:
 - When something can't be verified from here, say so and say what would verify it,
   rather than asserting it works.
 
-Steve is currently the only user. A friend helped with UAT early on and has since
-uninstalled it. A public release is the goal, possibly with donations. That
+Steve is no longer the only user. A friend helped with UAT early on and has since
+uninstalled it, and on 22 Sep a stranger signed up on the
+site, confirmed his email and signed in once. So there is real personal data
+belonging to someone else in the database: anything that changes accounts,
+auth or the schema has to be safe for an account that is not Steve's, and
+`src/routes/privacy.tsx` has to stay true to what the code collects. A public release is the goal, possibly with donations. That
 distinction matters: several problems in this codebase are tolerable today and
 unacceptable the day strangers install it. It also means there is no second pair
 of eyes, so anything that only shows up on someone else's machine will not be
