@@ -1,0 +1,80 @@
+# Builds wallraven.app and deploys it to Cloudflare Workers on every push to
+# main that touches the site. Replaces running "Publish website.bat" by hand,
+# which built from whatever copy of the repo was on Steve's PC and so could
+# quietly deploy something older than main.
+#
+# Needs two repository secrets (Settings > Secrets and variables > Actions):
+#   CLOUDFLARE_API_TOKEN   an API token from the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  the account id shown in the Cloudflare dashboard
+#
+# The Worker's own runtime secrets (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY,
+# SUPABASE_SERVICE_ROLE_KEY) live on the Worker and are left alone by a deploy.
+# The two below are needed at build time instead, because Vite bakes them into
+# the browser bundle. Both are publishable by design: the same values ship in
+# the desktop app.
+
+name: Site deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "electron/CHANGELOG.md" # the site's /changelog is built from it
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: https://bwvbilkfcmjnvopjpaer.supabase.co
+      VITE_SUPABASE_PROJECT_ID: bwvbilkfcmjnvopjpaer
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_g0yinRk5yCpzNvpOhF8tVg_gW4ansSo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      # A type error builds cleanly and fails at runtime, so it is caught here,
+      # before anything reaches the live site.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Check the live site answers
+        run: |
+          sleep 15
+          for path in / /changelog /privacy /about /updates/latest.json; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://wallraven.app$path")
+            echo "$path $code"
+            test "$code" = "200"
+          done
