@@ -76,12 +76,12 @@ Two machines, and neither can do everything:
 
 - **A clone in the cloud container** is where code is edited, tested and
   screenshot-checked (`scripts/shoot-settings.mjs` with
-  `CHROMIUM=/opt/pw-browsers/chromium`). It cannot push: the git proxy refuses
-  credentials for `necromoz/wallraven`, and its `origin/main` never updates on
-  its own. After Steve publishes, move it by hand with
-  `git update-ref refs/remotes/origin/main <sha>` so the unpushed count is
-  honest. It fell behind once before and nearly had old code copied out of it
-  over new: always build from a bundle, never copy files out of it.
+  `CHROMIUM=/opt/pw-browsers/chromium`). Since 6 Oct, with the Claude GitHub
+  App installed and the repo attached to the session (`add_repo`, access
+  `push`), it **can push to `main` directly**. Sessions started before the repo
+  was attached still cannot: the git proxy refuses credentials, and the old
+  route below (bundles applied by `Publish WallRaven.bat`) is the fallback.
+  Pushing still does not deploy the site; there is no site workflow.
 - **Steve's Linux workspace** (`device_bash`) builds the installers. It was
   down from 8 to 23 September after a Windows update and is working again.
 
