@@ -18,6 +18,7 @@ import { Route as LinkRouteImport } from './routes/link'
 import { Route as PresetsRouteImport } from './routes/presets'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AdminStatsRouteImport } from './routes/admin/stats'
 import { Route as ApiPublicFeedbackRouteImport } from './routes/api/public/feedback'
 import { Route as ApiPublicPairPollRouteImport } from './routes/api/public/pair/poll'
 import { Route as ApiPublicPairStartRouteImport } from './routes/api/public/pair/start'
@@ -70,6 +71,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminStatsRoute = AdminStatsRouteImport.update({
+  id: '/admin/stats',
+  path: '/admin/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicFeedbackRoute = ApiPublicFeedbackRouteImport.update({
   id: '/api/public/feedback',
   path: '/api/public/feedback',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/presets': typeof PresetsRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/api/public/feedback': typeof ApiPublicFeedbackRoute
   '/api/public/pair/poll': typeof ApiPublicPairPollRoute
   '/api/public/pair/start': typeof ApiPublicPairStartRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/presets': typeof PresetsRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/api/public/feedback': typeof ApiPublicFeedbackRoute
   '/api/public/pair/poll': typeof ApiPublicPairPollRoute
   '/api/public/pair/start': typeof ApiPublicPairStartRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/presets': typeof PresetsRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin/stats': typeof AdminStatsRoute
   '/api/public/feedback': typeof ApiPublicFeedbackRoute
   '/api/public/pair/poll': typeof ApiPublicPairPollRoute
   '/api/public/pair/start': typeof ApiPublicPairStartRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/presets'
     | '/privacy'
     | '/reset-password'
+    | '/admin/stats'
     | '/api/public/feedback'
     | '/api/public/pair/poll'
     | '/api/public/pair/start'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/presets'
     | '/privacy'
     | '/reset-password'
+    | '/admin/stats'
     | '/api/public/feedback'
     | '/api/public/pair/poll'
     | '/api/public/pair/start'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/presets'
     | '/privacy'
     | '/reset-password'
+    | '/admin/stats'
     | '/api/public/feedback'
     | '/api/public/pair/poll'
     | '/api/public/pair/start'
@@ -217,6 +229,7 @@ export interface RootRouteChildren {
   PresetsRoute: typeof PresetsRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  AdminStatsRoute: typeof AdminStatsRoute
   ApiPublicFeedbackRoute: typeof ApiPublicFeedbackRoute
   ApiPublicPairPollRoute: typeof ApiPublicPairPollRoute
   ApiPublicPairStartRoute: typeof ApiPublicPairStartRoute
@@ -290,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/stats': {
+      id: '/admin/stats'
+      path: '/admin/stats'
+      fullPath: '/admin/stats'
+      preLoaderRoute: typeof AdminStatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/feedback': {
       id: '/api/public/feedback'
       path: '/api/public/feedback'
@@ -345,6 +365,7 @@ const rootRouteChildren: RootRouteChildren = {
   PresetsRoute: PresetsRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  AdminStatsRoute: AdminStatsRoute,
   ApiPublicFeedbackRoute: ApiPublicFeedbackRoute,
   ApiPublicPairPollRoute: ApiPublicPairPollRoute,
   ApiPublicPairStartRoute: ApiPublicPairStartRoute,

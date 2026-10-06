@@ -201,6 +201,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      admin_stats: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
       increment_preset_copy_count: {
         Args: { _preset_id: string };
         Returns: boolean;
