@@ -26,13 +26,22 @@ export const Route = createFileRoute("/changelog")({
 
 type Release = { heading: string; items: string[] };
 
+// electron/CHANGELOG.md also carries beta entries, because the app shows its
+// own notes in What's new. This page is public, so it lists stable releases
+// only: anything like "v1.3.1-beta.1" is a pre-release and stays out until it
+// ships under a plain version number.
+const PRERELEASE = /^v?\d+\.\d+\.\d+-/;
+
 function parseChangelog(md: string): Release[] {
   const releases: Release[] = [];
+  let current: Release | null = null;
   for (const line of md.split(/\r?\n/)) {
     if (line.startsWith("## ")) {
-      releases.push({ heading: line.slice(3).trim(), items: [] });
-    } else if (line.startsWith("- ") && releases.length) {
-      releases[releases.length - 1]!.items.push(line.slice(2).trim());
+      const heading = line.slice(3).trim();
+      current = PRERELEASE.test(heading) ? null : { heading, items: [] };
+      if (current) releases.push(current);
+    } else if (line.startsWith("- ") && current) {
+      current.items.push(line.slice(2).trim());
     }
   }
   return releases;
