@@ -278,8 +278,9 @@ check("Now playing is a carousel around the wallpaper on screen", () => {
   // writes to it, and it slides like the others while browsing.
   const track = HTML.slice(HTML.indexOf('id="cf-track"'), HTML.indexOf('id="cf-note"'));
   assert.ok(/id="thumb"/.test(track), "the desktop's picture is not in the track");
-  const calls = JS.split("renderWhy();\n  renderCarousel();").length - 1;
-  assert.strictEqual(calls, 2, "renderCarousel is not called beside both redraws");
+  // The credit line for the picture follows its reason, in both redraws.
+  const calls = JS.split("renderWhy();\n  renderCredits();\n  renderCarousel();").length - 1;
+  assert.strictEqual(calls, 2, "renderCarousel and renderCredits are not called beside both redraws");
   assert.ok(
     hasCode(JS, "api.onCarouselChanged?.(() => renderCarousel());"),
     "a prefetch landing never redraws it",
