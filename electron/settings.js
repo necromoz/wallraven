@@ -1201,20 +1201,31 @@ function wireAllCards() {
   $("#btn-changelog-refresh") && ($("#btn-changelog-refresh").onclick = loadChangelog);
   renderUpdatesCard();
 
-  $("#scheduleEnabled")?.addEventListener("change", persistSchedule);
+  $("#scheduleEnabled")?.addEventListener("change", () => {
+    renderScheduleWeek(sortRules(collectSchedule().rules), scheduleActiveRuleId);
+    persistSchedule();
+  });
   $("#btn-add-rule") &&
     ($("#btn-add-rule").onclick = () => {
       const rules = collectSchedule().rules;
+      const id = "r" + Date.now();
       rules.push({
-        id: "r" + Date.now(),
+        id,
         startHHMM: "08:00",
         days: [],
         sourceType: "search",
         sourceRef: "",
         intervalMin: null,
       });
+      schSelectedId = id;
+      schShowAll = false;
       renderScheduleRules(rules);
       persistSchedule();
+    });
+  $("#btn-sch-showall") &&
+    ($("#btn-sch-showall").onclick = () => {
+      schShowAll = !schShowAll;
+      renderScheduleRules(collectSchedule().rules);
     });
 
   wireTagBrowser();
@@ -1233,6 +1244,7 @@ function wireAllCards() {
 
 // ---------- Schedule wiring ----------
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const WEEKDAYS = [1, 2, 3, 4, 5];
 const WEEKEND = [0, 6];
 
@@ -1359,25 +1371,235 @@ function clashingRuleIds(rules) {
   }
   return clashes;
 }
+// ---------- the week, drawn ----------
+// The timetable as a week of blocks, after the Day view in the v2 concept.
+// It is a picture of the existing rules, not a new kind of rule: entries still
+// have only a start, and run until the next one begins. So a block ends where
+// the next entry starts, and the stretch before a day's first entry is the
+// previous entry carrying on, drawn striped.
+//
+// What is drawn comes from scheduleRuleAt, a copy of findActiveRule in
+// main.cjs, so the picture cannot disagree with what the app does. A test
+// checks the two give the same answer across the whole week.
+
+const SCH_COLOURS = ["#a8b4ff", "#7fdde6", "#f5a3d0", "#f5b89c", "#c6e89a", "#ffe08a", "#c9b8ff", "#9fd8b5"];
+// Monday first, as a week is read here; values are Date.getDay() numbers.
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+// parseHHMM from main.cjs, as is: it clamps where ruleMinutes rejects, and the
+// week has to read times the way the scheduler does.
+function schedulerParseHHMM(v) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || "").trim());
+  if (!m) return null;
+  return Math.min(23, Math.max(0, Number(m[1]))) * 60 + Math.min(59, Math.max(0, Number(m[2])));
+}
+
+function scheduleRuleAt(rules, dow, mins) {
+  const appliesOn = (r, d) => !r.days || !r.days.length || r.days.includes(d);
+  const byStart = (a, b) => a._mins - b._mins;
+  const valid = (Array.isArray(rules) ? rules : [])
+    .map((r) => ({ ...r, _mins: schedulerParseHHMM(r.startHHMM) }))
+    .filter((r) => r._mins != null);
+  if (!valid.length) return null;
+  const startedToday = valid.filter((r) => appliesOn(r, dow) && r._mins <= mins).sort(byStart);
+  if (startedToday.length) return startedToday[startedToday.length - 1];
+  for (let back = 1; back <= 7; back++) {
+    const earlierDay = (dow - back + 7) % 7;
+    const onThatDay = valid.filter((r) => appliesOn(r, earlierDay)).sort(byStart);
+    if (onThatDay.length) return onThatDay[onThatDay.length - 1];
+  }
+  return null;
+}
+
+// One day as blocks: [{ id, from, to, carried }], minutes since midnight. A
+// block starts at midnight or at an entry's start; "carried" means the entry in
+// force did not start then, it is still running from earlier.
+function scheduleDaySegments(rules, dow) {
+  const starts = (rules || [])
+    .filter((r) => !r.days || !r.days.length || r.days.includes(dow))
+    .map((r) => schedulerParseHHMM(r.startHHMM))
+    .filter((m) => m !== null);
+  const points = [...new Set([0, ...starts])].sort((a, b) => a - b);
+  const out = [];
+  points.forEach((from, i) => {
+    const to = i + 1 < points.length ? points[i + 1] : 1440;
+    const rule = scheduleRuleAt(rules, dow, from);
+    if (!rule) return;
+    const carried = !(rule._mins === from && (!rule.days || !rule.days.length || rule.days.includes(dow)));
+    const last = out[out.length - 1];
+    if (last && last.id === rule.id) {
+      last.to = to;
+      return;
+    }
+    out.push({ id: rule.id, from, to, carried });
+  });
+  return out;
+}
+
+// Entries that use the same source share a colour, so the same playlist reads
+// as the same thing wherever it appears in the week.
+function scheduleSourceKey(rule) {
+  const ref = (rule.sourceRef || "").trim();
+  return (rule.sourceType || "search") + ":" + (rule.sourceType === "search" ? "" : ref);
+}
+function scheduleSourceLabel(rule) {
+  const ref = (rule.sourceRef || "").trim();
+  switch (rule.sourceType) {
+    case "playlist":
+      return ref || "Playlist (none chosen)";
+    case "preset":
+      return ref || "Preset (none chosen)";
+    case "collection":
+      return ref ? "Collection " + ref : "Collection (no id)";
+    default:
+      return "Saved search";
+  }
+}
+function scheduleColours(rules) {
+  const keys = [];
+  sortRules(rules).forEach((r) => {
+    const k = scheduleSourceKey(r);
+    if (!keys.includes(k)) keys.push(k);
+  });
+  const map = {};
+  (rules || []).forEach((r) => {
+    map[r.id] = SCH_COLOURS[keys.indexOf(scheduleSourceKey(r)) % SCH_COLOURS.length];
+  });
+  return map;
+}
+const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+
+let schSelectedId = null;
+let schShowAll = false;
+
+function renderScheduleWeek(rules, activeRuleId) {
+  const host = $("#scheduleWeek");
+  if (!host) return;
+  const byId = {};
+  (rules || []).forEach((r) => (byId[r.id] = r));
+  const colours = scheduleColours(rules);
+  const now = new Date();
+  const today = now.getDay();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const enabled = !!$("#scheduleEnabled")?.checked;
+  const pct = (m) => ((m / 1440) * 100).toFixed(3);
+
+  const axis = [0, 3, 6, 9, 12, 15, 18, 21, 24]
+    .map((h) => `<span style="left:${pct(h * 60)}%">${String(h).padStart(2, "0")}</span>`)
+    .join("");
+
+  const rows = WEEK_ORDER.map((dow) => {
+    const blocks = scheduleDaySegments(rules, dow)
+      .map((seg) => {
+        const r = byId[seg.id];
+        if (!r) return "";
+        const name = scheduleSourceLabel(r);
+        const range = hhmm(seg.from) + "–" + (seg.to === 1440 ? "24:00" : hhmm(seg.to));
+        const isNow = enabled && dow === today && r.id === activeRuleId && seg.from <= nowMins && nowMins < seg.to;
+        const label = seg.carried
+          ? `${name}, ${DAY_FULL[dow]} ${range}, carrying on from the ${r.startHHMM} entry`
+          : `${name}, ${DAY_FULL[dow]} ${range}`;
+        return `<button type="button" class="sch-block${seg.carried ? " carried" : ""}${r.id === schSelectedId ? " selected" : ""}${isNow ? " now" : ""}"
+          data-id="${escapeHtml(String(r.id))}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"
+          style="left:${pct(seg.from)}%; width:${pct(seg.to - seg.from)}%; --c:${colours[r.id]}">
+          <span class="sch-block-name">${escapeHtml(name)}</span>
+          <span class="sch-block-time">${seg.carried ? "carries on" : range}</span>
+        </button>`;
+      })
+      .join("");
+    const nowLine = dow === today ? `<div class="sch-now" aria-hidden="true" style="left:${pct(nowMins)}%"></div>` : "";
+    return `<div class="sch-day-row${dow === today ? " today" : ""}">
+      <span class="sch-day-label">${DAY_LABELS[dow]}</span>
+      <div class="sch-track" data-dow="${dow}">${blocks}${nowLine}</div>
+    </div>`;
+  }).join("");
+
+  host.classList.toggle("off", !enabled);
+  host.innerHTML = `<div class="sch-axis">${axis}</div>${rows}${
+    (rules || []).length ? "" : '<div class="sch-empty">Nothing planned. Double-click a day to add an entry.</div>'
+  }`;
+
+  // Selecting must not redraw the week: the first click of a double-click
+  // selects, and the second has to land on the same rows to place an entry.
+  host.onclick = (e) => {
+    const b = e.target.closest(".sch-block");
+    if (b) selectScheduleEntry(b.dataset.id);
+  };
+  host.ondblclick = (e) => {
+    const track = document.elementFromPoint(e.clientX, e.clientY)?.closest(".sch-track");
+    if (!track || !host.contains(track)) return;
+    const box = track.getBoundingClientRect();
+    if (!box.width) return;
+    const frac = Math.min(Math.max((e.clientX - box.left) / box.width, 0), 1);
+    const mins = Math.min(Math.round((frac * 1440) / 15) * 15, 1425);
+    const rules2 = collectSchedule().rules;
+    const id = "r" + Date.now();
+    rules2.push({
+      id,
+      startHHMM: hhmm(mins),
+      days: [Number(track.dataset.dow)],
+      sourceType: "search",
+      sourceRef: "",
+      intervalMin: null,
+    });
+    schSelectedId = id;
+    schShowAll = false;
+    renderScheduleRules(rules2);
+    persistSchedule();
+  };
+}
+
+// Show one entry's editor and mark its blocks, without rebuilding anything.
+function selectScheduleEntry(id) {
+  schSelectedId = id;
+  schShowAll = false;
+  document.querySelectorAll("#scheduleWeek .sch-block").forEach((b) => {
+    b.classList.toggle("selected", b.dataset.id === id);
+  });
+  let row = null;
+  document.querySelectorAll("#scheduleRules .sch-rule").forEach((r) => {
+    r.hidden = r.dataset.id !== id;
+    if (!r.hidden) row = r;
+  });
+  const rules = collectSchedule().rules;
+  const sel = rules.find((r) => r.id === id);
+  const title = $("#scheduleSelTitle");
+  if (title && sel) title.textContent = `The ${sel.startHHMM || "??:??"} entry: ${scheduleSourceLabel(sel)}`;
+  const showAllBtn = $("#btn-sch-showall");
+  if (showAllBtn) showAllBtn.textContent = "Show all entries";
+  row?.scrollIntoView({ block: "nearest" });
+}
+
 function renderScheduleRules(rules, activeRuleId) {
   const host = $("#scheduleRules");
   if (!host) return;
   const pls = Object.keys(config?.playlists || {}).sort();
   const presets = Object.keys(config?.presets || {}).sort();
+  // Every entry needs an id to be picked out of the week by.
+  (rules || []).forEach((r, i) => {
+    if (r && !r.id) r.id = "r" + Date.now() + "_" + i;
+  });
   const ordered = sortRules(rules);
+  const active = activeRuleId || scheduleActiveRuleId;
+  renderScheduleWeek(ordered, active);
+  const title = $("#scheduleSelTitle");
+  const showAllBtn = $("#btn-sch-showall");
   if (!ordered.length) {
     host.innerHTML =
       '<div class="help">Nothing scheduled. Add a time to have WallRaven switch sources during the day: a calm playlist for work hours, your usual search in the evening, that sort of thing.</div>';
+    if (title) title.textContent = "";
+    if (showAllBtn) showAllBtn.hidden = true;
     return;
   }
+  if (!ordered.some((r) => r.id === schSelectedId))
+    schSelectedId = (ordered.find((r) => r.id === active) || ordered[0]).id;
   const clashes = clashingRuleIds(ordered);
   const cycle = Number(config?.cycleMinutes) || 30;
-  const active = activeRuleId || scheduleActiveRuleId;
 
   host.innerHTML = ordered
     .map(
       (r, i) => `
-    <div class="sch-rule${active && r.id === active ? " is-active" : ""}" data-idx="${i}" data-id="${escapeHtml(String(r.id || ""))}">
+    <div class="sch-rule${active && r.id === active ? " is-active" : ""}" data-idx="${i}" data-id="${escapeHtml(String(r.id || ""))}"${schShowAll || r.id === schSelectedId ? "" : " hidden"}>
       <div style="display:grid; grid-template-columns:110px 1fr auto; gap:8px; align-items:center;">
         <input type="time" class="sch-time" value="${escapeHtml(r.startHHMM || "08:00")}" aria-label="Start time" />
         <select class="sch-src-type" aria-label="What to use from this time">
@@ -1420,10 +1642,25 @@ function renderScheduleRules(rules, activeRuleId) {
     )
     .join("");
 
+  const sel = ordered.find((r) => r.id === schSelectedId);
+  if (title)
+    title.textContent = schShowAll
+      ? `All ${ordered.length} entries, in the order they start`
+      : `The ${sel.startHHMM || "??:??"} entry: ${scheduleSourceLabel(sel)}`;
+  if (showAllBtn) {
+    showAllBtn.hidden = ordered.length < 2;
+    showAllBtn.textContent = schShowAll ? "Show just the selected entry" : "Show all entries";
+  }
+
   host.querySelectorAll(".sch-rule").forEach((row) => {
-    row
-      .querySelectorAll("input, select")
-      .forEach((el) => el.addEventListener("change", persistSchedule));
+    row.querySelectorAll("input, select").forEach((el) =>
+      el.addEventListener("change", () => {
+        // Redraw the week, not the form: redrawing the form would throw away
+        // whatever is half-typed in it.
+        renderScheduleWeek(sortRules(collectSchedule().rules), scheduleActiveRuleId);
+        persistSchedule();
+      }),
+    );
     row.querySelector(".sch-del").addEventListener("click", () => {
       const rules2 = collectSchedule().rules;
       rules2.splice(Number(row.dataset.idx), 1);
@@ -1468,7 +1705,7 @@ function collectSchedule() {
   const enabled = !!$("#scheduleEnabled")?.checked;
   if (!host) return { enabled, rules: config?.schedule?.rules || [] };
   const rules = [...host.querySelectorAll(".sch-rule")].map((row, i) => ({
-    id: config?.schedule?.rules?.[Number(row.dataset.idx)]?.id || "r" + Date.now() + "_" + i,
+    id: row.dataset.id || "r" + Date.now() + "_" + i,
     startHHMM: row.querySelector(".sch-time").value || "08:00",
     sourceType: row.querySelector(".sch-src-type").value || "search",
     sourceRef: row.querySelector(".sch-src-ref")?.value || "",

@@ -659,7 +659,7 @@
       <div class="card-intro">
         A timetable switches what WallRaven pulls from at set times of day. Each entry says "from
         this time, use this", and it stays in force until the next one starts. With nothing due yet
-        today, the last entry from the day before carries over.
+        today, the last entry from the day before carries over, which the week shows striped.
       </div>
       <div
         style="display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap"
@@ -668,6 +668,14 @@
           ><input type="checkbox" id="scheduleEnabled" /> Use the timetable</label
         >
         <span id="scheduleStatus" style="color: var(--muted); font-size: 12px"></span>
+      </div>
+      <div id="scheduleWeek" class="sch-week" role="group" aria-label="Your week"></div>
+      <div class="help" style="margin: 6px 0 12px 0">
+        Click a block to edit that entry. Double-click a day to add an entry at that time.
+      </div>
+      <div class="sch-list-head">
+        <span id="scheduleSelTitle"></span>
+        <button class="btn secondary" id="btn-sch-showall" type="button">Show all entries</button>
       </div>
       <div id="scheduleRules"></div>
       <button class="btn secondary" id="btn-add-rule" type="button" style="margin-top: 8px">

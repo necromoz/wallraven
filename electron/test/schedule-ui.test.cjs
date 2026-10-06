@@ -182,6 +182,112 @@ check("collectSchedule reads the chips it now renders", () => {
   assert.ok(hasCode(body, "classList.contains('on')"), "it still looks for checked checkboxes");
 });
 
+console.log("the week matches the scheduler");
+
+const { MAIN } = require("./sources.cjs");
+const scheduler = new Function(`
+  ${extractFrom(MAIN, "parseHHMM")}
+  ${extractFrom(MAIN, "findActiveRule")}
+  return findActiveRule;
+`)();
+const week = new Function(`
+  ${extract("ruleMinutes")}
+  ${extract("schedulerParseHHMM")}
+  ${extract("scheduleRuleAt")}
+  ${extract("scheduleDaySegments")}
+  return { scheduleDaySegments };
+`)();
+
+// A real local week, so getDay() and getHours() are what the scheduler sees.
+// 4 Oct 2026 is a Sunday.
+const at = (dow, mins) => new Date(2026, 9, 4 + dow, Math.floor(mins / 60), mins % 60);
+function blockAt(rules, dow, mins) {
+  const seg = week.scheduleDaySegments(rules, dow).find((s) => s.from <= mins && mins < s.to);
+  return seg ? seg.id : null;
+}
+function agree(rules, label) {
+  for (let dow = 0; dow < 7; dow++) {
+    for (let mins = 0; mins < 1440; mins++) {
+      const want = scheduler(rules, at(dow, mins));
+      const got = blockAt(rules, dow, mins);
+      assert.strictEqual(
+        got,
+        want ? want.id : null,
+        `${label}: day ${dow} ${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, "0")}`,
+      );
+    }
+  }
+}
+
+check("an ordinary weekday and weekend timetable", () => {
+  agree(
+    [
+      { id: "a", startHHMM: "08:00", days: [1, 2, 3, 4, 5] },
+      { id: "b", startHHMM: "18:00", days: [] },
+      { id: "c", startHHMM: "10:00", days: [0, 6] },
+    ],
+    "ordinary",
+  );
+});
+
+check("an entry on one day only carries on through the rest of the week", () => {
+  agree([{ id: "a", startHHMM: "22:00", days: [3] }], "single");
+});
+
+check("two entries at the same minute on the same day pick the same winner", () => {
+  agree(
+    [
+      { id: "a", startHHMM: "09:00", days: [] },
+      { id: "b", startHHMM: "09:00", days: [1] },
+      { id: "c", startHHMM: "00:00", days: [2] },
+    ],
+    "ties",
+  );
+});
+
+check("malformed times are read the way the scheduler reads them", () => {
+  agree(
+    [
+      { id: "a", startHHMM: "25:00", days: [] },
+      { id: "b", startHHMM: " 7:05 ", days: [1] },
+      { id: "c", startHHMM: "nonsense", days: [] },
+    ],
+    "malformed",
+  );
+});
+
+check("no entries draws nothing", () => {
+  agree([], "empty");
+});
+
+check("random timetables, 100 of them, agree at every minute of the week", () => {
+  let seed = 7;
+  const rand = (n) => ((seed = (seed * 1103515245 + 12345) % 2147483648), seed % n);
+  for (let t = 0; t < 100; t++) {
+    const rules = Array.from({ length: 1 + rand(6) }, (_, i) => ({
+      id: "r" + i,
+      startHHMM: `${String(rand(24)).padStart(2, "0")}:${String(rand(4) * 15).padStart(2, "0")}`,
+      days: rand(3) === 0 ? [] : [...new Set(Array.from({ length: 1 + rand(3) }, () => rand(7)))],
+    }));
+    agree(rules, "random " + t);
+  }
+});
+
+check("a day that starts mid-entry is marked as carried on", () => {
+  const segs = week.scheduleDaySegments(
+    [
+      { id: "a", startHHMM: "08:00", days: [] },
+      { id: "b", startHHMM: "20:00", days: [] },
+    ],
+    1,
+  );
+  assert.deepStrictEqual(segs, [
+    { id: "b", from: 0, to: 480, carried: true },
+    { id: "a", from: 480, to: 1200, carried: false },
+    { id: "b", from: 1200, to: 1440, carried: false },
+  ]);
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);

@@ -1718,6 +1718,161 @@ html[data-mascot="raven-fire"] #view-bar {
   border-color: var(--accent);
 }
 
+/* The week, after the Day view in the v2 concept. Blocks are buttons so the
+   keyboard reaches them; colours are fixed pastels with dark text, which read
+   on every theme, light ones included. */
+.sch-week {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 44px;
+  position: relative;
+}
+.sch-week.off {
+  opacity: 0.45;
+}
+.sch-axis {
+  position: relative;
+  height: 14px;
+  font: 10px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--muted);
+}
+.sch-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.sch-axis span:first-child {
+  transform: none;
+}
+.sch-axis span:last-child {
+  transform: translateX(-100%);
+}
+.sch-day-row {
+  position: relative;
+  height: 44px;
+}
+.sch-day-label {
+  position: absolute;
+  left: -44px;
+  width: 38px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.sch-day-row.today .sch-day-label {
+  color: var(--accent);
+}
+.sch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--fg) 4%, transparent) 0 8px,
+    transparent 8px 16px
+  );
+  cursor: copy;
+}
+.sch-block {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  box-sizing: border-box;
+  margin: 0 1px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background: var(--c);
+  color: #14121a;
+  text-align: left;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1.15;
+}
+.sch-block.carried {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--c) 72%, transparent) 0 6px,
+    color-mix(in srgb, var(--c) 38%, transparent) 6px 12px
+  );
+  color: var(--fg);
+}
+.sch-block.carried .sch-block-name,
+.sch-block.carried .sch-block-time {
+  align-self: flex-start;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--panel-2) 82%, transparent);
+}
+.sch-block:hover {
+  filter: brightness(1.06);
+}
+.sch-block.selected {
+  border-color: var(--fg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fg) 25%, transparent);
+  z-index: 1;
+}
+.sch-block:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.sch-block-name,
+.sch-block-time {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sch-block-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+.sch-block-time {
+  font: 10px/1.15 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  opacity: 0.8;
+}
+.sch-block.now .sch-block-name::after {
+  content: " · now";
+  font-weight: 600;
+}
+.sch-now {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--fg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fg) 20%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+.sch-empty {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.sch-list-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.sch-list-head span {
+  flex: 1;
+  font-weight: 600;
+}
+
 /* Timetable entries. The plain-English line under each one is the point:
    the controls say what the entry is made of, the sentence says what it
    will do. */
