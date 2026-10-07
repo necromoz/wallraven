@@ -68,6 +68,10 @@ double-click `Run WallRaven.bat`.
 
 ## Licence and credit
 
+Copyright (c) 2026 Steve Shaw. All rights reserved. The source is public so you
+can see what you are installing; it is not licensed for reuse, modification or
+redistribution. Ask if you would like to do something with it.
+
 Wallpapers belong to the people who made them. WallRaven displays them through
 Wallhaven's public API and claims no ownership or endorsement. Please follow,
 favourite and credit artists on Wallhaven.
