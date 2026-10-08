@@ -286,6 +286,12 @@ function loadConfig() {
     // should get the "what's new" panel rather than a welcome. Only a config
     // that was never written at all counts as a first run.
     if (saved.lastSeenVersion === undefined) merged.lastSeenVersion = "pre";
+    // Raven Summer and Raven Fyra were removed. Anyone who had one picked
+    // falls back to the default rather than keeping a theme id with no CSS
+    // left to match it, which would otherwise render as an unstyled blank.
+    if (merged.theme === "raven-beach" || merged.theme === "raven-fire") {
+      merged.theme = "glass";
+    }
     return merged;
   }
   return { ...DEFAULT_CONFIG };

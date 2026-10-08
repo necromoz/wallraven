@@ -91,7 +91,7 @@ check("every band above the shell is lifted above the theme backdrop", () => {
 });
 
 check("the themes that need it still lift the header and the shell", () => {
-  for (const theme of ["raven", "raven-beach", "raven-fire"]) {
+  for (const theme of ["raven"]) {
     assert.ok(
       new RegExp(`html\\[data-mascot="${theme}"\\] header \\{ position: relative; z-index: 1`).test(
         CSS,

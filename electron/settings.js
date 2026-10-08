@@ -275,8 +275,8 @@ function applyAccent(c) {
 function applyTheme(t) {
   const name = t || "glass";
   const el = document.documentElement;
-  // Raven themes share the glass controls and add their own full-window scene.
-  const mascotTheme = name === "raven" || name === "raven-beach" || name === "raven-fire";
+  // Raven shares the glass controls and adds its own full-window scene.
+  const mascotTheme = name === "raven";
   el.setAttribute("data-theme", mascotTheme ? "glass" : name);
   if (mascotTheme) el.setAttribute("data-mascot", name);
   else el.removeAttribute("data-mascot");
