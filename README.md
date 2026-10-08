@@ -68,7 +68,7 @@ double-click `Run WallRaven.bat`.
 
 ## Licence and credit
 
-Copyright (c) 2026 Steve Shaw. All rights reserved. The source is public so you
+Copyright (c) 2026 Necromoz. All rights reserved. The source is public so you
 can see what you are installing; it is not licensed for reuse, modification or
 redistribution. Ask if you would like to do something with it.
 
