@@ -1,21 +1,22 @@
 # Wallraven changelog
 
-## v1.3.1-beta.2 — 6 Oct 2026
-
-### New
-
-- **The timetable is a week you can see.** Schedule shows each day as a row of blocks: what plays when, the stretch before the first entry striped where the previous one carries on, and a line for now. Click a block to edit that entry, double-click a day to add one at that time. It shows the same rules as before; nothing about how they behave has changed.
-- **Credit for the picture on screen.** Now playing names the original artwork's source as given on Wallhaven, who uploaded it, and links to its Wallhaven page.
-
-### Changed
-
-- **Changing your username is deliberate.** It shows locked with a Change button, asks before saving, and can be changed once every 30 days after the first change.
-
-## v1.3.1-beta.1 — 25 Sep 2026
+## v1.3.1 — 8 Oct 2026
 
 ### New
 
 - **Skip letterboxed images.** Some "4K" uploads are really a shorter picture padded out with solid bars to reach the resolution. Wallpapers are now checked after downloading, and a barred one is quietly swapped for another. On by default; turn it off, or clear the list of ones it has flagged, under Resolution.
+- **The timetable is a week you can see.** Schedule shows each day as a row of blocks: what plays when, the stretch before the first entry striped where the previous one carries on, and a line for now. Click a block to edit that entry, double-click a day to add one at that time. It shows the same rules as before; nothing about how they behave has changed.
+- **Credit for the picture on screen.** Now playing names the original artwork's source as given on Wallhaven, who uploaded it, and links to its Wallhaven page.
+- **Sign in with Google is back**, on our own Google project this time rather than the one that depended on the old hosting.
+
+### Changed
+
+- **Changing your username is deliberate.** It shows locked with a Change button, asks before saving, and can be changed once every 30 days after the first change.
+- **Account emails look like WallRaven's.** Reset password and confirm signup used Supabase's generic template before; they're branded now.
+
+### Fixed
+
+- **Pairing a device actually finishes.** Approving a pairing code used to land you on your account page without ever asking for the code, so the device sat waiting forever.
 
 ## v1.3.0 — 24 Sep 2026
 

@@ -1,5 +1,49 @@
 # Wallraven changelog
 
+## v1.3.1 — 8 Oct 2026
+
+### New
+
+- **Skip letterboxed images.** Some "4K" uploads are really a shorter picture padded out with solid bars to reach the resolution. Wallpapers are now checked after downloading, and a barred one is quietly swapped for another. On by default; turn it off, or clear the list of ones it has flagged, under Resolution.
+- **The timetable is a week you can see.** Schedule shows each day as a row of blocks: what plays when, the stretch before the first entry striped where the previous one carries on, and a line for now. Click a block to edit that entry, double-click a day to add one at that time. It shows the same rules as before; nothing about how they behave has changed.
+- **Credit for the picture on screen.** Now playing names the original artwork's source as given on Wallhaven, who uploaded it, and links to its Wallhaven page.
+- **Sign in with Google is back**, on our own Google project this time rather than the one that depended on the old hosting.
+
+### Changed
+
+- **Changing your username is deliberate.** It shows locked with a Change button, asks before saving, and can be changed once every 30 days after the first change.
+- **Account emails look like WallRaven's.** Reset password and confirm signup used Supabase's generic template before; they're branded now.
+
+### Fixed
+
+- **Pairing a device actually finishes.** Approving a pairing code used to land you on your account page without ever asking for the code, so the device sat waiting forever.
+
+## v1.3.0 — 24 Sep 2026
+
+### New
+
+- **Browse your wallpapers.** Now playing is a carousel: the wallpaper on your desktop in the middle, your last 25 to the left and what comes next to the right. Drag it, use the slider or the arrow keys, or click a picture to bring it to the middle. Nothing on your desktop changes until you press Set as wallpaper. Double-click the middle one to see it full size, and move through them from there too.
+- **Why this one.** Now playing says how the wallpaper was chosen: the timetable entry in charge, the preset it switched to, and the search, playlist, folder or collection it came from.
+- **The thumbs show where you stand.** Like and dislike light up when the wallpaper on screen is already liked or disliked, in the tray too, and pressing a lit one undoes it.
+- **Undo a dislike.** Dislike & skip leaves a notice with Undo, which brings the wallpaper back.
+- **Clear likes**, next to Clear dislikes. It asks first, because a Liked collection is something you built on purpose.
+
+### Changed
+
+- **Save tells you when there is something to save.** It says Saved when there is nothing pending and Save changes when there is. Theme and colour still save the moment you pick them.
+- **Pause says Pause.** The button names what it will do, and lights up while paused.
+- **Less repetition.** Now playing no longer repeats the title bar's buttons, and Home no longer repeats the sidebar.
+- **Easier to read** in the Nord, Glass and Raven themes.
+- A lit dislike is a different colour from a lit like, and the window is called WallRaven.
+
+### Fixed
+
+- **A preset switched on by the timetable matches your screen.** "Match my screen" was ignored on that route, so it searched every resolution and aspect ratio.
+- **A timetable switch starts with the new search.** The first wallpaper after a timetable entry took over could still come from the previous one.
+- **The app only names a preset while it is really in use.** It used to go on naming the last preset you loaded after you had changed its settings.
+- **Clearing likes or dislikes clears them properly.** The Library kept showing entries that nothing else remembered.
+- **The next wallpaper is ready sooner** after starting up, saving a change or a timetable switch.
+
 ## v1.2.1 — 18 Sep 2026
 
 ### Fixed
