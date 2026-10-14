@@ -1,18 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  Cloud,
-  Folder,
-  Gamepad2,
-  Heart,
-  Keyboard,
-  LayoutGrid,
-  Monitor,
-  RefreshCw,
-  Search,
-  Sun,
-  Users,
-  WifiOff,
-} from "lucide-react";
 
 import { RELEASES_PAGE, useLatestRelease } from "@/lib/latest-release";
 import feat01 from "@/assets/feat-01.jpg";
@@ -75,87 +61,148 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const FEATURES = [
+type Feature = {
+  tag: string;
+  image: string;
+  title: string;
+  body: string;
+};
+
+// Rows 1–6, shown before the interlude.
+const FEATURES_A: Feature[] = [
   {
-    icon: Search,
+    tag: "Discover",
     image: feat01,
     title: "Find the look you want",
     body: "Pick tags, colours and categories from a simple panel — no search syntax to learn.",
   },
   {
-    icon: RefreshCw,
+    tag: "Auto-cycle",
     image: feat02,
     title: "A fresh wallpaper, automatically",
     body: "Change every few minutes or once a day, and step back to the one you liked.",
   },
   {
-    icon: Sun,
+    tag: "Time of day",
     image: feat03,
     title: "Different by time of day",
     body: "Calm mornings, bolder evenings, something quieter during work hours.",
   },
   {
-    icon: LayoutGrid,
+    tag: "Presets",
     image: feat04,
     title: "Presets that just work",
     body: "Over 65 hand-picked presets with previews. One click and your desktop changes.",
   },
   {
-    icon: Users,
+    tag: "Community",
     image: feat05,
     title: "Presets from other people",
     body: "Share your own and try other people's. Your screen and account details stay private.",
   },
   {
-    icon: Heart,
+    tag: "Collections",
     image: feat06,
     title: "Your own collections",
     body: "Group the wallpapers you love and keep them safe from cleanups.",
   },
+];
+
+// The interlude's own feature — pulled out of the grid and given a full-width
+// banner, since "stays out of the way" reads better as a statement than a card.
+const FOCUS_FEATURE: Feature = {
+  tag: "Focus",
+  image: feat09,
+  title: "Stays out of the way when gaming",
+  body: "WallRaven spots full-screen games and apps and leaves your wallpaper alone until you're done.",
+};
+
+// Rows 7–11, shown after the interlude.
+const FEATURES_B: Feature[] = [
   {
-    icon: Folder,
+    tag: "Local folders",
     image: feat07,
     title: "Your own pictures too",
     body: "Point WallRaven at folders on your PC and it cycles those the same way.",
   },
   {
-    icon: Monitor,
+    tag: "Multi-monitor",
     image: feat08,
     title: "Looks right on every screen",
     body: "A different wallpaper per monitor, sensible cropping, and a matching lock screen.",
   },
   {
-    icon: Gamepad2,
-    image: feat09,
-    title: "Stays out of the way when gaming",
-    body: "Spots full-screen games and apps and leaves your wallpaper alone until you're done.",
-  },
-  {
-    icon: Keyboard,
+    tag: "Shortcuts",
     image: feat10,
     title: "Keyboard shortcuts",
     body: "Skip, go back, save or pause without opening the app.",
   },
   {
-    icon: Cloud,
+    tag: "Sync",
     image: feat11,
     title: "Same setup on every PC",
     body: "Sign in once and your filters, collections and favourites follow you.",
   },
   {
-    icon: WifiOff,
+    tag: "Offline",
     image: feat12,
     title: "Works offline",
     body: "Wallpapers are saved ahead of time, so it keeps going without a connection.",
   },
 ];
 
+// Original abstract wing motif — a faint decorative watermark, not a logo.
+function WingMotif({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 900 900" className={className}>
+      <path
+        d="M450 80 C 300 140, 160 260, 90 460 C 220 420, 330 430, 420 490 C 330 520, 230 600, 170 740 C 300 680, 400 660, 470 690 C 420 760, 400 820, 410 860 C 480 780, 560 700, 610 600 C 560 610, 510 600, 480 570 C 580 540, 680 470, 740 360 C 670 380, 610 370, 570 330 C 660 280, 740 200, 780 110 C 680 140, 590 150, 520 130 C 560 100, 580 70, 580 40 C 530 60, 480 70, 450 80 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+    </svg>
+  );
+}
+
+function FeatureRow({ feature, number }: { feature: Feature; number: number }) {
+  const reversed = number % 2 === 0;
+  return (
+    <div className={`flex flex-col border-t border-border md:flex-row ${reversed ? "md:flex-row-reverse" : ""}`}>
+      <div className="flex flex-1 flex-col justify-center p-8 sm:p-10 md:basis-2/5">
+        <span className="inline-flex items-center gap-2 text-xs font-bold tracking-[0.2em] text-primary uppercase">
+          {String(number).padStart(2, "0")} — {feature.tag}
+        </span>
+        <h3 className="font-display mt-3 text-2xl font-bold tracking-tight">{feature.title}</h3>
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">{feature.body}</p>
+      </div>
+      <div
+        className={`relative min-h-[260px] flex-1 overflow-hidden border-border md:basis-3/5 ${
+          reversed ? "md:border-r" : "md:border-l"
+        }`}
+      >
+        <img
+          src={feature.image}
+          alt=""
+          loading="lazy"
+          width={1264}
+          height={848}
+          className="h-full w-full object-cover saturate-150 contrast-105"
+        />
+      </div>
+    </div>
+  );
+}
+
 function Index() {
   const latest = useLatestRelease();
+  const downloadLabel = `Download for Windows${latest ? ` — v${latest.version}` : ""}`;
+
   return (
     <main className="min-w-0">
-      {/* Hero panel */}
-      <section className="rise relative overflow-hidden rounded-2xl border border-border bg-card/50">
+      {/* Hero */}
+      <section className="rise relative overflow-hidden rounded-none border border-border bg-card/50">
+        <WingMotif className="pointer-events-none absolute -top-28 -left-36 h-[560px] w-[560px] text-primary opacity-[0.06]" />
         <div
           aria-hidden
           className="pointer-events-none absolute inset-y-0 right-0 hidden w-[46%] lg:block"
@@ -170,11 +217,11 @@ function Index() {
           />
         </div>
         <div className="relative z-10 max-w-2xl p-8 sm:p-10 lg:py-14">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs tracking-wide text-muted-foreground uppercase">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
+            <span className="h-px w-5 bg-primary" />
             Windows desktop app
           </span>
-          <h1 className="text-gradient mt-4 font-display text-4xl leading-[1.07] font-semibold tracking-tight text-balance sm:text-5xl">
+          <h1 className="font-display mt-5 text-4xl leading-[1.08] font-bold tracking-tight text-balance uppercase sm:text-5xl">
             Wallpapers that keep their own schedule.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
@@ -187,7 +234,7 @@ function Index() {
               href={latest?.url ?? RELEASES_PAGE}
               className="glow-ring prism-btn inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold transition-transform hover:-translate-y-0.5"
             >
-              Download for Windows{latest ? ` \u2014 v${latest.version}` : ""}
+              {downloadLabel}
             </a>
             <Link
               to="/presets"
@@ -196,55 +243,62 @@ function Index() {
               Browse presets
             </Link>
           </div>
+          <p className="mt-6 text-xs tracking-wide text-muted-foreground/70 uppercase">
+            Free · Windows 10 &amp; 11 · No account required to start
+          </p>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="mt-12">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">Everything it does</h2>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Set it up once. Then just enjoy the view.
+      {/* Editorial statement */}
+      <section className="mt-14 flex flex-col items-center border-y border-border py-12 text-center">
+        <span aria-hidden className="h-9 w-px bg-border" />
+        <p className="font-display mt-6 max-w-2xl text-xl leading-snug font-semibold tracking-tight text-balance sm:text-2xl">
+          Not a widget. Not a slideshow. A desktop that finds what you like, keeps its own
+          schedule, and stays out of the way when it matters.
         </p>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f, i) => (
-            <article
-              key={f.title}
-              className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card/60 transition-colors hover:border-primary/50"
-            >
-              <div className="relative aspect-[3/2] overflow-hidden">
-                <img
-                  src={f.image}
-                  alt=""
-                  loading="lazy"
-                  width={768}
-                  height={512}
-                  className="h-full w-full object-cover saturate-150 contrast-105 transition-transform duration-700 group-hover:scale-105"
-                />
-                <span
-                  aria-hidden
-                  className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent"
-                />
-              </div>
-              <div className="relative flex flex-1 flex-col p-5 pt-4">
-                <span className="font-display text-xs text-muted-foreground/70">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <h3 className="mt-1.5 pr-10 font-display text-base font-semibold">{f.title}</h3>
-                <p className="mt-2 pr-10 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
-                <f.icon
-                  aria-hidden
-                  className="absolute right-4 bottom-4 h-5 w-5 text-muted-foreground/60 transition-colors group-hover:text-primary"
-                />
-              </div>
-              <span className="absolute inset-x-0 bottom-0 h-px scale-x-0 bg-gradient-to-r from-primary to-ember transition-transform duration-500 group-hover:scale-x-100" />
-            </article>
-          ))}
+        <span aria-hidden className="mt-6 h-9 w-px bg-border" />
+      </section>
+
+      {/* Features, rows 1-6 */}
+      <section className="border-b border-border">
+        {FEATURES_A.map((f, i) => (
+          <FeatureRow key={f.title} feature={f} number={i + 1} />
+        ))}
+      </section>
+
+      {/* Interlude */}
+      <section className="relative h-[360px] overflow-hidden border-b border-border sm:h-[420px]">
+        <img
+          src={FOCUS_FEATURE.image}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          width={1264}
+          height={848}
+          className="absolute inset-0 h-full w-full object-cover saturate-150 contrast-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
+        <div className="absolute inset-x-6 bottom-8 sm:inset-x-10">
+          <span className="text-xs font-semibold tracking-[0.2em] text-primary uppercase">
+            Always ready
+          </span>
+          <p className="font-display mt-3 max-w-lg text-xl leading-snug font-bold tracking-tight uppercase sm:text-2xl">
+            Saved ahead of time. Cropped for every screen. Gone the moment you need focus.
+          </p>
         </div>
       </section>
 
-      <section className="glass-card relative mt-16 flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl p-8 sm:flex-row sm:items-center">
+      {/* Features, rows 7-11 */}
+      <section className="border-b border-border">
+        {FEATURES_B.map((f, i) => (
+          <FeatureRow key={f.title} feature={f} number={i + 7} />
+        ))}
+      </section>
+
+      {/* Cross-promo */}
+      <section className="glass-card relative mt-10 flex flex-col items-start justify-between gap-6 overflow-hidden rounded-none p-8 sm:flex-row sm:items-center">
         <img
-          src={feat12}
+          src={feat05}
           alt=""
           aria-hidden
           loading="lazy"
@@ -273,7 +327,26 @@ function Index() {
         </Link>
       </section>
 
-      <footer className="mt-16 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-6 text-xs text-muted-foreground">
+      {/* Final CTA */}
+      <section className="mt-10 flex flex-col items-center border-y border-border py-16 text-center">
+        <span className="text-xs font-semibold tracking-[0.2em] text-primary uppercase">
+          Get started
+        </span>
+        <h2 className="font-display mt-5 max-w-xl text-3xl leading-tight font-bold tracking-tight text-balance uppercase sm:text-4xl">
+          Give your desktop something to do.
+        </h2>
+        <a
+          href={latest?.url ?? RELEASES_PAGE}
+          className="glow-ring prism-btn mt-7 inline-flex items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5"
+        >
+          {downloadLabel}
+        </a>
+        <p className="mt-4 text-xs tracking-wide text-muted-foreground/70 uppercase">
+          Windows 10 &amp; 11 · Free
+        </p>
+      </section>
+
+      <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 pt-6 text-xs text-muted-foreground">
         <span>WallRaven — an unofficial companion for Wallhaven.cc</span>
         <span>Not affiliated with Wallhaven</span>
       </footer>
