@@ -3,16 +3,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { RELEASES_PAGE, useLatestRelease } from "@/lib/latest-release";
 import feat01 from "@/assets/feat-01.jpg";
 import feat02 from "@/assets/feat-02.jpg";
-import feat03 from "@/assets/feat-03.jpg";
 import feat04 from "@/assets/feat-04.jpg";
 import feat05 from "@/assets/feat-05.jpg";
-import feat06 from "@/assets/feat-06.jpg";
-import feat07 from "@/assets/feat-07.jpg";
 import feat08 from "@/assets/feat-08.jpg";
 import feat09 from "@/assets/feat-09.jpg";
-import feat10 from "@/assets/feat-10.jpg";
-import feat11 from "@/assets/feat-11.jpg";
-import feat12 from "@/assets/feat-12.jpg";
 import characterUrl from "@/assets/wallraven-character.png";
 
 export const Route = createFileRoute("/")({
@@ -68,7 +62,8 @@ type Feature = {
   body: string;
 };
 
-// Rows 1–6, shown before the interlude.
+// A handful of hero features, not the whole list — shown as alternating
+// full-width rows before the interlude.
 const FEATURES_A: Feature[] = [
   {
     tag: "Discover",
@@ -83,28 +78,16 @@ const FEATURES_A: Feature[] = [
     body: "Change every few minutes or once a day, and step back to the one you liked.",
   },
   {
-    tag: "Time of day",
-    image: feat03,
-    title: "Different by time of day",
-    body: "Calm mornings, bolder evenings, something quieter during work hours.",
-  },
-  {
     tag: "Presets",
     image: feat04,
     title: "Presets that just work",
     body: "Over 65 hand-picked presets with previews. One click and your desktop changes.",
   },
   {
-    tag: "Community",
-    image: feat05,
-    title: "Presets from other people",
-    body: "Share your own and try other people's. Your screen and account details stay private.",
-  },
-  {
-    tag: "Collections",
-    image: feat06,
-    title: "Your own collections",
-    body: "Group the wallpapers you love and keep them safe from cleanups.",
+    tag: "Multi-monitor",
+    image: feat08,
+    title: "Looks right on every screen",
+    body: "A different wallpaper per monitor, sensible cropping, and a matching lock screen.",
   },
 ];
 
@@ -116,40 +99,6 @@ const FOCUS_FEATURE: Feature = {
   title: "Stays out of the way when gaming",
   body: "WallRaven spots full-screen games and apps and leaves your wallpaper alone until you're done.",
 };
-
-// Rows 7–11, shown after the interlude.
-const FEATURES_B: Feature[] = [
-  {
-    tag: "Local folders",
-    image: feat07,
-    title: "Your own pictures too",
-    body: "Point WallRaven at folders on your PC and it cycles those the same way.",
-  },
-  {
-    tag: "Multi-monitor",
-    image: feat08,
-    title: "Looks right on every screen",
-    body: "A different wallpaper per monitor, sensible cropping, and a matching lock screen.",
-  },
-  {
-    tag: "Shortcuts",
-    image: feat10,
-    title: "Keyboard shortcuts",
-    body: "Skip, go back, save or pause without opening the app.",
-  },
-  {
-    tag: "Sync",
-    image: feat11,
-    title: "Same setup on every PC",
-    body: "Sign in once and your filters, collections and favourites follow you.",
-  },
-  {
-    tag: "Offline",
-    image: feat12,
-    title: "Works offline",
-    body: "Wallpapers are saved ahead of time, so it keeps going without a connection.",
-  },
-];
 
 // Original abstract wing motif — a faint decorative watermark, not a logo.
 function WingMotif({ className }: { className?: string }) {
@@ -286,13 +235,6 @@ function Index() {
             Saved ahead of time. Cropped for every screen. Gone the moment you need focus.
           </p>
         </div>
-      </section>
-
-      {/* Features, rows 7-11 */}
-      <section className="border-b border-border">
-        {FEATURES_B.map((f, i) => (
-          <FeatureRow key={f.title} feature={f} number={i + 7} />
-        ))}
       </section>
 
       {/* Cross-promo */}
