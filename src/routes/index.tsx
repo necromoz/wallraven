@@ -1,13 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  Cloud,
+  Folder,
+  Gamepad2,
+  LayoutGrid,
+  Monitor,
+  RefreshCw,
+  Search,
+  WifiOff,
+} from "lucide-react";
 
 import { RELEASES_PAGE, useLatestRelease } from "@/lib/latest-release";
-import feat01 from "@/assets/feat-01.jpg";
-import feat02 from "@/assets/feat-02.jpg";
-import feat04 from "@/assets/feat-04.jpg";
 import feat05 from "@/assets/feat-05.jpg";
-import feat08 from "@/assets/feat-08.jpg";
-import feat09 from "@/assets/feat-09.jpg";
-import characterUrl from "@/assets/wallraven-character.png";
+import appHome from "@/assets/app-home.jpg";
+import appBrowse from "@/assets/app-browse.jpg";
 
 export const Route = createFileRoute("/")({
   ssr: false,
@@ -55,50 +61,54 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Feature = {
-  tag: string;
-  image: string;
+type Bullet = {
+  icon: typeof Search;
   title: string;
   body: string;
 };
 
-// A handful of hero features, not the whole list — shown as alternating
-// full-width rows before the interlude.
-const FEATURES_A: Feature[] = [
+const BULLETS: Bullet[] = [
   {
-    tag: "Discover",
-    image: feat01,
+    icon: Search,
     title: "Find the look you want",
-    body: "Pick tags, colours and categories from a simple panel — no search syntax to learn.",
+    body: "Tags, colours and categories — no search syntax to learn.",
   },
   {
-    tag: "Auto-cycle",
-    image: feat02,
-    title: "A fresh wallpaper, automatically",
-    body: "Change every few minutes or once a day, and step back to the one you liked.",
+    icon: RefreshCw,
+    title: "Changes on its own",
+    body: "Every few minutes or once a day, your call.",
   },
   {
-    tag: "Presets",
-    image: feat04,
-    title: "Presets that just work",
-    body: "Over 65 hand-picked presets with previews. One click and your desktop changes.",
+    icon: LayoutGrid,
+    title: "65+ ready-made presets",
+    body: "One click and your whole desktop changes.",
   },
   {
-    tag: "Multi-monitor",
-    image: feat08,
-    title: "Looks right on every screen",
-    body: "A different wallpaper per monitor, sensible cropping, and a matching lock screen.",
+    icon: Monitor,
+    title: "Every monitor, cropped right",
+    body: "A different wallpaper per screen, plus a matching lock screen.",
+  },
+  {
+    icon: Folder,
+    title: "Your own pictures too",
+    body: "Point it at a folder on your PC and it cycles those the same way.",
+  },
+  {
+    icon: Cloud,
+    title: "Same setup everywhere",
+    body: "Sign in once and your filters and favourites follow you.",
+  },
+  {
+    icon: WifiOff,
+    title: "Works offline",
+    body: "Wallpapers are saved ahead of time.",
+  },
+  {
+    icon: Gamepad2,
+    title: "Stays out of the way",
+    body: "Spots full-screen games and apps and leaves you alone.",
   },
 ];
-
-// The interlude's own feature — pulled out of the grid and given a full-width
-// banner, since "stays out of the way" reads better as a statement than a card.
-const FOCUS_FEATURE: Feature = {
-  tag: "Focus",
-  image: feat09,
-  title: "Stays out of the way when gaming",
-  body: "WallRaven spots full-screen games and apps and leaves your wallpaper alone until you're done.",
-};
 
 // Original abstract wing motif — a faint decorative watermark, not a logo.
 function WingMotif({ className }: { className?: string }) {
@@ -114,31 +124,17 @@ function WingMotif({ className }: { className?: string }) {
   );
 }
 
-function FeatureRow({ feature, number }: { feature: Feature; number: number }) {
-  const reversed = number % 2 === 0;
+// A framed "window" around a real screenshot, so it reads as the actual app
+// rather than decorative art.
+function AppWindow({ src, alt }: { src: string; alt: string }) {
   return (
-    <div className={`flex flex-col border-t border-border md:flex-row ${reversed ? "md:flex-row-reverse" : ""}`}>
-      <div className="flex flex-1 flex-col justify-center p-8 sm:p-10 md:basis-2/5">
-        <span className="inline-flex items-center gap-2 text-xs font-bold tracking-[0.2em] text-primary uppercase">
-          {String(number).padStart(2, "0")} — {feature.tag}
-        </span>
-        <h3 className="font-display mt-3 text-2xl font-bold tracking-tight">{feature.title}</h3>
-        <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">{feature.body}</p>
+    <div className="shadow-lift relative overflow-hidden rounded-none border border-border bg-card">
+      <div className="flex items-center gap-1.5 border-b border-border px-3 py-2.5">
+        <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+        <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+        <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
       </div>
-      <div
-        className={`relative min-h-[260px] flex-1 overflow-hidden border-border md:basis-3/5 ${
-          reversed ? "md:border-r" : "md:border-l"
-        }`}
-      >
-        <img
-          src={feature.image}
-          alt=""
-          loading="lazy"
-          width={1264}
-          height={848}
-          className="h-full w-full object-cover saturate-150 contrast-105"
-        />
-      </div>
+      <img src={src} alt={alt} loading="lazy" width={1400} height={1000} className="block w-full" />
     </div>
   );
 }
@@ -149,36 +145,22 @@ function Index() {
 
   return (
     <main className="min-w-0">
-      {/* Hero */}
-      <section className="rise relative overflow-hidden rounded-none border border-border bg-card/50">
-        <WingMotif className="pointer-events-none absolute -top-28 -left-36 h-[560px] w-[560px] text-primary opacity-[0.06]" />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 hidden w-[46%] lg:block"
-        >
-          <div className="absolute inset-x-8 top-6 bottom-6 rounded-full bg-primary/14 blur-[110px]" />
-          <img
-            src={characterUrl}
-            alt=""
-            width={960}
-            height={1408}
-            className="relative h-full w-full object-cover object-top opacity-70 [mask-image:linear-gradient(to_right,transparent,rgba(0,0,0,1)_38%)]"
-          />
-        </div>
-        <div className="relative z-10 max-w-2xl p-8 sm:p-10 lg:py-14">
+      {/* Hero — everything you need lands in the first screen */}
+      <section className="rise relative grid gap-8 overflow-hidden rounded-none border border-border bg-card/50 p-6 sm:p-8 lg:grid-cols-[1fr_1.15fr] lg:items-center lg:gap-10 lg:p-10">
+        <WingMotif className="pointer-events-none absolute -top-24 -left-32 hidden h-[480px] w-[480px] text-primary opacity-[0.06] lg:block" />
+        <div className="relative z-10">
           <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
             <span className="h-px w-5 bg-primary" />
             Windows desktop app
           </span>
-          <h1 className="font-display mt-5 text-4xl leading-[1.08] font-bold tracking-tight text-balance uppercase sm:text-5xl">
+          <h1 className="font-display mt-4 text-3xl leading-[1.1] font-bold tracking-tight text-balance uppercase sm:text-4xl">
             Wallpapers that keep their own schedule.
           </h1>
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
+          <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground">
             WallRaven sits quietly in your taskbar and keeps your desktop looking new. Choose the
-            kind of pictures you like, let it change them on its own, save the ones you love, and
-            have the same setup waiting on every PC you use.
+            kind of pictures you like, let it change them on its own, and save the ones you love.
           </p>
-          <div className="mt-7 flex flex-wrap items-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center gap-3">
             <a
               href={latest?.url ?? RELEASES_PAGE}
               className="glow-ring prism-btn inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold transition-transform hover:-translate-y-0.5"
@@ -192,53 +174,39 @@ function Index() {
               Browse presets
             </Link>
           </div>
-          <p className="mt-6 text-xs tracking-wide text-muted-foreground/70 uppercase">
+          <p className="mt-5 text-xs tracking-wide text-muted-foreground/70 uppercase">
             Free · Windows 10 &amp; 11 · No account required to start
           </p>
         </div>
+        <div className="relative z-10">
+          <AppWindow src={appHome} alt="WallRaven's Now Playing screen, showing the current wallpaper and a quick way to step through recent ones" />
+        </div>
       </section>
 
-      {/* Editorial statement */}
-      <section className="mt-14 flex flex-col items-center border-y border-border py-12 text-center">
-        <span aria-hidden className="h-9 w-px bg-border" />
-        <p className="font-display mt-6 max-w-2xl text-xl leading-snug font-semibold tracking-tight text-balance sm:text-2xl">
-          Not a widget. Not a slideshow. A desktop that finds what you like, keeps its own
-          schedule, and stays out of the way when it matters.
-        </p>
-        <span aria-hidden className="mt-6 h-9 w-px bg-border" />
-      </section>
-
-      {/* Features, rows 1-6 */}
-      <section className="border-b border-border">
-        {FEATURES_A.map((f, i) => (
-          <FeatureRow key={f.title} feature={f} number={i + 1} />
-        ))}
-      </section>
-
-      {/* Interlude */}
-      <section className="relative h-[360px] overflow-hidden border-b border-border sm:h-[420px]">
-        <img
-          src={FOCUS_FEATURE.image}
-          alt=""
-          aria-hidden
-          loading="lazy"
-          width={1264}
-          height={848}
-          className="absolute inset-0 h-full w-full object-cover saturate-150 contrast-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-        <div className="absolute inset-x-6 bottom-8 sm:inset-x-10">
-          <span className="text-xs font-semibold tracking-[0.2em] text-primary uppercase">
-            Always ready
-          </span>
-          <p className="font-display mt-3 max-w-lg text-xl leading-snug font-bold tracking-tight uppercase sm:text-2xl">
-            Saved ahead of time. Cropped for every screen. Gone the moment you need focus.
-          </p>
+      {/* Everything it does — one screenshot, a compact list, no endless scroll */}
+      <section className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-10">
+        <AppWindow src={appBrowse} alt="WallRaven's Browse screen, searching Wallhaven by tag, colour and category" />
+        <div>
+          <h2 className="font-display text-xl font-semibold tracking-tight">Everything it does</h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">Set it up once. Then just enjoy the view.</p>
+          <ul className="mt-5 grid gap-4 sm:grid-cols-2">
+            {BULLETS.map((b) => (
+              <li key={b.title} className="flex gap-3">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-primary">
+                  <b.icon className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{b.title}</div>
+                  <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{b.body}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
       {/* Cross-promo */}
-      <section className="glass-card relative mt-10 flex flex-col items-start justify-between gap-6 overflow-hidden rounded-none p-8 sm:flex-row sm:items-center">
+      <section className="glass-card relative mt-8 flex flex-col items-start justify-between gap-6 overflow-hidden rounded-none p-8 sm:flex-row sm:items-center">
         <img
           src={feat05}
           alt=""
@@ -270,16 +238,13 @@ function Index() {
       </section>
 
       {/* Final CTA */}
-      <section className="mt-10 flex flex-col items-center border-y border-border py-16 text-center">
-        <span className="text-xs font-semibold tracking-[0.2em] text-primary uppercase">
-          Get started
-        </span>
-        <h2 className="font-display mt-5 max-w-xl text-3xl leading-tight font-bold tracking-tight text-balance uppercase sm:text-4xl">
+      <section className="mt-8 flex flex-col items-center border-y border-border py-10 text-center">
+        <h2 className="font-display max-w-xl text-2xl leading-tight font-bold tracking-tight text-balance uppercase sm:text-3xl">
           Give your desktop something to do.
         </h2>
         <a
           href={latest?.url ?? RELEASES_PAGE}
-          className="glow-ring prism-btn mt-7 inline-flex items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5"
+          className="glow-ring prism-btn mt-6 inline-flex items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5"
         >
           {downloadLabel}
         </a>
@@ -288,7 +253,7 @@ function Index() {
         </p>
       </section>
 
-      <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 pt-6 text-xs text-muted-foreground">
+      <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 pt-6 text-xs text-muted-foreground">
         <span>WallRaven — an unofficial companion for Wallhaven.cc</span>
         <span>Not affiliated with Wallhaven</span>
       </footer>
