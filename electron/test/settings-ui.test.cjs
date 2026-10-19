@@ -557,6 +557,42 @@ check("small things: dislike colour, icons, names, window title", () => {
   }
 });
 
+console.log("thumbnail-grid cards never get squeezed by the card deck");
+
+check("every gallery card is marked so it spans the full deck width", () => {
+  // #cards lays cards out as CSS multi-column masonry (column-width: 460px),
+  // so on a wide window several cards sit side by side and each is squeezed
+  // to roughly a fraction of the window. A thumbnail grid inside one of
+  // those (repeat(auto-fill, minmax(...))) picks its own column count from
+  // whatever width it's given -- so a card squeezed next to others could
+  // show FEWER thumbnail columns on a wide monitor than the same card shows
+  // full-width on a narrower one. Every card whose body is mostly a
+  // thumbnail grid is marked `gallery: true` so it always spans the deck
+  // instead, keeping its thumbnail count tied to the window.
+  const meta = JS.slice(JS.indexOf("const CARD_META = {"), JS.indexOf("// Quick actions on Home"));
+  for (const id of ["history", "favourites", "playlists", "browse"]) {
+    const at = meta.indexOf(`${id}: {`) !== -1 ? meta.indexOf(`${id}: {`) : meta.indexOf(`${id}:`);
+    assert.ok(at !== -1, `no CARD_META entry for ${id}`);
+    const entry = meta.slice(at, at + 400);
+    assert.ok(/gallery:\s*true/.test(entry), `${id} is not marked gallery: true`);
+  }
+});
+
+check("buildCard carries the gallery flag onto the card element", () => {
+  const body = fn("renderCards");
+  assert.ok(
+    /if \(meta\.gallery\) card\.dataset\.gallery = ["']1["'];/.test(body),
+    "renderCards no longer stamps data-gallery from CARD_META",
+  );
+});
+
+check("a gallery card spans every masonry column instead of sitting in one", () => {
+  assert.ok(
+    /\[data-gallery\][\s\S]{0,40}\{[\s\S]{0,120}column-span:\s*all/.test(CSS),
+    "no column-span: all rule for [data-gallery] cards",
+  );
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);

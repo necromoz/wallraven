@@ -275,6 +275,20 @@ main {
      instead of the whole document. */
   contain: layout style paint;
 }
+/* A card whose body is mostly a thumbnail grid (Recently shown, Liked &
+   disliked, Playlists, Browse) always spans the full card deck instead of
+   sitting in whichever masonry column the layout happens to split it into.
+   Those grids pick their own column count from the width they're given
+   (repeat(auto-fill, minmax(...))), so if two such cards land side by side
+   on a wide monitor, each gets squeezed to roughly half the window and can
+   show FEWER thumbnails per row than the same card gets on a narrower
+   window with only one masonry column. Spanning the full width ties the
+   thumbnail count to the window instead, so it only ever grows with it. */
+#cards > .card[data-gallery],
+.group > .group-cards > .card[data-gallery] {
+  column-span: all;
+  display: block;
+}
 /* While the window is being dragged to a new size, drop the expensive
    per-card blur and shadows so each frame is cheap and the pointer keeps up.
    Everything comes back the moment resizing stops. */

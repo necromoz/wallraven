@@ -109,18 +109,30 @@ const CARD_META = {
       { id: "display", label: "How it's shown" },
     ],
   },
-  browse: { title: "Browse wallpapers", page: "browse" },
-  history: { title: "Recently shown", page: "library", sec: "history" },
+  // `gallery: true` marks a card whose body is mostly a thumbnail grid
+  // (wp-grid, browseGrid, collectionItems, playlistGrid all use the same
+  // "as many columns as fit" auto-fill grid). Those cards always take the
+  // full card-deck width (see the `[data-gallery]` rule in settings.css) so
+  // their column count tracks the window, not whichever width the masonry
+  // deck happens to squeeze a compact card into.
+  browse: { title: "Browse wallpapers", page: "browse", gallery: true },
+  history: { title: "Recently shown", page: "library", sec: "history", gallery: true },
   favourites: {
     title: "Liked & disliked",
     page: "library",
     sec: "favourites",
+    gallery: true,
     parts: [
       { id: "favourites", label: "Your reactions" },
       { id: "favorites", label: "Wallhaven account" },
     ],
   },
-  playlists: { title: "Playlists", page: "library", sec: "playlists" },
+  playlists: {
+    title: "Playlists",
+    page: "library",
+    sec: "playlists",
+    gallery: true,
+  },
   library: { title: "Pictures on this PC", page: "library", sec: "local" },
   presets: { title: "My presets", page: "presets" },
   community: { title: "Community presets", page: "presets" },
@@ -342,6 +354,7 @@ function renderCards() {
     const card = document.createElement("section");
     card.className = "card" + (collapsed[id] ? "" : " open");
     card.dataset.id = id;
+    if (meta.gallery) card.dataset.gallery = "1";
     card.draggable = false;
     card.innerHTML = `
       <div class="card-head">
