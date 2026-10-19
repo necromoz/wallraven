@@ -1,5 +1,9 @@
 # Wallraven changelog
 
+## v1.3.2-beta.7 — test build
+
+- **Thumbnail grids on Library and Browse no longer shrink on a bigger window.** Recently shown, Liked & disliked, Playlists and Browse results now always use the full window width, so the number of pictures per row only ever grows as you resize — it could previously end up showing fewer columns on a maximised 4K window than in a small one.
+
 ## v1.3.2-beta.6 — test build
 
 - **App theme no longer gets reverted by cloud sync.** Signing in (or the periodic sync after it) could silently pull an old theme choice back over whatever you'd just set as the app's background, with no error. "custom" now stays strictly local — syncing your other theme choices across devices is unaffected.
