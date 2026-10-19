@@ -1,5 +1,11 @@
 # Wallraven changelog
 
+## v1.3.2-beta.8 — test build
+
+- **Cards that fit side by side now actually sit side by side.** My presets + Community presets, and Pictures on this PC + Statistics, used to stack in one narrow column with the rest of the window empty beside them, even though both would comfortably fit next to each other. A Chromium quirk with exactly two cards sharing space — fixed.
+- **Liked & disliked now uses the full width of its card.** Your reactions and Wallhaven account used to squeeze into the same narrow column, leaving most of the card blank — same underlying cause as above, now fixed everywhere it showed up (also affects Search & filters and General, which never visibly hit it but are built the same way).
+- **The sign-in popup now says it works for an existing account too**, instead of reading as if "Create account" was the only option.
+
 ## v1.3.2-beta.7 — test build
 
 - **Thumbnail grids on Library and Browse no longer shrink on a bigger window.** Recently shown, Liked & disliked, Playlists and Browse results now always use the full window width, so the number of pictures per row only ever grows as you resize — it could previously end up showing fewer columns on a maximised 4K window than in a small one.
