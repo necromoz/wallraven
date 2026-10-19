@@ -1,5 +1,11 @@
 # Wallraven changelog
 
+## v1.3.2-beta.5 — test build
+
+- **Sign-in popup is readable over every theme now** — it was translucent under Glass, letting the wallpaper behind it show through.
+- **"Set as theme" works on any wallpaper**, not just ones still cached locally — it downloads the picture again if needed, the same way Back/Forward already does for a pruned one.
+- **Setting a second theme image actually shows it** — it used to say it worked but leave the old picture on screen until you restarted the app.
+
 ## v1.3.2-beta.4 — test build
 
 - **The sign-in pill actually does something now.** Clicking it did nothing in beta.3 — fixed. Signed in, it takes you to Account & sync. Signed out, it opens a short popup explaining what signing in is for, with Create account and Skip.
