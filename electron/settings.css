@@ -267,9 +267,20 @@ main {
 }
 #cards > .card,
 .group > .group-cards > .card {
+  /* break-inside: avoid is what actually keeps a card from splitting across
+     columns; a block box (the default for a <section>) honours it exactly
+     like an inline-block one does. inline-block used to sit here too, but
+     it has a real cost: with exactly two break-inside: avoid cards sharing
+     a column region, Chromium's column-balancing stacks both of them in
+     column one and leaves the next column completely empty, instead of
+     splitting one card to each column the way it does for one or three-plus
+     cards. Confirmed in isolation -- the only variable that mattered was
+     inline-block vs block. Two compact cards (My presets + Community
+     presets on Presets, Pictures on this PC + Statistics trailing the
+     gallery cards on Library) were landing in one column with the rest of
+     the window empty beside them because of this. */
   break-inside: avoid;
   margin: 0 0 14px;
-  display: inline-block; /* keeps a card from splitting across columns */
   width: 100%;
   /* Isolate each card so a window resize only reflows the card itself
      instead of the whole document. */
@@ -312,10 +323,11 @@ html.resizing * {
   display: block;
   column-width: auto;
 }
-/* A page showing only one or two cards should use the full window width so the
-   card's own sections can sit side by side instead of in one tall column. */
-#cards[data-visible="1"],
-#cards[data-visible="2"] {
+/* A lone card, or a pair where one has sections of its own, uses the full
+   window width so those sections can sit side by side instead of stacking
+   into one tall column -- see the matching comment in applyPageVisibility,
+   which is what decides this and why a plain pair of cards doesn't qualify. */
+#cards.few-wide-cards {
   column-width: auto;
   column-count: 1;
 }
@@ -1293,10 +1305,13 @@ hr {
     column-gap: 28px;
   }
   .card > .card-body:has(> .subcard + .subcard) > .subcard {
+    /* No display: inline-block here either -- see the matching comment on
+       #cards > .card. A card with exactly two sections (Liked & disliked:
+       Your reactions + Wallhaven account) was the clearest case: both
+       sections landed in the first column and the rest of the wide card
+       sat empty, instead of the sections sitting side by side. */
     break-inside: avoid;
-    display: inline-block;
     width: 100%;
-    vertical-align: top;
     margin: 0;
   }
   .card > .card-body:has(> .subcard + .subcard) > .subcard + .subcard {

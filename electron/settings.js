@@ -544,13 +544,24 @@ function applyPageVisibility() {
   if (!host) return;
   for (const p of PAGES) host.classList.toggle("page-" + p.id, p.id === uiPage);
   let visible = 0;
+  let anyHasParts = false;
   host.querySelectorAll(".card").forEach((card) => {
     card.hidden = !isCardVisible(card.dataset.id);
-    if (!card.hidden) visible++;
+    if (!card.hidden) {
+      visible++;
+      if (CARD_META[card.dataset.id]?.parts) anyHasParts = true;
+    }
   });
-  // Pages with only one or two panels use the full window width; their own
-  // sections then flow side by side instead of stacking into a long scroll.
   host.dataset.visible = String(visible);
+  // A lone card always gets the full window width -- there's nothing else on
+  // the page for it to share space with. Two cards only get the same
+  // treatment when one of them actually has sections of its own to spread
+  // into (Search & filters, Liked & disliked, General): that's what the full
+  // width is for. A page with a couple of plain cards and no sections (My
+  // presets + Community presets) gained nothing from being forced full width
+  // except wasted space -- those now flow like any other pair of cards and
+  // sit side by side when they fit.
+  host.classList.toggle("few-wide-cards", visible === 1 || (visible === 2 && anyHasParts));
 }
 
 function goPage(id) {
@@ -5437,9 +5448,12 @@ function fmtWhen(ms) {
   return d.toLocaleString();
 }
 
-// A short pitch for creating an account, shown instead of silently doing
-// nothing when the signed-out header pill is clicked. "Skip" just closes it —
-// the app works fully signed out, this is only ever an offer.
+// A short pitch for signing in, shown instead of silently doing nothing when
+// the signed-out header pill is clicked. "Continue" opens the same browser
+// pairing flow as the Account page's own Sign in button either way -- the
+// site page it opens handles both an existing account and a new one, so the
+// popup says so rather than reading as account-creation-only. "Skip" just
+// closes it -- the app works fully signed out, this is only ever an offer.
 function showSigninPromo() {
   const el = $("#signin-promo");
   if (el) el.style.display = "flex";

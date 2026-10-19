@@ -593,6 +593,65 @@ check("a gallery card spans every masonry column instead of sitting in one", () 
   );
 });
 
+console.log("cards never land in one column when two would fit side by side");
+
+check("no card in the deck uses display: inline-block any more", () => {
+  // With exactly two break-inside: avoid, inline-block cards sharing a
+  // column region, Chromium's column-balancing put both in column one and
+  // left the next column empty -- confirmed in isolation, the only variable
+  // that mattered was inline-block vs the default block. Plain block honours
+  // break-inside: avoid identically and doesn't have the bug. This hit two
+  // real pairs: My presets + Community presets (Presets), and Pictures on
+  // this PC + Statistics trailing the gallery cards (Library).
+  // Match the actual declaration (display: inline-block;), not prose in a
+  // comment explaining why it was removed -- both rules below say so inline.
+  assert.ok(
+    !/#cards > \.card,[\s\S]{0,300}display:\s*inline-block\s*;/.test(CSS),
+    "#cards > .card is using display: inline-block again, which stacks pairs instead of splitting them",
+  );
+  assert.ok(
+    !/subcard \+ \.subcard\) > \.subcard \{[\s\S]{0,300}display:\s*inline-block\s*;/.test(CSS),
+    "the subcard rule is using display: inline-block again",
+  );
+});
+
+check("a card pair only forces full width when one of them has sections", () => {
+  // Forcing a lone card, or a parts-bearing card's pair, to full width lets
+  // its own sections spread out -- but a plain pair (My presets + Community
+  // presets, neither with `parts`) gained nothing from that except wasted
+  // width, so it no longer qualifies.
+  const body = fn("applyPageVisibility");
+  assert.ok(
+    /anyHasParts/.test(body) && /CARD_META\[card\.dataset\.id\]\?\.parts/.test(body),
+    "applyPageVisibility no longer checks whether a visible card has sections",
+  );
+  assert.ok(
+    /visible === 1 \|\| \(visible === 2 && anyHasParts\)/.test(body),
+    "the few-wide-cards condition changed shape; re-check the CSS side still matches it",
+  );
+  assert.ok(
+    /classList\.toggle\(["']few-wide-cards["']/.test(body),
+    "applyPageVisibility no longer sets the few-wide-cards class",
+  );
+  assert.ok(
+    /#cards\.few-wide-cards\s*\{/.test(CSS),
+    "no #cards.few-wide-cards rule in CSS to match the class JS sets",
+  );
+});
+
+console.log("the sign-in popup acknowledges an existing account");
+
+check("the popup doesn't read as account-creation-only", () => {
+  assert.ok(
+    /Already have an account/i.test(HTML),
+    "the sign-in popup never mentions an existing account",
+  );
+  assert.ok(
+    !/>Create account</.test(HTML),
+    "the button still says Create account, which is what prompted this",
+  );
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);
