@@ -1977,7 +1977,12 @@ html[data-mascot="custom"] #view-bar {
 }
 .modal-backdrop .modal {
   width: min(380px, 100%);
-  background: var(--panel);
+  /* var(--panel) is deliberately translucent under the glass theme, so the
+     mascot art reads through card surfaces — fine for a card, wrong for a
+     dialog that has to stay legible over whatever's behind it. Layering the
+     panel colour over the theme's own solid --bg flattens it to fully
+     opaque without needing a separate value per theme. */
+  background: linear-gradient(var(--panel), var(--panel)) var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);

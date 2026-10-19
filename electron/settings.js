@@ -303,17 +303,19 @@ function applyTheme(t) {
   }
 }
 
-// Turns a wallpaper you already have saved locally into the app's own
-// background theme — same idea as the Raven theme, pointed at your own
-// picture. Reached from the 🎨 action on History/Liked/Disliked cards.
+// Turns a wallpaper into the app's own background theme — same idea as the
+// Raven theme, pointed at your own picture. Reached from the 🎨 action on
+// History/Liked/Disliked cards. Works whether or not it's still cached
+// locally: if not, the main process downloads it again by id, the same way
+// a pruned history entry comes back for Back/Forward.
 async function setAsAppTheme(item) {
-  if (!item?.file) {
-    flash("That wallpaper isn't saved locally, so it can't be used as a theme.", "err");
+  if (!item?.file && !item?.id) {
+    flash("That wallpaper can't be used as a theme.", "err");
     return;
   }
-  flash("Setting app theme…");
+  flash(item.file ? "Setting app theme…" : "Downloading that wallpaper to use as the theme…");
   try {
-    const bgPath = await api.setAppThemeFromFile(item.file);
+    const bgPath = await api.setAppThemeFromItem({ file: item.file, id: item.id });
     config = await api.setConfig({ theme: "custom", customThemeImage: bgPath });
     applyTheme(config.theme);
     hydrateInputs(config);

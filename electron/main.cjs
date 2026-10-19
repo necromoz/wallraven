@@ -4522,31 +4522,64 @@ function revealItem(target) {
 ipcMain.handle("show:inFolder", (_e, file) => revealItem(file));
 
 // ---------- App theme from a saved wallpaper ----------
-// Lets a wallpaper the user already has locally become the app's own
-// background, reusing the same "full scene behind the glass" treatment the
-// Raven theme already uses, just pointed at the user's picture instead of
-// built-in art. The chosen image is copied into the data dir so the theme
-// doesn't quietly break later when the source gets pruned from the cache or
-// removed from history — see "cache prunes oldest-first" above.
-function themeBgPath(ext) {
-  return path.join(DATA_DIR, `theme-bg${ext}`);
+// Lets a wallpaper become the app's own background, reusing the same "full
+// scene behind the glass" treatment the Raven theme already uses, just
+// pointed at the user's picture instead of built-in art. The chosen image is
+// copied into the data dir — never the cache dir — so the theme can't be
+// quietly undone by ordinary cache pruning (pruneCache only ever looks at
+// CACHE_DIR) and doesn't break when the source is later pruned from the
+// cache or removed from history.
+//
+// The filename carries a fresh tag every time a theme is set, rather than a
+// fixed "theme-bg.jpg". The renderer points a CSS background-image straight
+// at this file's file:// path, and the browser does not notice the bytes
+// under an unchanged URL changing, so reusing one name left the old picture
+// on screen after the second use even though the copy underneath it had
+// genuinely changed. A new name forces a repaint. The old file is removed
+// only once the new one is safely down, and only after, so a failed
+// re-download never leaves the theme pointing at nothing.
+function themeBgPath(ext, tag) {
+  return path.join(DATA_DIR, `theme-bg-${tag}${ext}`);
 }
-ipcMain.handle("theme:setFromFile", (_e, file) => {
-  assertImageReadable(file);
-  const ext = (path.extname(String(file)) || ".jpg").toLowerCase();
-  const safeExt = IMAGE_EXTS.has(ext) ? ext : ".jpg";
-  const dest = themeBgPath(safeExt);
-  // Drop a previous custom theme image saved under a different extension so
-  // these don't pile up in the data dir.
-  for (const e of IMAGE_EXTS) {
-    const p = themeBgPath(e);
-    if (p !== dest && fs.existsSync(p)) {
-      try {
-        fs.unlinkSync(p);
-      } catch {}
-    }
+function clearThemeBgFiles(exceptPath) {
+  let names;
+  try {
+    names = fs.readdirSync(DATA_DIR);
+  } catch {
+    return;
   }
-  fs.copyFileSync(file, dest);
+  for (const name of names) {
+    if (!/^theme-bg-/.test(name)) continue;
+    const p = path.join(DATA_DIR, name);
+    if (p === exceptPath) continue;
+    try {
+      fs.unlinkSync(p);
+    } catch {}
+  }
+}
+// Accepts the same shape a history/carousel item already has. If the file is
+// still on disk it's used directly; otherwise — a wallpaper whose cached copy
+// was pruned, or one that was never downloaded at all — it's fetched again by
+// id, the same way a pruned history entry is restored for Back/Forward or for
+// re-clicking a history thumbnail (restoreHistoryFile). Only a genuinely local
+// item (a playlist picture, a file from a watched folder) with no file left
+// behind can't be recovered either way.
+ipcMain.handle("theme:setFromItem", async (_e, { file, id } = {}) => {
+  let source = file && fileExistsSafe(file) ? file : null;
+  if (!source) source = await restoreHistoryFile({ id, file }).catch(() => null);
+  if (!source) {
+    throw new Error(
+      historyRestorable({ id })
+        ? "Wallhaven no longer has that wallpaper"
+        : "That wallpaper isn't saved locally and can't be downloaded again",
+    );
+  }
+  assertImageReadable(source);
+  const ext = (path.extname(source) || ".jpg").toLowerCase();
+  const safeExt = IMAGE_EXTS.has(ext) ? ext : ".jpg";
+  const dest = themeBgPath(safeExt, Date.now());
+  fs.copyFileSync(source, dest);
+  clearThemeBgFiles(dest);
   return dest;
 });
 
