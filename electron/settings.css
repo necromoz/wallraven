@@ -1588,6 +1588,73 @@ html[data-mascot="raven"] #view-bar {
   }
 }
 
+/* Custom theme: the same full-window scene as Raven, except the picture is
+   whichever wallpaper the user picked with the 🎨 action, applied via a CSS
+   variable set from JS (applyTheme) rather than a fixed file. */
+html[data-mascot="custom"] body::before,
+html[data-mascot="custom"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+html[data-mascot="custom"] body::before {
+  background-image: var(--custom-bg-image, none);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+html[data-mascot="custom"] body::after {
+  background:
+    linear-gradient(
+      90deg,
+      oklch(0.12 0.025 280 / 0.72) 0%,
+      oklch(0.12 0.025 280 / 0.42) 48%,
+      oklch(0.12 0.025 280 / 0.28) 100%
+    ),
+    linear-gradient(
+      180deg,
+      oklch(0.1 0.02 280 / 0.34) 0%,
+      transparent 28%,
+      oklch(0.1 0.02 280 / 0.42) 100%
+    );
+}
+html[data-mascot="custom"] #shell,
+html[data-mascot="custom"] header {
+  position: relative;
+  z-index: 1;
+}
+html[data-mascot="custom"] body {
+  background: oklch(0.12 0.025 280);
+}
+html[data-mascot="custom"] .card,
+html[data-mascot="custom"] #view-bar {
+  background: color-mix(in oklab, oklch(0.18 0.025 280) 72%, transparent);
+}
+
+/* Always-visible sign-in state. Buried on the Account page, it was easy to
+   forget you'd been signed out (e.g. after an update) until sync quietly
+   stopped working. This sits in the header at all times. */
+#hdr-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.acct-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+#hdr-account.signed-in .acct-dot {
+  background: oklch(0.78 0.16 145); /* green: signed in */
+}
+#hdr-account.pairing .acct-dot {
+  background: oklch(0.8 0.15 80); /* amber: waiting on the browser */
+}
+
 /* The like and dislike buttons in the title bar act on whatever is on screen,
    which you cannot see while looking at this window. A thumbnail of it sits
    next to them so there is no guessing. */

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("api", {
   historyRemove: (item) => ipcRenderer.invoke("history:remove", item),
   openExternal: (u) => ipcRenderer.invoke("open:external", u),
   showInFolder: (f) => ipcRenderer.invoke("show:inFolder", f),
+  setAppThemeFromFile: (f) => ipcRenderer.invoke("theme:setFromFile", f),
   fetchTags: (opts) => ipcRenderer.invoke("tags:fetch", opts),
   whCollections: (opts) => ipcRenderer.invoke("wh:collections", opts),
   whCollectionItems: (opts) => ipcRenderer.invoke("wh:collectionItems", opts),

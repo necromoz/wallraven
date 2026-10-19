@@ -21,6 +21,14 @@
       <div id="toast-stack" aria-live="polite"></div>
       <div class="right">
         <button
+          class="btn secondary"
+          id="hdr-account"
+          title="Not signed in — click to sign in"
+        >
+          <span id="hdr-account-dot" class="acct-dot" aria-hidden="true"></span>
+          <span id="hdr-account-label">Sign in</span>
+        </button>
+        <button
           id="hdr-thumb"
           type="button"
           title="The wallpaper on screen now. Click to open Now playing."
@@ -977,10 +985,13 @@
           <option value="light">Light</option>
           <option value="glass">Glass ✨ (default)</option>
           <option value="raven">Raven 🐦‍⬛</option>
+          <option value="custom">Custom 🎨 (from a wallpaper)</option>
         </select>
       </div>
       <div class="help help-indent">
-        Raven has a cheekier raven in the background. Everything else is a plain colour scheme.
+        Raven has a cheekier raven in the background. Custom uses a wallpaper of your own — pick
+        the 🎨 on any wallpaper in History or your Liked/Disliked lists. Everything else is a
+        plain colour scheme.
       </div>
       <div class="row"><label>Accent colour</label><input id="uiAccent" type="color" /></div>
     </template>

@@ -131,6 +131,7 @@ const DEFAULT_CONFIG = {
   lastSeenVersion: "",
   uiAccent: "#7c5cff",
   theme: "glass",
+  customThemeImage: "", // path to the user's own picture, once they set one as the app theme
   notifyOnChange: false,
   whUsername: "",
   sourceMode: "search", // 'search' | 'collection'
@@ -4519,6 +4520,35 @@ function revealItem(target) {
 }
 
 ipcMain.handle("show:inFolder", (_e, file) => revealItem(file));
+
+// ---------- App theme from a saved wallpaper ----------
+// Lets a wallpaper the user already has locally become the app's own
+// background, reusing the same "full scene behind the glass" treatment the
+// Raven theme already uses, just pointed at the user's picture instead of
+// built-in art. The chosen image is copied into the data dir so the theme
+// doesn't quietly break later when the source gets pruned from the cache or
+// removed from history — see "cache prunes oldest-first" above.
+function themeBgPath(ext) {
+  return path.join(DATA_DIR, `theme-bg${ext}`);
+}
+ipcMain.handle("theme:setFromFile", (_e, file) => {
+  assertImageReadable(file);
+  const ext = (path.extname(String(file)) || ".jpg").toLowerCase();
+  const safeExt = IMAGE_EXTS.has(ext) ? ext : ".jpg";
+  const dest = themeBgPath(safeExt);
+  // Drop a previous custom theme image saved under a different extension so
+  // these don't pile up in the data dir.
+  for (const e of IMAGE_EXTS) {
+    const p = themeBgPath(e);
+    if (p !== dest && fs.existsSync(p)) {
+      try {
+        fs.unlinkSync(p);
+      } catch {}
+    }
+  }
+  fs.copyFileSync(file, dest);
+  return dest;
+});
 
 // ---------- v0.2.0 IPC: likes, dislikes, schedule, updater ----------
 ipcMain.handle("wp:like", () => {

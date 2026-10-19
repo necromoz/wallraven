@@ -275,11 +275,38 @@ function applyAccent(c) {
 function applyTheme(t) {
   const name = t || "glass";
   const el = document.documentElement;
-  // Raven shares the glass controls and adds its own full-window scene.
-  const mascotTheme = name === "raven";
+  // Raven and Custom both share the glass controls and add their own
+  // full-window scene behind everything.
+  const mascotTheme = name === "raven" || name === "custom";
   el.setAttribute("data-theme", mascotTheme ? "glass" : name);
   if (mascotTheme) el.setAttribute("data-mascot", name);
   else el.removeAttribute("data-mascot");
+  if (name === "custom" && config?.customThemeImage) {
+    el.style.setProperty(
+      "--custom-bg-image",
+      `url("file://${String(config.customThemeImage).replace(/\\/g, "/")}")`,
+    );
+  }
+}
+
+// Turns a wallpaper you already have saved locally into the app's own
+// background theme — same idea as the Raven theme, pointed at your own
+// picture. Reached from the 🎨 action on History/Liked/Disliked cards.
+async function setAsAppTheme(item) {
+  if (!item?.file) {
+    flash("That wallpaper isn't saved locally, so it can't be used as a theme.", "err");
+    return;
+  }
+  flash("Setting app theme…");
+  try {
+    const bgPath = await api.setAppThemeFromFile(item.file);
+    config = await api.setConfig({ theme: "custom", customThemeImage: bgPath });
+    applyTheme(config.theme);
+    hydrateInputs(config);
+    flash("App theme updated — see it under Appearance", "ok");
+  } catch (err) {
+    flash("Failed: " + err.message, "err");
+  }
 }
 
 // ---------- Card rendering, collapse, reorder ----------
@@ -4359,6 +4386,7 @@ function wallpaperCardHtml({ id, src, meta, state, active, extra = "", cls = "" 
         <div class="hcard-actions">
           ${reactionButtonsHtml(state)}
           <button class="icon-btn" data-act="open" title="Open on Wallhaven">↗</button>
+          <button class="icon-btn" data-act="theme" title="Use as the app's background theme">🎨</button>
           ${extra}
         </div>
       </div>
@@ -4507,6 +4535,8 @@ function wireHistoryGrid() {
       }
     } else if (act === "open") {
       await openOnWallhaven(item);
+    } else if (act === "theme") {
+      await setAsAppTheme(item);
     } else if (act === "folder") {
       api.showInFolder(item.file);
     } else if (act === "del") {
@@ -4872,6 +4902,10 @@ function wireFavourites() {
       }
       if (act === "open") {
         await openOnWallhaven(it || { id: card.dataset.id });
+        return;
+      }
+      if (act === "theme") {
+        await setAsAppTheme(it);
         return;
       }
       if (it?.file) {
@@ -5374,9 +5408,28 @@ function fmtWhen(ms) {
   return d.toLocaleString();
 }
 
+function renderHeaderAccount(st) {
+  const btn = $("#hdr-account");
+  const label = $("#hdr-account-label");
+  if (!btn || !label) return;
+  btn.classList.toggle("signed-in", !!st.signedIn);
+  btn.classList.toggle("pairing", !!st.pairing && !st.signedIn);
+  if (st.signedIn) {
+    label.textContent = st.email || "Account";
+    btn.title = "Signed in" + (st.email ? " as " + st.email : "") + " — click for account settings";
+  } else if (st.pairing) {
+    label.textContent = "Signing in…";
+    btn.title = "Waiting for you to approve the sign-in in your browser";
+  } else {
+    label.textContent = "Sign in";
+    btn.title = "Not signed in — click to sign in";
+  }
+}
+
 function renderAccount(s) {
   acctState = s || acctState;
   const st = acctState || {};
+  renderHeaderAccount(st);
   const status = $("#acctStatus");
   if (!status) return;
   if (st.signedIn) {
@@ -5593,6 +5646,7 @@ function renderPlayPause() {
   b.classList.toggle("on", cyclePaused);
 }
 document.getElementById("hdr-thumb")?.addEventListener("click", () => goPage("home"));
+document.getElementById("hdr-account")?.addEventListener("click", () => goPage("account"));
 // Both title bar thumbs go through the same path the Library uses, so the
 // toggle, the cached sets and the lit state can never disagree. The old handler
 // added the id to likedIds unconditionally, even when the click had just
