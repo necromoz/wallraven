@@ -1,5 +1,10 @@
 # Wallraven changelog
 
+## v1.3.2-beta.3 — test build
+
+- **Use a wallpaper as the app's own background.** A new 🎨 button sits next to the others on History, Liked and Disliked — click it and that picture becomes WallRaven's theme, the same full-window look the Raven theme has. Pick it under Settings > General > Theme too.
+- **Always know if you're signed in.** A dot and label next to Pause, in the header on every page: grey for signed out, amber while a sign-in is pending, green with your email once you're in. Click it to jump to Account & sync.
+
 ## v1.3.1 — 8 Oct 2026
 
 ### New
