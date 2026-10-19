@@ -1,5 +1,9 @@
 # Wallraven changelog
 
+## v1.3.2-beta.6 — test build
+
+- **App theme no longer gets reverted by cloud sync.** Signing in (or the periodic sync after it) could silently pull an old theme choice back over whatever you'd just set as the app's background, with no error. "custom" now stays strictly local — syncing your other theme choices across devices is unaffected.
+
 ## v1.3.2-beta.5 — test build
 
 - **Sign-in popup is readable over every theme now** — it was translucent under Glass, letting the wallpaper behind it show through.
