@@ -224,6 +224,20 @@ function pageOf(id) {
 function secOf(id) {
   return (CARD_META[id] || {}).sec || "";
 }
+// Navigate straight to a card: its page, and — if the page has tabs — the tab
+// that card lives on. goPage() alone only understands page ids ("settings"),
+// not card ids ("account"), so a plain goPage("account") is a silent no-op.
+function goCard(cardId) {
+  const page = pageOf(cardId);
+  goPage(page);
+  const sec = secOf(cardId);
+  if (sec && pageMeta(page).tabs) {
+    uiTabs[page] = sec;
+    persistUiState();
+    renderPageHead();
+    applyPageVisibility();
+  }
+}
 function activeTab(pageId) {
   const meta = pageMeta(pageId);
   if (!meta.tabs) return "";
@@ -5408,6 +5422,32 @@ function fmtWhen(ms) {
   return d.toLocaleString();
 }
 
+// A short pitch for creating an account, shown instead of silently doing
+// nothing when the signed-out header pill is clicked. "Skip" just closes it —
+// the app works fully signed out, this is only ever an offer.
+function showSigninPromo() {
+  const el = $("#signin-promo");
+  if (el) el.style.display = "flex";
+}
+function hideSigninPromo() {
+  const el = $("#signin-promo");
+  if (el) el.style.display = "none";
+}
+function wireSigninPromo() {
+  const backdrop = $("#signin-promo");
+  if (!backdrop) return;
+  $("#signin-promo-skip")?.addEventListener("click", hideSigninPromo);
+  $("#signin-promo-create")?.addEventListener("click", async () => {
+    hideSigninPromo();
+    await beginAccountSignIn();
+    goCard("account");
+  });
+  // Clicking the dimmed backdrop itself dismisses it, same as Skip.
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) hideSigninPromo();
+  });
+}
+
 function renderHeaderAccount(st) {
   const btn = $("#hdr-account");
   const label = $("#hdr-account-label");
@@ -5482,19 +5522,23 @@ function showPairCode(code) {
   }
 }
 
+// Shared by the Account & sync card's own button and the sign-in popup, so
+// both start the exact same flow.
+async function beginAccountSignIn() {
+  flash("Opening your browser to sign in…");
+  try {
+    const started = await api.accountSignIn();
+    showPairCode(started && started.code);
+    await refreshAccount();
+  } catch (e) {
+    showPairCode(null);
+    flash("Could not start sign-in: " + e.message, "err");
+  }
+}
+
 function wireAccount() {
   if (!$("#btn-acct-signin") || !api.accountSignIn) return;
-  $("#btn-acct-signin").onclick = async () => {
-    flash("Opening your browser to sign in…");
-    try {
-      const started = await api.accountSignIn();
-      showPairCode(started && started.code);
-      await refreshAccount();
-    } catch (e) {
-      showPairCode(null);
-      flash("Could not start sign-in: " + e.message, "err");
-    }
-  };
+  $("#btn-acct-signin").onclick = beginAccountSignIn;
   $("#btn-acct-cancel").onclick = async () => {
     try {
       await api.accountCancelSignIn();
@@ -5646,7 +5690,14 @@ function renderPlayPause() {
   b.classList.toggle("on", cyclePaused);
 }
 document.getElementById("hdr-thumb")?.addEventListener("click", () => goPage("home"));
-document.getElementById("hdr-account")?.addEventListener("click", () => goPage("account"));
+document.getElementById("hdr-account")?.addEventListener("click", () => {
+  if (acctState && (acctState.signedIn || acctState.pairing)) {
+    goCard("account");
+  } else {
+    showSigninPromo();
+  }
+});
+wireSigninPromo();
 // Both title bar thumbs go through the same path the Library uses, so the
 // toggle, the cached sets and the lit state can never disagree. The old handler
 // added the id to likedIds unconditionally, even when the click had just

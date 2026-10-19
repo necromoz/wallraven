@@ -1957,6 +1957,56 @@ html[data-mascot="custom"] #view-bar {
   margin-top: 10px;
 }
 
+/* The sign-in explainer popup. First modal in the app — no existing pattern
+   to extend, so it's a plain centered card over a dimmed backdrop. It sits
+   between the header and the shell in the DOM, so under the mascot themes
+   (a full-window fixed backdrop at z-index 0, with only the header and shell
+   explicitly lifted above it) it needs its own lift too, and well above
+   header/shell's z-index: 1 since it must cover them both when open. */
+#signin-promo {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+.modal-backdrop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 20px;
+}
+.modal-backdrop .modal {
+  width: min(380px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  padding: 20px;
+}
+.modal-backdrop .modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 10px;
+}
+.modal-backdrop .modal-body {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.modal-backdrop .modal-body p {
+  margin: 0 0 10px;
+}
+.modal-backdrop .modal-body p:last-child {
+  margin-bottom: 0;
+}
+.modal-backdrop .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 #quick-actions {
   display: flex;
   flex-wrap: wrap;
