@@ -1,5 +1,9 @@
 # Wallraven changelog
 
+## v1.3.2-beta.4 — test build
+
+- **The sign-in pill actually does something now.** Clicking it did nothing in beta.3 — fixed. Signed in, it takes you to Account & sync. Signed out, it opens a short popup explaining what signing in is for, with Create account and Skip.
+
 ## v1.3.2-beta.3 — test build
 
 - **Use a wallpaper as the app's own background.** A new 🎨 button sits next to the others on History, Liked and Disliked — click it and that picture becomes WallRaven's theme, the same full-window look the Raven theme has. Pick it under Settings > General > Theme too.
