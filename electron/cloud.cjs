@@ -609,6 +609,22 @@ async function push(config, { force = false } = {}) {
   for (const name of Object.keys(SECTIONS)) {
     const local = sectionFromConfig(config, name);
     if (name === "playlists" && local.playlists) local.playlists = stripPlaylists(local.playlists);
+    // "custom" means "the app's own full-window background is this machine's
+    // own picture" — config.customThemeImage, which is deliberately never
+    // synced (it's a local file path; meaningless on another machine, and
+    // reused as plain config.theme would have meant it also had no business
+    // staying in step with whichever picture is actually on disk here right
+    // now). Pushing "custom" anyway left every pull a trap: signing in pulled
+    // down whatever theme was last pushed before this feature even existed,
+    // and every 15-minute pull after that could silently knock the picture
+    // back out from under a theme that had just been set, with no error and
+    // no visible cause. Push whatever non-custom theme the cloud already has
+    // instead, so the one meaningful part of "theme" that does travel between
+    // devices keeps doing that, and "custom" never leaves this machine.
+    if (name === "settings" && local.theme === "custom") {
+      const remoteTheme = remote?.settings?.data?.theme;
+      local.theme = remoteTheme && remoteTheme !== "custom" ? remoteTheme : "glass";
+    }
     const localStamp = config._syncStamps?.[name] || 0;
     const remoteStamp = remote?.[name]?.updatedAt || 0;
     if (force || localStamp >= remoteStamp) {
@@ -650,6 +666,13 @@ async function pull(config, { force = false } = {}) {
       // able to delete one and leave nothing in its place.
       if (name === "settings") {
         patch.schedule = keepBetterSchedule(config.schedule, patch.schedule);
+      }
+      // "custom" never comes from the cloud (push already substitutes it away
+      // — see the matching comment there): if an older row somehow has it
+      // anyway, leave whatever theme this machine already has alone rather
+      // than switching it into a custom theme it may have no picture for.
+      if (name === "settings" && patch.theme === "custom") {
+        delete patch.theme;
       }
       stamps[name] = remoteStamp || Date.now();
       changed = true;

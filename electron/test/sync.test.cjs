@@ -208,6 +208,37 @@ check("the pull path uses it", () => {
   );
 });
 
+// "custom" (the app theme feature) means "this machine's own picture" —
+// config.customThemeImage, a local file path that is deliberately never
+// synced. config.theme does sync, though, and a naive sync of "custom" left
+// a real trap: signing in pulled down a stale pre-feature "settings" row and
+// silently reverted the just-set theme, repeating on every pull after that,
+// which is what a tester saw as the app theme "working a few times, then
+// going back to one from a while ago" with no error anywhere.
+console.log("custom theme never crosses devices");
+
+check("push never writes 'custom' as the synced theme", () => {
+  const at = SRC.indexOf("async function push(");
+  const body = SRC.slice(at, SRC.indexOf("\nasync function pull(", at));
+  assert.ok(
+    /local\.theme === "custom"/.test(body),
+    "push no longer checks for a custom theme before writing it",
+  );
+  assert.ok(
+    /local\.theme = remoteTheme/.test(body),
+    "push no longer substitutes a non-custom theme",
+  );
+});
+
+check("pull never adopts 'custom' from the cloud", () => {
+  const at = SRC.indexOf("async function pull(");
+  const body = SRC.slice(at, SRC.indexOf("\n}", at));
+  assert.ok(
+    /patch\.theme === "custom"/.test(body) && /delete patch\.theme/.test(body),
+    "pull no longer strips an incoming 'custom' theme",
+  );
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);
