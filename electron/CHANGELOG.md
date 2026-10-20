@@ -1,5 +1,9 @@
 # Wallraven changelog
 
+## v1.3.2-beta.10 — test build
+
+- **The Wallhaven disclaimer no longer sits at the bottom of every page.** Moved it to one place, Settings → About, as the last line on the Statistics card — it only needs to be said once, and it was never going to line up cleanly as a page-wide footer no matter how the spacing was tuned.
+
 ## v1.3.2-beta.9 — test build
 
 - **Wallhaven collections moved out of Liked & disliked, into Settings → Wallhaven.** It was never really a sign-in — just a username and your collections — and splitting it side by side with your reactions list was the main source of the squeezed/uneven layout. It now lives next to the API key it depends on, and Liked & disliked links out to it. Liked & disliked itself now just fills the width of its card, the same way Recently shown does.
