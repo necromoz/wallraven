@@ -1,5 +1,25 @@
 # Wallraven changelog
 
+## v1.3.2 — 20 Oct 2026
+
+### New
+
+- **Give the app your own background.** A new 🎨 button sits next to the others on History, Liked and Disliked — click it and that wallpaper becomes WallRaven's own theme, the same full-window look the Raven theme has. Pick it under Settings > General > Theme too.
+- **Always know if you're signed in.** A dot and label next to Pause, in the header on every page: grey for signed out, amber while a sign-in is pending, green with your email once you're in. Click it to jump to Account & sync, or to open a short explainer if you're signed out.
+
+### Changed
+
+- **Settings → Wallhaven now holds your collections too**, next to your API key — pull wallpapers from one of your own Wallhaven collections instead of a search. Liked & disliked links out to it, and now just fills the width of its card instead of squeezing against that section.
+- **Statistics moved to a new Settings → About tab**, out of the Library page.
+- **Cycling moved to Home**, right under Now Playing, as a plain "cycle every N minutes" field — Schedule now has just the timetable, using the whole page.
+- **The Wallhaven disclaimer lives in one place now**, at the bottom of Settings → About, instead of repeating at the foot of every page.
+- Cards and thumbnail grids now use the width they're given properly: a page with only a couple of cards no longer leaves most of a wide window empty, and grids like Recently shown no longer show fewer pictures per row on a bigger monitor than a smaller one.
+
+### Fixed
+
+- **The sign-in popup covers an existing account, not just a new one** — it used to read as if "Create account" was the only option.
+- **App theme no longer gets reverted by cloud sync** on another device or the periodic sync after signing in.
+
 ## v1.3.2-beta.10 — test build
 
 - **The Wallhaven disclaimer no longer sits at the bottom of every page.** Moved it to one place, Settings → About, as the last line on the Statistics card — it only needs to be said once, and it was never going to line up cleanly as a page-wide footer no matter how the spacing was tuned.
