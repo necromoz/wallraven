@@ -1,5 +1,13 @@
 # Wallraven changelog
 
+## v1.3.2-beta.9 — test build
+
+- **Wallhaven collections moved out of Liked & disliked, into Settings → Wallhaven.** It was never really a sign-in — just a username and your collections — and splitting it side by side with your reactions list was the main source of the squeezed/uneven layout. It now lives next to the API key it depends on, and Liked & disliked links out to it. Liked & disliked itself now just fills the width of its card, the same way Recently shown does.
+- **Statistics moved to a new Settings → About tab**, out of the Library page.
+- **Cycling moved to Home**, right under Now Playing, as a plain number field instead of a slider — so Schedule's Timetable card can use the whole page to itself.
+- **Pages with only a couple of short cards (Presets; the new Wallhaven tab) no longer leave most of a wide window empty.** They used to only fill the first column or two of the card grid regardless of how much room was left; the cards now stretch to fill the width between them.
+- **The Wallhaven disclaimer at the bottom of every page now lines up with the cards above it**, instead of sitting in its own narrower, oddly centred box.
+
 ## v1.3.2-beta.8 — test build
 
 - **Cards that fit side by side now actually sit side by side.** My presets + Community presets, and Pictures on this PC + Statistics, used to stack in one narrow column with the rest of the window empty beside them, even though both would comfortably fit next to each other. A Chromium quirk with exactly two cards sharing space — fixed.
