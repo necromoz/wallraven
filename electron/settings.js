@@ -92,13 +92,26 @@ const PAGES = [
       { id: "wallhaven", label: "Wallhaven" },
       { id: "updates", label: "Updates" },
       { id: "help", label: "Help" },
+      { id: "about", label: "About" },
     ],
   },
 ];
 
 const CARD_META = {
-  current: { title: "Now playing", page: "home" },
-  statistics: { title: "Statistics", page: "library", sec: "all" },
+  // `gallery: true` on "current" isn't about a thumbnail grid -- it just
+  // reuses the same "always take the full card deck width" mechanism (see
+  // the [data-gallery] rule below) so Now Playing stays the Home page's
+  // centrepiece regardless of what else is on Home. It layers on top of the
+  // dedicated #cards.page-home > .card[data-id="current"] rule further down,
+  // which is still what it needs for its own sizing.
+  current: { title: "Now playing", page: "home", gallery: true },
+  // A plain number field, not a slider -- lives on Home, right under Now
+  // Playing, so you don't have to leave the page to change how often the
+  // wallpaper cycles. Deliberately has no `parts` and isn't `gallery`, so it
+  // stays a small card instead of stretching to the window's width (see the
+  // plainVisible comment in applyPageVisibility for why that only happens
+  // when it would be sharing a row with another plain card).
+  cycle: { title: "Cycling", page: "home" },
   search: {
     title: "Search & filters",
     page: "browse",
@@ -117,15 +130,15 @@ const CARD_META = {
   // deck happens to squeeze a compact card into.
   browse: { title: "Browse wallpapers", page: "browse", gallery: true },
   history: { title: "Recently shown", page: "library", sec: "history", gallery: true },
+  // Used to carry a second section (Wallhaven account: username, collections)
+  // split side by side via `parts`. That's now its own card, `whcollections`,
+  // under Settings > Wallhaven -- this one is just the reactions list, so it
+  // flows full width the same way Recently shown and Browse do.
   favourites: {
     title: "Liked & disliked",
     page: "library",
     sec: "favourites",
     gallery: true,
-    parts: [
-      { id: "favourites", label: "Your reactions" },
-      { id: "favorites", label: "Wallhaven account" },
-    ],
   },
   playlists: {
     title: "Playlists",
@@ -136,7 +149,6 @@ const CARD_META = {
   library: { title: "Pictures on this PC", page: "library", sec: "local" },
   presets: { title: "My presets", page: "presets" },
   community: { title: "Community presets", page: "presets" },
-  cycle: { title: "Cycling", page: "schedule" },
   schedule: { title: "Timetable", page: "schedule" },
   app: {
     title: "General",
@@ -154,34 +166,41 @@ const CARD_META = {
   hotkeys: { title: "Keyboard shortcuts", page: "settings", sec: "keyboard" },
   account: { title: "Account & sync", page: "settings", sec: "account" },
   apikey: { title: "Wallhaven connection", page: "settings", sec: "wallhaven" },
+  // Was the second half of the Liked & disliked card (the "Wallhaven
+  // account" section: username + collections). Moved here because it's
+  // config, not a reaction to look at, and it sits naturally next to the API
+  // key it depends on.
+  whcollections: { title: "Wallhaven collections", page: "settings", sec: "wallhaven" },
   updates: { title: "Updates", page: "settings", sec: "updates" },
   feedback: { title: "Feedback", page: "settings", sec: "help" },
   donate: { title: "Support WallRaven", page: "settings", sec: "help" },
   cereal: { title: "🥣", page: "settings", sec: "help" },
+  statistics: { title: "Statistics", page: "settings", sec: "about" },
 };
 
 const DEFAULT_ORDER = [
   "current",
+  "cycle",
   "search",
   "browse",
   "history",
   "favourites",
   "playlists",
   "library",
-  "statistics",
   "presets",
   "community",
-  "cycle",
   "schedule",
   "app",
   "cache",
   "hotkeys",
   "account",
   "apikey",
+  "whcollections",
   "updates",
   "feedback",
   "donate",
   "cereal",
+  "statistics",
 ];
 // Old card ids from before the merges, so saved layouts survive the upgrade.
 const CARD_MIGRATIONS = {
@@ -545,23 +564,40 @@ function applyPageVisibility() {
   for (const p of PAGES) host.classList.toggle("page-" + p.id, p.id === uiPage);
   let visible = 0;
   let anyHasParts = false;
+  let plainVisible = 0;
   host.querySelectorAll(".card").forEach((card) => {
     card.hidden = !isCardVisible(card.dataset.id);
     if (!card.hidden) {
       visible++;
       if (CARD_META[card.dataset.id]?.parts) anyHasParts = true;
+      if (!CARD_META[card.dataset.id]?.gallery) plainVisible++;
     }
   });
   host.dataset.visible = String(visible);
   // A lone card always gets the full window width -- there's nothing else on
   // the page for it to share space with. Two cards only get the same
   // treatment when one of them actually has sections of its own to spread
-  // into (Search & filters, Liked & disliked, General): that's what the full
-  // width is for. A page with a couple of plain cards and no sections (My
-  // presets + Community presets) gained nothing from being forced full width
-  // except wasted space -- those now flow like any other pair of cards and
-  // sit side by side when they fit.
+  // into (Search & filters, General): that's what the full width is for. A
+  // page with a couple of plain cards and no sections (My presets + Community
+  // presets) gained nothing from being forced full width except wasted space
+  // -- those now flow like any other pair of cards and sit side by side when
+  // they fit.
   host.classList.toggle("few-wide-cards", visible === 1 || (visible === 2 && anyHasParts));
+  // #cards lays plain (non-gallery) cards out in CSS columns sized to fit as
+  // many ~460px-wide columns as the window allows -- great when there's
+  // enough content to fill them, but a page with only one or two short cards
+  // (My presets + Community presets; the Wallhaven connection + collections
+  // cards) only ever fills the first column or two, leaving the rest of a
+  // wide monitor empty beside them. Capping column-count to the number of
+  // plain cards actually on screen makes CSS stretch exactly that many
+  // columns to fill the width instead of leaving unused ones -- see the
+  // matching column-count: var(--plain-cols, 999) rule in settings.css. Only
+  // done from two cards up: a single plain card (Cycling, alone under Now
+  // Playing on Home; Pictures on this PC, alone among Library's gallery
+  // cards) is meant to stay a compact card, not stretch edge to edge just
+  // because nothing else shares its row.
+  if (plainVisible >= 2) host.style.setProperty("--plain-cols", String(plainVisible));
+  else host.style.removeProperty("--plain-cols");
 }
 
 function goPage(id) {
@@ -758,7 +794,6 @@ function hydrateInputs(c) {
   }
   setChips("ratios", (c.ratios || "").split(",").filter(Boolean));
   buildPalette(c.colors || []);
-  set("#cycleMinutes", c.cycleMinutes);
   set("#cycleMinutesNum", c.cycleMinutes);
   set("#cacheMaxMB", c.cacheMaxMB);
   set("#cacheMaxMBNum", c.cacheMaxMB);
@@ -847,7 +882,7 @@ function collect() {
       return [...out].join(",");
     })(),
     colors: readPalette(),
-    cycleMinutes: num("#cycleMinutes", 30),
+    cycleMinutes: num("#cycleMinutesNum", 30),
     cacheMaxMB: num("#cacheMaxMB", 1024),
     apiKey: val("#apiKey").trim(),
     uiAccent: val("#uiAccent") || "#7c5cff",
@@ -924,7 +959,6 @@ function wireAllCards() {
   // leaves the page and comes back.
   renderHotkeyStatus();
   applyStoreUi();
-  bindSlider("cycleMinutes", "cycleMinutesNum");
   bindSlider("cacheMaxMB", "cacheMaxMBNum");
 
   $("#sorting")?.addEventListener("change", () => {
@@ -4962,6 +4996,10 @@ function wireFavourites() {
     if (e.target.closest?.("#btn-fav-refresh")) {
       config = await api.getConfig();
       renderFavourites();
+      return;
+    }
+    if (e.target.closest?.("#btn-goto-wh-collections")) {
+      goCard("whcollections");
       return;
     }
     if (e.target.closest?.("#btn-fav-use")) {

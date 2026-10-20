@@ -652,6 +652,135 @@ check("the popup doesn't read as account-creation-only", () => {
   );
 });
 
+console.log("Wallhaven collections moved out of Liked & disliked, into Settings > Wallhaven");
+
+check("favourites no longer carries the Wallhaven account section as a part", () => {
+  const meta = JS.slice(JS.indexOf("const CARD_META = {"), JS.indexOf("const DEFAULT_ORDER"));
+  const at = meta.indexOf("favourites: {");
+  assert.ok(at !== -1, "no CARD_META entry for favourites");
+  const entry = meta.slice(at, meta.indexOf("playlists: {", at));
+  assert.ok(!/parts:/.test(entry), "favourites still splits into subcard parts");
+  assert.ok(/gallery:\s*true/.test(entry), "favourites should still span the full deck width");
+});
+
+check("Wallhaven collections is its own card under Settings > Wallhaven", () => {
+  const meta = JS.slice(JS.indexOf("const CARD_META = {"), JS.indexOf("const DEFAULT_ORDER"));
+  assert.ok(/whcollections:\s*\{/.test(meta), "no whcollections entry in CARD_META");
+  const at = meta.indexOf("whcollections: {");
+  const entry = meta.slice(at, meta.indexOf("}", at) + 1);
+  assert.ok(/page:\s*"settings"/.test(entry), "whcollections is not on the settings page");
+  assert.ok(/sec:\s*"wallhaven"/.test(entry), "whcollections is not on the wallhaven tab");
+  assert.ok(
+    HTML.includes('id="tpl-whcollections"'),
+    "no tpl-whcollections template for the whcollections card to render",
+  );
+  assert.ok(
+    HTML.includes('id="whUsername"') && HTML.includes('id="btn-load-collections"'),
+    "the collections controls (username, load collections) are missing from the markup",
+  );
+});
+
+check("Liked & disliked points to where collections moved", () => {
+  assert.ok(
+    /btn-goto-wh-collections/.test(HTML),
+    "no link/button out of Liked & disliked toward Wallhaven settings",
+  );
+  const body = fn("wireFavourites");
+  assert.ok(
+    hasCode(body, 'goCard("whcollections")'),
+    "the goto-collections button is not wired to navigate there",
+  );
+});
+
+console.log("Statistics moved to Settings > About");
+
+check("Statistics is on a new About tab, not Library", () => {
+  const meta = JS.slice(JS.indexOf("const CARD_META = {"), JS.indexOf("const DEFAULT_ORDER"));
+  const at = meta.indexOf("statistics: {");
+  assert.ok(at !== -1, "no CARD_META entry for statistics");
+  const entry = meta.slice(at, meta.indexOf("}", at) + 1);
+  assert.ok(/page:\s*"settings"/.test(entry), "statistics is not on the settings page");
+  assert.ok(/sec:\s*"about"/.test(entry), "statistics is not on the about tab");
+});
+
+check("Settings has an About tab", () => {
+  const pages = JS.slice(JS.indexOf("const PAGES = ["), JS.indexOf("const CARD_META"));
+  assert.ok(
+    /id:\s*"about"/.test(pages) && /id:\s*"settings"/.test(pages),
+    "no about tab declared under the settings page",
+  );
+});
+
+console.log("Cycling moved to Home, as a plain field");
+
+check("Cycling lives on Home now, without the old range slider", () => {
+  const meta = JS.slice(JS.indexOf("const CARD_META = {"), JS.indexOf("const DEFAULT_ORDER"));
+  const at = meta.indexOf("cycle: {");
+  assert.ok(at !== -1, "no CARD_META entry for cycle");
+  const entry = meta.slice(at, meta.indexOf("}", at) + 1);
+  assert.ok(/page:\s*"home"/.test(entry), "cycle is not on the home page");
+  const tpl = HTML.slice(
+    HTML.indexOf('id="tpl-cycle"'),
+    HTML.indexOf("</template>", HTML.indexOf('id="tpl-cycle"')),
+  );
+  assert.ok(!/type="range"/.test(tpl), "the cycle template still has a range slider");
+  assert.ok(/type="number"/.test(tpl), "the cycle template lost its number input");
+});
+
+check("collect() and hydrateInputs() read the cycle minutes field by its real id", () => {
+  assert.ok(
+    hasCode(fn("collect"), 'num("#cycleMinutesNum", 30)'),
+    "collect() still reads the removed #cycleMinutes range input",
+  );
+  const body = fn("hydrateInputs");
+  assert.ok(hasCode(body, 'set("#cycleMinutesNum", c.cycleMinutes)'), "cycle minutes is not hydrated");
+  assert.ok(
+    !hasCode(body, 'set("#cycleMinutes", c.cycleMinutes)'),
+    "hydrateInputs still sets the removed #cycleMinutes range input",
+  );
+});
+
+console.log("plain cards fill the width they're given instead of leaving columns empty");
+
+check("applyPageVisibility caps columns to the number of plain cards on screen", () => {
+  // #cards picks as many ~460px columns as the window allows, whether or not
+  // there's content to fill them -- fine with several cards, but a page with
+  // only one or two short ones (My presets + Community presets) used to fill
+  // only the first column or two and leave the rest of a wide monitor empty.
+  const body = fn("applyPageVisibility");
+  assert.ok(/plainVisible/.test(body), "applyPageVisibility no longer tracks plain card count");
+  assert.ok(
+    /if \(!CARD_META\[card\.dataset\.id\]\?\.gallery\) plainVisible\+\+;/.test(body),
+    "gallery cards should not count toward plainVisible -- they already span full width",
+  );
+  assert.ok(
+    /plainVisible >= 2/.test(body) && /--plain-cols/.test(body),
+    "applyPageVisibility no longer sets --plain-cols for two or more plain cards",
+  );
+  assert.ok(
+    /removeProperty\(["']--plain-cols["']\)/.test(body),
+    "a single plain card (e.g. Cycling, alone under Now Playing) should not be force-stretched -- " +
+      "--plain-cols needs to be cleared rather than left at a stale value",
+  );
+});
+
+check("CSS caps column-count at --plain-cols to match", () => {
+  assert.ok(
+    /column-count:\s*var\(--plain-cols,\s*999\)/.test(CSS),
+    "no column-count: var(--plain-cols, 999) rule for #cards to pick up what JS computes",
+  );
+});
+
+console.log("the footer lines up with the card deck instead of floating narrower than it");
+
+check("footer has no narrower max-width of its own", () => {
+  const body = CSS.slice(CSS.indexOf("footer {"), CSS.indexOf("footer a {"));
+  assert.ok(
+    !/max-width/.test(body),
+    "footer still caps its own width, which is what left it narrower than #cards above it",
+  );
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);

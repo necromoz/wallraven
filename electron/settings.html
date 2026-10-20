@@ -238,9 +238,26 @@
           <span class="help">No disliked wallpapers yet.</span>
         </div>
       </details>
+      <div
+        class="help"
+        style="margin-top: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap"
+      >
+        <span
+          >Want to cycle wallpapers from one of your own Wallhaven collections instead? Connect
+          your Wallhaven account under Settings → Wallhaven.</span
+        >
+        <button class="btn secondary" id="btn-goto-wh-collections" type="button">
+          Open Wallhaven settings
+        </button>
+      </div>
     </template>
 
-    <template id="tpl-favorites">
+    <template id="tpl-whcollections">
+      <div class="card-intro">
+        Pull wallpapers from one of your own Wallhaven collections instead of a search. Separate
+        from the API key above: that unlocks NSFW purity and favouriting, this just points at a
+        collection by username.
+      </div>
       <div class="row">
         <label>Wallhaven username</label
         ><input id="whUsername" type="text" placeholder="your wallhaven username" />
@@ -272,8 +289,8 @@
         "
       ></div>
       <div class="help" style="margin-top: 8px">
-        Requires your Wallhaven API key. Wallhaven's public API doesn't let apps add favourites -
-        use the "Open page" icon to favourite on wallhaven.cc while signed in.
+        Requires your Wallhaven API key, above. Wallhaven's public API doesn't let apps add
+        favourites - use the "Open page" icon to favourite on wallhaven.cc while signed in.
       </div>
     </template>
 
@@ -557,16 +574,14 @@
     </template>
 
     <template id="tpl-cycle">
-      <div>
-        <label>Cycle every</label>
-        <div class="slider-row">
-          <input type="range" id="cycleMinutes" min="1" max="1440" step="1" />
-          <input type="number" id="cycleMinutesNum" min="1" max="1440" />
-        </div>
-        <div class="help">
-          Minutes between wallpaper changes (overridden by an active schedule rule)
+      <div class="row">
+        <label for="cycleMinutesNum">Cycle every</label>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <input type="number" id="cycleMinutesNum" min="1" max="1440" style="width: 80px" />
+          minutes
         </div>
       </div>
+      <div class="help help-indent">Overridden by an active schedule rule.</div>
     </template>
 
     <template id="tpl-display">

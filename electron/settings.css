@@ -259,10 +259,22 @@ main {
 }
 
 /* Wide columns keep controls readable on large monitors, and packing the
-   cards vertically avoids the dead space a strict row grid leaves behind. */
+   cards vertically avoids the dead space a strict row grid leaves behind.
+   column-width alone picks as many ~460px columns as the window allows,
+   whether or not there's enough content to fill them -- fine on a page with
+   several cards, but a page with only one or two short ones (My presets +
+   Community presets; Wallhaven connection + Wallhaven collections) ended up
+   using only the first column or two and leaving the rest of a wide monitor
+   empty. --plain-cols is set in applyPageVisibility() to the number of
+   non-gallery cards actually on screen (only from two up -- see its comment
+   there), capping the column count so CSS stretches exactly that many
+   columns to fill the width instead. column-width still wins on a narrow
+   window: the spec takes the smaller of the two, so this only ever reduces
+   the column count column-width would have picked on its own. */
 #cards,
 .group > .group-cards {
   column-width: 460px;
+  column-count: var(--plain-cols, 999);
   column-gap: 14px;
 }
 #cards > .card,
@@ -1306,10 +1318,10 @@ hr {
   }
   .card > .card-body:has(> .subcard + .subcard) > .subcard {
     /* No display: inline-block here either -- see the matching comment on
-       #cards > .card. A card with exactly two sections (Liked & disliked:
-       Your reactions + Wallhaven account) was the clearest case: both
-       sections landed in the first column and the rest of the wide card
-       sat empty, instead of the sections sitting side by side. */
+       #cards > .card. A card with several sections (General's five; Search &
+       filters' four) is the case this guards: without it, two sections
+       sharing a column region land in the first column and the rest of the
+       wide card sits empty, instead of the sections sitting side by side. */
     break-inside: avoid;
     width: 100%;
     margin: 0;
@@ -1328,13 +1340,17 @@ hr {
     max-width: 560px;
   }
 }
+/* No max-width of its own: footer is a direct child of main, which already
+   caps and centres the page at 2100px, same as #cards. A narrower cap here
+   used to leave it as a small island of text, visibly narrower than the
+   cards above it with empty page either side -- letting it use the same
+   width main already gives everything else keeps its edges lined up with
+   the deck instead. */
 footer {
   font-size: 11px;
   color: var(--muted);
   text-align: center;
   padding: 16px 20px 22px;
-  max-width: 900px;
-  margin: 0 auto;
   line-height: 1.6;
 }
 footer a {
