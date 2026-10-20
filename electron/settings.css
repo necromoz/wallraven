@@ -1340,31 +1340,22 @@ hr {
     max-width: 560px;
   }
 }
-/* No max-width of its own: footer is a direct child of main, which already
-   caps and centres the page at 2100px, same as #cards. A narrower cap here
-   used to leave it as a small island of text, visibly narrower than the
-   cards above it with empty page either side -- letting it use the same
-   width main already gives everything else keeps its edges lined up with
-   the deck instead. */
-footer {
+/* The Wallhaven disclaimer used to be a page-wide footer under every page's
+   cards -- it only needs to appear once, so it now lives here instead, as
+   the last thing in the Statistics card on Settings > About. No width
+   tricks needed: it just inherits the card's own padding and background,
+   which is what it was fighting to line up with as a separate footer. */
+.wh-disclaimer {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
   font-size: 11px;
   color: var(--muted);
-  text-align: center;
-  padding: 16px 20px 22px;
   line-height: 1.6;
 }
-footer a {
+.wh-disclaimer a {
   color: var(--muted);
   text-decoration: underline;
-}
-/* The mascot themes paint artwork behind the page, and the footer sat straight
-   on it: measured as low as 2.2:1. A quiet panel behind it, like the cards
-   have, brings it well above AA without hiding the art. */
-html[data-mascot] footer {
-  background: color-mix(in oklab, var(--bg) 80%, transparent);
-  backdrop-filter: blur(6px);
-  border-radius: 10px;
-  margin-bottom: 14px;
 }
 
 /* History thumb icon buttons */

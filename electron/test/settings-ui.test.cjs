@@ -771,14 +771,22 @@ check("CSS caps column-count at --plain-cols to match", () => {
   );
 });
 
-console.log("the footer lines up with the card deck instead of floating narrower than it");
+console.log("the Wallhaven disclaimer lives once, on Settings > About, not as a page-wide footer");
 
-check("footer has no narrower max-width of its own", () => {
-  const body = CSS.slice(CSS.indexOf("footer {"), CSS.indexOf("footer a {"));
-  assert.ok(
-    !/max-width/.test(body),
-    "footer still caps its own width, which is what left it narrower than #cards above it",
-  );
+check("no page-wide <footer> left in the shell", () => {
+  assert.ok(!/<footer/.test(HTML), "a global footer is still in the page shell markup");
+});
+
+check("the disclaimer text is part of the Statistics card template", () => {
+  const tpl = HTML.slice(HTML.indexOf('id="tpl-statistics"'), HTML.indexOf("</template>", HTML.indexOf('id="tpl-statistics"')));
+  assert.ok(/wh-disclaimer/.test(tpl), "tpl-statistics has no .wh-disclaimer block");
+  assert.ok(/wallhaven\.cc/.test(tpl), "the Wallhaven disclaimer copy isn't in tpl-statistics");
+});
+
+check("the disclaimer has no narrower max-width of its own", () => {
+  const body = CSS.slice(CSS.indexOf(".wh-disclaimer {"), CSS.indexOf(".wh-disclaimer a {"));
+  assert.ok(body, "no .wh-disclaimer rule in settings.css");
+  assert.ok(!/max-width/.test(body), "the disclaimer caps its own width again");
 });
 
 console.log();
