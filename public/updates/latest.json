@@ -1,9 +1,9 @@
 {
-  "version": "1.3.1",
-  "releasedAt": "2026-10-08",
-  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.3.1/Wallraven-Setup-v1.3.1.exe",
-  "sha256": "e6b00078e737aa5a416a7f84ac91a009eea8b120ae6eeec64a902f9b0280d802",
-  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.3.1",
-  "sizeBytes": 110101326,
-  "notes": "Skips letterboxed wallpapers that are really a smaller picture padded out to size, shows your schedule as a week you can see, credits the original artist on Now Playing, and brings Google sign-in back."
+  "version": "1.3.2",
+  "releasedAt": "2026-10-21",
+  "url": "https://github.com/wallraven-app/wallraven/releases/download/v1.3.2/WallRaven-Setup-v1.3.2.exe",
+  "sha256": "f05c665718340691800e4ea31522f4c85662541ef90a7f9119feab92ff4ff995",
+  "pageUrl": "https://github.com/wallraven-app/wallraven/releases/tag/v1.3.2",
+  "sizeBytes": 110175943,
+  "notes": "Lets you set any wallpaper as the app's own background, adds a sign-in status indicator to the header, and reorganizes Settings: Wallhaven collections sit next to the API key, Statistics has its own About tab, and Cycling is a simple field on Home."
 }
