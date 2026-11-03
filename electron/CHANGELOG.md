@@ -1,5 +1,9 @@
 # Wallraven changelog
 
+## v1.3.3-beta.4 — test build
+
+- **Wording pass on the tour, from Steve's feedback.** No more em dashes in the tour text. No more "click this to do that" phrasing on steps that point at the real app behind the modal, since clicking there just closes the tour. Added a closing line on the last step pointing at Ko-fi.
+
 ## v1.3.3-beta.3 — test build
 
 - **The setup wizard is now a tour of the whole app, not just the opening settings.** After the API key, filters and cycling steps, it now walks through Browse, History, Liked & disliked, Playlists, Presets, Timetable and Keyboard shortcuts — seven new steps, each one bringing up the real page behind the wizard (not a description of it) before moving on, the same way the sign-in step already lands on Account & sync. Skipping or closing the tour early puts you back on whichever page you actually started from, not wherever it last navigated to.

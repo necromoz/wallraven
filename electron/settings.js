@@ -2481,13 +2481,13 @@ const ONBOARDING_STEPS = [
       <p>WallRaven changes your desktop wallpaper on a timer, using pictures from
       <strong>Wallhaven</strong> or from folders on this PC.</p>
       <p>It runs in the system tray, so closing this window leaves it running.
-      This quick setup covers what's worth knowing before you start — skip it any time.</p>`,
+      This quick setup covers what's worth knowing before you start. Skip it any time.</p>`,
   },
   {
     title: "Your Wallhaven API key",
     body: `
       <p>Optional, but unlocks two things: Sketchy/NSFW results, and pulling wallpapers from
-      your own Wallhaven collections. Skip this if you don't want either yet — you can always
+      your own Wallhaven collections. Skip this if you don't want either yet. You can always
       add one later in Settings.</p>
       <div class="onboarding-field">
         <input id="onb-apikey" type="password" placeholder="paste your 32-character Wallhaven key" />
@@ -2513,7 +2513,7 @@ const ONBOARDING_STEPS = [
         <label class="check"><input type="checkbox" id="onb-pur-sketchy" /> Sketchy</label>
         <label class="check"><input type="checkbox" id="onb-pur-nsfw" /> NSFW</label>
       </div>
-      <p>Sketchy and NSFW need the API key from the last step — without one those searches come
+      <p>Sketchy and NSFW need the API key from the last step. Without one, those searches come
       back empty. Change any of this later in <strong>Search &amp; filters</strong>.</p>`,
     wire: wireOnboardingFilters,
     collect: collectOnboardingFilters,
@@ -2526,8 +2526,8 @@ const ONBOARDING_STEPS = [
         <span>minutes</span>
       </div>
       <p>Change this any time on <strong>Home</strong>, under Now playing. Want different
-      sources at different times — one feed in the morning, another at night? That's what
-      <strong>Timetable</strong> is for — a couple of steps from here.</p>`,
+      sources at different times, one feed in the morning, another at night? That's what
+      <strong>Timetable</strong> is for, coming up in a couple of steps.</p>`,
     wire: wireOnboardingCycle,
     collect: collectOnboardingCycle,
   },
@@ -2539,18 +2539,19 @@ const ONBOARDING_STEPS = [
     title: "Finding something new",
     goto: "browse",
     body: `
-      <p>This is <strong>Browse</strong> — search Wallhaven directly without touching your saved
+      <p>This is <strong>Browse</strong>: search Wallhaven directly without touching your saved
       search. What you type here is just for looking around; the search your wallpaper actually
       cycles on is the one in <strong>Search &amp; filters</strong>, and it's untouched.</p>
-      <p>Click a picture to set it as your wallpaper right now (this pauses automatic cycling).
+      <p>A picture becomes your wallpaper the moment you click it, and pauses automatic cycling.
       <strong>+</strong> also saves it to a playlist.</p>`,
   },
   {
     title: "What you've already seen",
     goto: "history",
     body: `
-      <p>This is <strong>Library → History</strong> — every wallpaper WallRaven has shown
-      recently. Click a thumbnail to bring it back, or use 👍/👎 to like or dislike it.</p>`,
+      <p>This is <strong>Library → History</strong>: every wallpaper WallRaven has shown
+      recently. A thumbnail comes back as your wallpaper with a click; 👍/👎 likes or dislikes
+      it.</p>`,
   },
   {
     title: "Liked and disliked",
@@ -2564,7 +2565,7 @@ const ONBOARDING_STEPS = [
     title: "Playlists",
     goto: "playlists",
     body: `
-      <p>A playlist is a fixed set of pictures you choose yourself — it doesn't search for
+      <p>A playlist is a fixed set of pictures you choose yourself. It doesn't search for
       anything and doesn't change on its own. Add to one from Browse, History or your current
       wallpaper, then switch cycling to it with <strong>Use this playlist for cycling</strong>.</p>`,
   },
@@ -2572,7 +2573,7 @@ const ONBOARDING_STEPS = [
     title: "Ready-made presets",
     goto: "presets",
     body: `
-      <p>A <strong>preset</strong> is a saved search — load one and WallRaven keeps fetching new
+      <p>A <strong>preset</strong> is a saved search. Load one and WallRaven keeps fetching new
       wallpapers that match it. Built-in presets (General, Anime, Nature, Toplist, …) are always
       here; save your own search as one too.</p>
       <p>Just below, <strong>Community presets</strong> are ones other WallRaven users have
@@ -2582,19 +2583,19 @@ const ONBOARDING_STEPS = [
     title: "Timetable",
     goto: "schedule",
     body: `
-      <p>Want different sources at different times — a calmer feed overnight, something else
+      <p>Want different sources at different times, a calmer feed overnight, something else
       during the day? That's the <strong>Timetable</strong>. Each entry says "from this time, use
       this," and it holds until the next one starts.</p>
-      <p>Double-click a day to add an entry. Pressing ► yourself always works, using whichever
-      entry is currently in force.</p>`,
+      <p>A double-click on a day adds an entry there. Pressing ► yourself always works, using
+      whichever entry is currently in force.</p>`,
   },
   {
     title: "Keyboard shortcuts",
     goto: "hotkeys",
     body: `
-      <p>Global hotkeys work even when WallRaven isn't focused — next wallpaper, like/dislike the
-      current one, pause the timetable, jump back or forward through history. Off by default,
-      turn them on here and set whichever ones you want.</p>`,
+      <p>Global hotkeys work even when WallRaven isn't focused: next wallpaper, like or dislike
+      the current one, pause the timetable, jump back or forward through history. Off by
+      default, turn them on here and set whichever ones you want.</p>`,
   },
   {
     title: "Sign in to WallRaven",
@@ -2602,9 +2603,12 @@ const ONBOARDING_STEPS = [
     body: `
       <p>Signing in keeps your settings, presets and liked wallpapers backed up, and in sync
       if you use WallRaven on more than one PC.</p>
-      <p>Already have an account? Continuing signs you straight in — you don't need to make a
+      <p>Already have an account? Continuing signs you straight in: you don't need to make a
       new one.</p>
-      <p>It's optional — WallRaven works fully signed out, and nothing here is required.</p>`,
+      <p>It's optional. WallRaven works fully signed out, and nothing here is required.</p>
+      <p>That's the tour. If WallRaven's worth it to you,
+      <a href="#" data-ext="https://ko-fi.com/wallraven">buy me a coffee on Ko-fi</a>. It goes
+      straight back into the app.</p>`,
     signin: true,
   },
 ];
