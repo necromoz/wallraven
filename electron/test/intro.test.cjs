@@ -200,6 +200,30 @@ check("the API key and filters steps actually set something", () => {
   assert.ok(hasCode(stepsSrc, "collect: collectOnboardingCycle"), "no collect for the cycling step");
 });
 
+// The wizard's last few steps are a feature tour, not setup -- it's the
+// `goto` on each one, not any `collect`, that does the work: it brings up
+// the real card behind the modal so the step shows the actual feature.
+check("the tour steps bring up the real feature, not just a description of it", () => {
+  const stepsSrc = extractConstFrom(JS, "ONBOARDING_STEPS");
+  const gotos = [...stepsSrc.matchAll(/goto:\s*"([^"]*)"/g)].map((m) => m[1]);
+  for (const id of ["browse", "history", "favourites", "playlists", "presets", "schedule", "hotkeys", "account"]) {
+    assert.ok(gotos.includes(id), `no tour step points at the "${id}" card`);
+  }
+});
+
+check("renderOnboardingStep actually acts on goto", () => {
+  const body = extract("renderOnboardingStep");
+  assert.ok(hasCode(body, "if (step.goto) goCard(step.goto)"), "goto is declared on steps but never used");
+});
+
+check("leaving the tour restores wherever the user actually was", () => {
+  const body = extract("finishOnboarding");
+  assert.ok(
+    hasCode(body, "restoreOnboardingOrigin()"),
+    "finishing the tour does not put the user back where it found them",
+  );
+});
+
 console.log();
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);

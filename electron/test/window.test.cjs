@@ -294,7 +294,7 @@ function settle(ms = 60) {
   });
 
   doc.getElementById("onb-cycle").value = "45";
-  doc.getElementById("onboarding-next").click(); // 4 cycling -> 5 sign-in
+  doc.getElementById("onboarding-next").click(); // 4 cycling -> 5 browse
   await settle(30);
 
   check("changing the cycle minutes and moving on saves it, and the real field agrees", () => {
@@ -304,9 +304,65 @@ function settle(ms = 60) {
     assert.strictEqual(doc.getElementById("cycleMinutesNum").value, "45");
   });
 
-  check("it ends on the sign-in offer", () => {
+  const pageHeadTitle = () => doc.querySelector("#page-head h2")?.textContent;
+  const activeTabLabel = () => doc.querySelector("#subnav .tab.on")?.textContent;
+
+  check("the rest of the tour actually brings up the real page, not just modal text", () => {
+    assert.ok(/new/i.test(doc.getElementById("onboarding-title").textContent), "did not land on the Browse step");
+    assert.strictEqual(pageHeadTitle(), "Browse", "Browse step did not navigate there");
+  });
+
+  doc.getElementById("onboarding-next").click(); // 5 browse -> 6 history
+  await settle(30);
+  check("the history step lands on Library > History", () => {
+    assert.ok(/already seen/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(pageHeadTitle(), "Library");
+    assert.strictEqual(activeTabLabel(), "History");
+  });
+
+  doc.getElementById("onboarding-next").click(); // 6 history -> 7 favourites
+  await settle(30);
+  check("the favourites step switches tabs to Favourites", () => {
+    assert.ok(/liked and disliked/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(activeTabLabel(), "Favourites");
+  });
+
+  doc.getElementById("onboarding-next").click(); // 7 favourites -> 8 playlists
+  await settle(30);
+  check("the playlists step switches tabs to Playlists", () => {
+    assert.ok(/playlists/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(activeTabLabel(), "Playlists");
+  });
+
+  doc.getElementById("onboarding-next").click(); // 8 playlists -> 9 presets
+  await settle(30);
+  check("the presets step lands on Presets", () => {
+    assert.ok(/presets/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(pageHeadTitle(), "Presets");
+  });
+
+  doc.getElementById("onboarding-next").click(); // 9 presets -> 10 timetable
+  await settle(30);
+  check("the timetable step lands on Schedule", () => {
+    assert.ok(/timetable/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(pageHeadTitle(), "Schedule");
+  });
+
+  doc.getElementById("onboarding-next").click(); // 10 timetable -> 11 hotkeys
+  await settle(30);
+  check("the hotkeys step lands on Settings > Keyboard", () => {
+    assert.ok(/keyboard shortcuts/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(pageHeadTitle(), "Settings");
+    assert.strictEqual(activeTabLabel(), "Keyboard");
+  });
+
+  doc.getElementById("onboarding-next").click(); // 11 hotkeys -> 12 sign-in
+  await settle(30);
+
+  check("it ends on the sign-in offer, on Settings > Account & sync", () => {
     assert.ok(/Sign in/i.test(doc.getElementById("onboarding-title").textContent));
     assert.strictEqual(doc.getElementById("onboarding-next").textContent, "Continue");
+    assert.strictEqual(activeTabLabel(), "Account & sync");
     assert.notStrictEqual(
       doc.getElementById("onboarding-back").style.display,
       "none",
@@ -329,6 +385,10 @@ function settle(ms = 60) {
       w.calls.every((c) => c.name !== "accountSignIn"),
       "Skip tour should not have started a sign-in",
     );
+  });
+
+  check("declining puts you back where the tour found you, not wherever it last navigated", () => {
+    assert.strictEqual(pageHeadTitle(), "Home", "stranded on a tour page instead of restored to Home");
   });
 
   console.log("replaying the wizard from Settings");

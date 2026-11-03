@@ -2527,12 +2527,78 @@ const ONBOARDING_STEPS = [
       </div>
       <p>Change this any time on <strong>Home</strong>, under Now playing. Want different
       sources at different times — one feed in the morning, another at night? That's what
-      <strong>Timetable</strong> is for.</p>`,
+      <strong>Timetable</strong> is for — a couple of steps from here.</p>`,
     wire: wireOnboardingCycle,
     collect: collectOnboardingCycle,
   },
+  // The steps below don't set anything -- they're a tour, not setup. Each one
+  // carries `goto`, a card id, so the real page comes up behind the modal
+  // (via the same goCard() the signed-out pill and the "Account" link use),
+  // showing the actual feature rather than describing it in the abstract.
+  {
+    title: "Finding something new",
+    goto: "browse",
+    body: `
+      <p>This is <strong>Browse</strong> — search Wallhaven directly without touching your saved
+      search. What you type here is just for looking around; the search your wallpaper actually
+      cycles on is the one in <strong>Search &amp; filters</strong>, and it's untouched.</p>
+      <p>Click a picture to set it as your wallpaper right now (this pauses automatic cycling).
+      <strong>+</strong> also saves it to a playlist.</p>`,
+  },
+  {
+    title: "What you've already seen",
+    goto: "history",
+    body: `
+      <p>This is <strong>Library → History</strong> — every wallpaper WallRaven has shown
+      recently. Click a thumbnail to bring it back, or use 👍/👎 to like or dislike it.</p>`,
+  },
+  {
+    title: "Liked and disliked",
+    goto: "favourites",
+    body: `
+      <p>Liked wallpapers land here and stay cached forever, so they survive cache clean-up.
+      Disliked ones are never shown again. <strong>Only shuffle Liked</strong> restricts cycling
+      to just this list.</p>`,
+  },
+  {
+    title: "Playlists",
+    goto: "playlists",
+    body: `
+      <p>A playlist is a fixed set of pictures you choose yourself — it doesn't search for
+      anything and doesn't change on its own. Add to one from Browse, History or your current
+      wallpaper, then switch cycling to it with <strong>Use this playlist for cycling</strong>.</p>`,
+  },
+  {
+    title: "Ready-made presets",
+    goto: "presets",
+    body: `
+      <p>A <strong>preset</strong> is a saved search — load one and WallRaven keeps fetching new
+      wallpapers that match it. Built-in presets (General, Anime, Nature, Toplist, …) are always
+      here; save your own search as one too.</p>
+      <p>Just below, <strong>Community presets</strong> are ones other WallRaven users have
+      shared.</p>`,
+  },
+  {
+    title: "Timetable",
+    goto: "schedule",
+    body: `
+      <p>Want different sources at different times — a calmer feed overnight, something else
+      during the day? That's the <strong>Timetable</strong>. Each entry says "from this time, use
+      this," and it holds until the next one starts.</p>
+      <p>Double-click a day to add an entry. Pressing ► yourself always works, using whichever
+      entry is currently in force.</p>`,
+  },
+  {
+    title: "Keyboard shortcuts",
+    goto: "hotkeys",
+    body: `
+      <p>Global hotkeys work even when WallRaven isn't focused — next wallpaper, like/dislike the
+      current one, pause the timetable, jump back or forward through history. Off by default,
+      turn them on here and set whichever ones you want.</p>`,
+  },
   {
     title: "Sign in to WallRaven",
+    goto: "account",
     body: `
       <p>Signing in keeps your settings, presets and liked wallpapers backed up, and in sync
       if you use WallRaven on more than one PC.</p>
@@ -2604,6 +2670,11 @@ function collectOnboardingCycle() {
 
 let onboardingStep = 0;
 let onboardingVersion = "";
+// Where the user actually was before the wizard opened -- a tour step's
+// `goto` moves the real page underneath the modal, so without this, Skip or
+// the backdrop click would strand them on whatever card the tour last
+// visited instead of where they started.
+let onboardingReturn = null;
 
 function renderOnboardingStep() {
   const step = ONBOARDING_STEPS[onboardingStep];
@@ -2617,7 +2688,27 @@ function renderOnboardingStep() {
   if (progress) progress.textContent = `Step ${onboardingStep + 1} of ${ONBOARDING_STEPS.length}`;
   if (back) back.style.display = onboardingStep === 0 ? "none" : "";
   if (next) next.textContent = step.signin ? "Continue" : "Next";
+  // Tour steps (no `collect`, just `goto`) bring up the real page behind the
+  // modal so the step is pointing at the actual feature, not a description
+  // of it -- same goCard() the rest of the app uses to jump to a card.
+  if (step.goto) goCard(step.goto);
   step.wire?.();
+}
+
+// Puts the user back exactly where the wizard found them. Safe to call even
+// when the signin step's own goCard("account") immediately follows and
+// overrides it -- that's the one case landing somewhere else is intentional.
+function restoreOnboardingOrigin() {
+  if (!onboardingReturn) return;
+  const { page, tab } = onboardingReturn;
+  goPage(page);
+  if (tab && pageMeta(page).tabs) {
+    uiTabs[page] = tab;
+    persistUiState();
+    renderPageHead();
+    applyPageVisibility();
+  }
+  onboardingReturn = null;
 }
 
 // Whatever the current step actually sets (API key, filters, cycling) is
@@ -2648,6 +2739,7 @@ async function finishOnboarding() {
   try {
     config = await api.setConfig({ lastSeenVersion: onboardingVersion });
   } catch {}
+  restoreOnboardingOrigin();
 }
 
 function wireOnboarding() {
@@ -2692,6 +2784,7 @@ function wireOnboarding() {
 function showOnboarding(version) {
   onboardingVersion = version;
   onboardingStep = 0;
+  onboardingReturn = { page: uiPage, tab: uiTabs[uiPage] };
   renderOnboardingStep();
   const el = $("#onboarding-modal");
   if (el) el.style.display = "flex";

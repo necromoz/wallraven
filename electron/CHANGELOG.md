@@ -1,5 +1,9 @@
 # Wallraven changelog
 
+## v1.3.3-beta.3 — test build
+
+- **The setup wizard is now a tour of the whole app, not just the opening settings.** After the API key, filters and cycling steps, it now walks through Browse, History, Liked & disliked, Playlists, Presets, Timetable and Keyboard shortcuts — seven new steps, each one bringing up the real page behind the wizard (not a description of it) before moving on, the same way the sign-in step already lands on Account & sync. Skipping or closing the tour early puts you back on whichever page you actually started from, not wherever it last navigated to.
+
 ## v1.3.3-beta.2 — test build
 
 - **The first-run tour is now an actual setup wizard, not just a walkthrough.** Steve's call: it should let you set things, not just describe them. Three of its five steps now have real controls that save as you go — your Wallhaven API key (with Validate), what it searches for (Categories and Purity checkboxes), and how often the wallpaper changes — pre-filled from your current settings and reflected immediately in the real cards elsewhere in Settings. Welcome and the sign-in offer stay as they were.
