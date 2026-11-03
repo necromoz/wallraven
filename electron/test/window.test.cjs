@@ -226,7 +226,7 @@ function settle(ms = 60) {
 
   console.log("the first-run tour");
 
-  check("a fresh install gets the tour, not the what's new banner", () => {
+  check("a fresh install gets the wizard, not the what's new banner", () => {
     // The stub config has no lastSeenVersion, which is what a first run looks
     // like: no config file was ever written.
     const modal = doc.getElementById("onboarding-modal");
@@ -241,10 +241,70 @@ function settle(ms = 60) {
     assert.strictEqual(doc.getElementById("onboarding-back").style.display, "none", "Back on step one");
   });
 
-  check("it steps forward to the sign-in offer at the end", () => {
-    doc.getElementById("onboarding-next").click(); // 1 -> 2
-    doc.getElementById("onboarding-next").click(); // 2 -> 3
-    doc.getElementById("onboarding-next").click(); // 3 -> 4 (sign-in)
+  doc.getElementById("onboarding-next").click(); // 1 Welcome -> 2 API key
+  await settle(30);
+
+  check("the API key step is empty, matching a config with none set yet", () => {
+    assert.ok(/API key/i.test(doc.getElementById("onboarding-title").textContent));
+    const input = doc.getElementById("onb-apikey");
+    assert.ok(input, "no API key field on this step");
+    assert.strictEqual(input.value, "");
+  });
+
+  doc.getElementById("onb-apikey").value = "a".repeat(32);
+  doc.getElementById("onboarding-next").click(); // 2 API key -> 3 filters
+  await settle(30);
+
+  check("typing a key and moving on saves it", () => {
+    const saved = w.calls.filter((c) => c.name === "setConfig" && c.args[0]?.apiKey);
+    assert.ok(saved.length > 0, "the API key was never sent to setConfig");
+    assert.strictEqual(saved[saved.length - 1].args[0].apiKey, "a".repeat(32));
+  });
+
+  check("the filters step opens pre-filled from the current config", () => {
+    assert.ok(/looks for/i.test(doc.getElementById("onboarding-title").textContent));
+    // baseConfig() has general/sfw on, everything else off.
+    assert.strictEqual(doc.getElementById("onb-cat-general").checked, true);
+    assert.strictEqual(doc.getElementById("onb-cat-anime").checked, false);
+    assert.strictEqual(doc.getElementById("onb-pur-sfw").checked, true);
+    assert.strictEqual(doc.getElementById("onb-pur-nsfw").checked, false);
+  });
+
+  doc.getElementById("onb-cat-anime").checked = true;
+  doc.getElementById("onboarding-next").click(); // 3 filters -> 4 cycling
+  await settle(30);
+
+  check("toggling a filter and moving on saves it", () => {
+    const saved = w.calls.filter((c) => c.name === "setConfig" && c.args[0]?.categories);
+    assert.ok(saved.length > 0, "the filter change was never sent to setConfig");
+    assert.strictEqual(saved[saved.length - 1].args[0].categories.anime, true);
+    assert.strictEqual(saved[saved.length - 1].args[0].categories.general, true, "General got lost");
+  });
+
+  check("the real Search & filters checkbox picked up the change too", () => {
+    // Every card is built once at boot and just shown/hidden by page; the
+    // wizard's save re-hydrates the whole form, so the real card (wherever
+    // it sits in the DOM right now) should already agree, no restart needed.
+    assert.strictEqual(doc.getElementById("cat-anime").checked, true);
+  });
+
+  check("the cycling step opens pre-filled too", () => {
+    assert.ok(/often it changes/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(doc.getElementById("onb-cycle").value, "30");
+  });
+
+  doc.getElementById("onb-cycle").value = "45";
+  doc.getElementById("onboarding-next").click(); // 4 cycling -> 5 sign-in
+  await settle(30);
+
+  check("changing the cycle minutes and moving on saves it, and the real field agrees", () => {
+    const saved = w.calls.filter((c) => c.name === "setConfig" && c.args[0]?.cycleMinutes);
+    assert.ok(saved.length > 0, "the cycle minutes change was never sent to setConfig");
+    assert.strictEqual(saved[saved.length - 1].args[0].cycleMinutes, 45);
+    assert.strictEqual(doc.getElementById("cycleMinutesNum").value, "45");
+  });
+
+  check("it ends on the sign-in offer", () => {
     assert.ok(/Sign in/i.test(doc.getElementById("onboarding-title").textContent));
     assert.strictEqual(doc.getElementById("onboarding-next").textContent, "Continue");
     assert.notStrictEqual(
@@ -259,7 +319,7 @@ function settle(ms = 60) {
   doc.getElementById("onboarding-skip").click();
   await settle(60);
 
-  check("declining still records the version, so the tour does not come back", () => {
+  check("declining still records the version, so the wizard does not come back", () => {
     assert.strictEqual(doc.getElementById("onboarding-modal").style.display, "none");
     const saved = w.calls.filter(
       (c) => c.name === "setConfig" && c.args[0] && c.args[0].lastSeenVersion,
@@ -270,6 +330,21 @@ function settle(ms = 60) {
       "Skip tour should not have started a sign-in",
     );
   });
+
+  console.log("replaying the wizard from Settings");
+
+  check("Settings > Updates has a way to run it again", () => {
+    w.dom.window.goPage("settings");
+    const btn = doc.getElementById("btn-replay-onboarding");
+    assert.ok(btn, "no replay button in the Updates card");
+    btn.click();
+    const modal = doc.getElementById("onboarding-modal");
+    assert.notStrictEqual(modal.style.display, "none", "clicking it did not reopen the wizard");
+    assert.ok(/Welcome/i.test(doc.getElementById("onboarding-title").textContent), "did not restart at step one");
+  });
+
+  doc.getElementById("onboarding-skip").click();
+  await settle(30);
 
   console.log("the status lines the cards draw");
 

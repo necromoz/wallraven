@@ -167,16 +167,37 @@ check("the tour's own dismissal records the version too", () => {
   );
 });
 
+// Not eval'd: the array references wireOnboardingApiKey, wireOnboardingFilters
+// and collectOnboardingFilters by identifier (the `wire`/`collect` entries),
+// so running it standalone would need all three stubbed just to not throw.
+// Checking the extracted text directly is simpler and just as honest about
+// what's being asserted -- step order and which one claims to be sign-in.
+check("the wizard has real steps, not just a welcome message", () => {
+  const stepsSrc = extractConstFrom(JS, "ONBOARDING_STEPS");
+  const titles = [...stepsSrc.matchAll(/title:\s*"([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(titles.length >= 4, "a wizard this short isn't really a wizard");
+});
+
 check("the tour ends on an offer to sign in, not buried in the middle", () => {
   const stepsSrc = extractConstFrom(JS, "ONBOARDING_STEPS");
-  const steps = new Function(`${stepsSrc}\nreturn ONBOARDING_STEPS;`)();
-  assert.ok(steps.length >= 3, "a tour this short isn't really a tour");
+  const titles = [...stepsSrc.matchAll(/title:\s*"([^"]*)"/g)].map((m) => m[1]);
   assert.ok(
-    steps.slice(0, -1).every((s) => !s.signin),
-    "an earlier step also claims to be the sign-in step",
+    /sign in/i.test(titles[titles.length - 1]),
+    "the last step should be the sign-in offer",
   );
-  assert.ok(steps[steps.length - 1].signin, "the last step should be the sign-in offer");
-  assert.ok(/sign in/i.test(steps[steps.length - 1].title));
+  const signinMatches = stepsSrc.match(/signin:\s*true/g) || [];
+  assert.strictEqual(
+    signinMatches.length,
+    1,
+    "exactly one step should claim to be the sign-in step",
+  );
+});
+
+check("the API key and filters steps actually set something", () => {
+  const stepsSrc = extractConstFrom(JS, "ONBOARDING_STEPS");
+  assert.ok(hasCode(stepsSrc, "collect: () => ({ apiKey:"), "no collect for the API key step");
+  assert.ok(hasCode(stepsSrc, "collect: collectOnboardingFilters"), "no collect for the filters step");
+  assert.ok(hasCode(stepsSrc, "collect: collectOnboardingCycle"), "no collect for the cycling step");
 });
 
 console.log();

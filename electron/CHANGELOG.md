@@ -1,5 +1,10 @@
 # Wallraven changelog
 
+## v1.3.3-beta.2 — test build
+
+- **The first-run tour is now an actual setup wizard, not just a walkthrough.** Steve's call: it should let you set things, not just describe them. Three of its five steps now have real controls that save as you go — your Wallhaven API key (with Validate), what it searches for (Categories and Purity checkboxes), and how often the wallpaper changes — pre-filled from your current settings and reflected immediately in the real cards elsewhere in Settings. Welcome and the sign-in offer stay as they were.
+- **Run the setup wizard again from Settings → Updates.** A new "Run the setup tour again" button reopens it on demand — useful for testing it without faking a fresh install, and for anyone who skipped it the first time and wants another look.
+
 ## v1.3.3-beta.1 — test build
 
 - **A first-run tour for new installs.** Instead of a one-line welcome banner, a fresh install now gets a short step-by-step walkthrough: what WallRaven does, what it searches for by default (General only, SFW only, AI art excluded, random order), how often it changes the wallpaper (every 30 minutes, with Timetable for more control), and finally an offer to sign in. Skip tour, Back and Next at every step; declining the sign-in offer (or skipping outright) is remembered the same way dismissing the old banner was, so it never shows twice. Existing installs upgrading still get the lighter what's new banner, unchanged.

@@ -2090,6 +2090,34 @@ html[data-mascot="custom"] #view-bar {
   color: var(--fg);
   font-weight: 600;
 }
+/* The wizard steps that actually set something (API key, filters, cycling)
+   reuse the same checkbox (.check) and text-input styling every real card
+   uses, so they don't look like a different control set -- just the layout
+   around them is simpler, since a fixed 160px label column (.row) doesn't
+   have room in a 440px modal. */
+.onboarding-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.onboarding-field input {
+  flex: 1;
+}
+.onboarding-group + .onboarding-group {
+  margin-top: 10px;
+}
+.onboarding-group-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+#onboarding-apikey-status {
+  color: var(--muted);
+}
 /* Back is hidden on step one via inline style from JS; when it is visible,
    Skip tour and Next/Continue both stay pinned to the right of it rather
    than spreading out across the modal. */

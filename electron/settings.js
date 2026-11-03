@@ -1016,6 +1016,11 @@ function wireAllCards() {
   $("#apiKey")?.addEventListener("input", () =>
     setApiKeyStatus(($("#apiKey").value || "").trim() ? "unchecked" : "missing"),
   );
+  $("#btn-replay-onboarding") &&
+    ($("#btn-replay-onboarding").onclick = () => {
+      const version = (document.getElementById("app-version")?.textContent || "").replace(/^v/, "");
+      showOnboarding(version);
+    });
   $("#btn-changelog-toggle") &&
     ($("#btn-changelog-toggle").onclick = () => {
       const wrap = $("#changelogWrap");
@@ -2457,11 +2462,18 @@ async function showIntroPanel() {
 }
 
 // ---------- First-run tour ----------
-// Walks a brand new install through what's already set up, then offers to
-// sign in. Each step is just title + body; the last one (`signin: true`)
-// swaps the Next button for the same Continue/sign-in action the header's
-// signed-out pill uses, so there's exactly one place that knows how to start
-// a sign-in, not two copies drifting apart.
+// A setup wizard, not just a tour: walks a brand new install through the
+// settings worth looking at before you start (API key, what it searches
+// for, how often it changes), then offers to sign in. Steps that actually
+// set something carry `wire` (pre-fill its controls from `config` once the
+// step's HTML is in the DOM) and `collect` (read them back into a config
+// patch); both run against plain, step-local elements -- the real cards for
+// these same settings exist elsewhere on the page the whole time (every
+// card is built once at boot, see renderCards), but the modal sits on top
+// of all of them, so there's no reaching into another card's inputs here.
+// The last step (`signin: true`) swaps Next for the same Continue action
+// the header's signed-out pill uses, so there's one place that knows how
+// to start a sign-in, not two copies drifting apart.
 const ONBOARDING_STEPS = [
   {
     title: "Welcome to WallRaven",
@@ -2469,26 +2481,55 @@ const ONBOARDING_STEPS = [
       <p>WallRaven changes your desktop wallpaper on a timer, using pictures from
       <strong>Wallhaven</strong> or from folders on this PC.</p>
       <p>It runs in the system tray, so closing this window leaves it running.
-      This quick tour covers what's already set up for you — skip it any time.</p>`,
+      This quick setup covers what's worth knowing before you start — skip it any time.</p>`,
   },
   {
-    title: "What it looks for, by default",
+    title: "Your Wallhaven API key",
     body: `
-      <ul>
-        <li><strong>General</strong> category only — Anime and People are off</li>
-        <li><strong>SFW</strong> purity only</li>
-        <li>AI-generated art excluded</li>
-        <li>Random order, not newest or most favourited</li>
-      </ul>
-      <p>Nothing here is locked in — change any of it later in <strong>Search &amp; filters</strong>.</p>`,
+      <p>Optional, but unlocks two things: Sketchy/NSFW results, and pulling wallpapers from
+      your own Wallhaven collections. Skip this if you don't want either yet — you can always
+      add one later in Settings.</p>
+      <div class="onboarding-field">
+        <input id="onb-apikey" type="password" placeholder="paste your 32-character Wallhaven key" />
+        <button class="btn secondary" id="onb-apikey-validate" type="button">Validate</button>
+      </div>
+      <p>Get one at <a href="#" data-ext="https://wallhaven.cc/settings/account">wallhaven.cc/settings/account</a>.
+      <span id="onboarding-apikey-status"></span></p>`,
+    wire: wireOnboardingApiKey,
+    collect: () => ({ apiKey: ($("#onb-apikey")?.value || "").trim() }),
+  },
+  {
+    title: "What it looks for",
+    body: `
+      <div class="onboarding-group">
+        <span class="onboarding-group-label">Categories</span>
+        <label class="check"><input type="checkbox" id="onb-cat-general" /> General</label>
+        <label class="check"><input type="checkbox" id="onb-cat-anime" /> Anime</label>
+        <label class="check"><input type="checkbox" id="onb-cat-people" /> People</label>
+      </div>
+      <div class="onboarding-group">
+        <span class="onboarding-group-label">Purity</span>
+        <label class="check"><input type="checkbox" id="onb-pur-sfw" /> SFW</label>
+        <label class="check"><input type="checkbox" id="onb-pur-sketchy" /> Sketchy</label>
+        <label class="check"><input type="checkbox" id="onb-pur-nsfw" /> NSFW</label>
+      </div>
+      <p>Sketchy and NSFW need the API key from the last step — without one those searches come
+      back empty. Change any of this later in <strong>Search &amp; filters</strong>.</p>`,
+    wire: wireOnboardingFilters,
+    collect: collectOnboardingFilters,
   },
   {
     title: "How often it changes",
     body: `
-      <p>A new wallpaper every <strong>30 minutes</strong>, pulled from Wallhaven. Change the
-      number right on <strong>Home</strong>, under Now playing.</p>
-      <p>Want different sources at different times — one feed in the morning, another at
-      night? That's what <strong>Timetable</strong> is for.</p>`,
+      <div class="onboarding-field" style="flex: 0 0 auto">
+        <input id="onb-cycle" type="number" min="1" max="1440" style="width: 80px; flex: 0 0 auto" />
+        <span>minutes</span>
+      </div>
+      <p>Change this any time on <strong>Home</strong>, under Now playing. Want different
+      sources at different times — one feed in the morning, another at night? That's what
+      <strong>Timetable</strong> is for.</p>`,
+    wire: wireOnboardingCycle,
+    collect: collectOnboardingCycle,
   },
   {
     title: "Sign in to WallRaven",
@@ -2501,6 +2542,65 @@ const ONBOARDING_STEPS = [
     signin: true,
   },
 ];
+
+function wireOnboardingApiKey() {
+  const input = $("#onb-apikey");
+  if (input) input.value = config?.apiKey || "";
+  const setStatus = (text) => {
+    const el = $("#onboarding-apikey-status");
+    if (el) el.textContent = text;
+  };
+  $("#onb-apikey-validate")?.addEventListener("click", async () => {
+    const key = (input?.value || "").trim();
+    if (!key) return setStatus("Enter a key first.");
+    setStatus("Checking…");
+    try {
+      const r = await api.apiKeyValidate(key);
+      setStatus(r.ok ? `Valid — signed in as ${r.username}.` : `Invalid: ${r.reason || "double-check the key."}`);
+    } catch {
+      setStatus("Could not check it right now.");
+    }
+  });
+}
+
+function wireOnboardingFilters() {
+  const c = config || {};
+  const chk = (sel, v) => {
+    const el = $(sel);
+    if (el) el.checked = !!v;
+  };
+  chk("#onb-cat-general", c.categories?.general);
+  chk("#onb-cat-anime", c.categories?.anime);
+  chk("#onb-cat-people", c.categories?.people);
+  chk("#onb-pur-sfw", c.purity?.sfw);
+  chk("#onb-pur-sketchy", c.purity?.sketchy);
+  chk("#onb-pur-nsfw", c.purity?.nsfw);
+}
+
+function collectOnboardingFilters() {
+  const chk = (sel) => !!$(sel)?.checked;
+  return {
+    categories: {
+      general: chk("#onb-cat-general"),
+      anime: chk("#onb-cat-anime"),
+      people: chk("#onb-cat-people"),
+    },
+    purity: {
+      sfw: chk("#onb-pur-sfw"),
+      sketchy: chk("#onb-pur-sketchy"),
+      nsfw: chk("#onb-pur-nsfw"),
+    },
+  };
+}
+
+function wireOnboardingCycle() {
+  const el = $("#onb-cycle");
+  if (el) el.value = Number(config?.cycleMinutes) || 30;
+}
+
+function collectOnboardingCycle() {
+  return { cycleMinutes: Math.min(1440, Math.max(1, Number($("#onb-cycle")?.value) || 30)) };
+}
 
 let onboardingStep = 0;
 let onboardingVersion = "";
@@ -2517,6 +2617,24 @@ function renderOnboardingStep() {
   if (progress) progress.textContent = `Step ${onboardingStep + 1} of ${ONBOARDING_STEPS.length}`;
   if (back) back.style.display = onboardingStep === 0 ? "none" : "";
   if (next) next.textContent = step.signin ? "Continue" : "Next";
+  step.wire?.();
+}
+
+// Whatever the current step actually sets (API key, filters, cycling) is
+// saved as soon as you leave that step -- Back, Next, Skip tour or Continue
+// all call this first. Not saved as you type: nobody wants a setConfig
+// round trip per keystroke, so it's read once, on the way out, the same
+// moment the step's own "this is what I set" becomes final.
+async function persistOnboardingStep() {
+  const step = ONBOARDING_STEPS[onboardingStep];
+  if (!step?.collect) return;
+  try {
+    config = await api.setConfig(step.collect());
+    // The real cards for these same settings are already in the DOM (every
+    // card is built once at boot) -- hydrate them now so they show what the
+    // wizard just set without needing a restart to notice.
+    hydrateInputs(config);
+  } catch {}
 }
 
 // Ends the tour, however it ended -- skipped outright, clicked through to the
@@ -2524,6 +2642,7 @@ function renderOnboardingStep() {
 // recorded as seen the same way the what's new banner records a dismissal,
 // so it never shows again for this version.
 async function finishOnboarding() {
+  await persistOnboardingStep();
   const el = $("#onboarding-modal");
   if (el) el.style.display = "none";
   try {
@@ -2538,8 +2657,9 @@ function wireOnboarding() {
     e.preventDefault();
     finishOnboarding();
   });
-  $("#onboarding-back")?.addEventListener("click", () => {
+  $("#onboarding-back")?.addEventListener("click", async () => {
     if (onboardingStep > 0) {
+      await persistOnboardingStep();
       onboardingStep -= 1;
       renderOnboardingStep();
     }
@@ -2552,6 +2672,7 @@ function wireOnboarding() {
       goCard("account");
       return;
     }
+    await persistOnboardingStep();
     if (onboardingStep < ONBOARDING_STEPS.length - 1) {
       onboardingStep += 1;
       renderOnboardingStep();
@@ -2564,6 +2685,10 @@ function wireOnboarding() {
   });
 }
 
+// version: the app version to stamp as lastSeenVersion once the wizard
+// finishes, so it doesn't open again on its own next launch. Used both for
+// the real first run and for "run it again" from Settings > Updates --
+// replaying it harmlessly re-stamps the version it would already show.
 function showOnboarding(version) {
   onboardingVersion = version;
   onboardingStep = 0;
