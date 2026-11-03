@@ -131,6 +131,25 @@
         </div>
       </div>
     </div>
+    <!-- The first-run tour. Shown once, only when lastSeenVersion has never been
+         set at all -- see chooseIntro/showOnboarding in settings.js. An existing
+         install upgrading gets the lighter #intro-panel banner instead; this is
+         deliberately bigger and slower because a brand new window has nothing on
+         screen yet to anchor a quick note to. -->
+    <div id="onboarding-modal" class="modal-backdrop" style="display: none">
+      <div class="modal onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+        <div class="onboarding-head">
+          <span class="onboarding-progress" id="onboarding-progress"></span>
+          <a href="#" id="onboarding-skip" class="onboarding-skip">Skip tour</a>
+        </div>
+        <div class="modal-title" id="onboarding-title"></div>
+        <div class="modal-body" id="onboarding-body"></div>
+        <div class="modal-actions">
+          <button class="btn secondary" id="onboarding-back" type="button">Back</button>
+          <button class="btn" id="onboarding-next" type="button">Next</button>
+        </div>
+      </div>
+    </div>
 
     <div id="shell">
       <nav id="sidebar" aria-label="Sections"></nav>

@@ -224,28 +224,51 @@ function settle(ms = 60) {
     });
   })();
 
-  console.log("the welcome panel");
+  console.log("the first-run tour");
 
-  check("a fresh install is greeted", () => {
+  check("a fresh install gets the tour, not the what's new banner", () => {
     // The stub config has no lastSeenVersion, which is what a first run looks
     // like: no config file was ever written.
-    const panel = doc.getElementById("intro-panel");
-    assert.ok(panel, "no intro panel in the window");
-    assert.notStrictEqual(panel.style.display, "none", "a fresh install sees nothing at all");
-    assert.ok(/Welcome/i.test(doc.getElementById("intro-title").textContent));
+    const modal = doc.getElementById("onboarding-modal");
+    assert.ok(modal, "no onboarding modal in the window");
+    assert.notStrictEqual(modal.style.display, "none", "a fresh install sees nothing at all");
+    assert.ok(/Welcome/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(
+      doc.getElementById("intro-panel").style.display,
+      "none",
+      "the what's new banner showed up too -- a fresh install should only see one of them",
+    );
+    assert.strictEqual(doc.getElementById("onboarding-back").style.display, "none", "Back on step one");
   });
 
-  // Click, let the write settle, then assert: an async body passed to check()
-  // would pass regardless of what it threw.
-  doc.getElementById("intro-dismiss").click();
+  check("it steps forward to the sign-in offer at the end", () => {
+    doc.getElementById("onboarding-next").click(); // 1 -> 2
+    doc.getElementById("onboarding-next").click(); // 2 -> 3
+    doc.getElementById("onboarding-next").click(); // 3 -> 4 (sign-in)
+    assert.ok(/Sign in/i.test(doc.getElementById("onboarding-title").textContent));
+    assert.strictEqual(doc.getElementById("onboarding-next").textContent, "Continue");
+    assert.notStrictEqual(
+      doc.getElementById("onboarding-back").style.display,
+      "none",
+      "Back should be back once we've moved off step one",
+    );
+  });
+
+  // Skip tour, not Continue: declining the sign-in offer still has to end the
+  // tour and remember it was seen, the same as clicking through would.
+  doc.getElementById("onboarding-skip").click();
   await settle(60);
 
-  check("dismissing it records the version, so it does not come back", () => {
-    assert.strictEqual(doc.getElementById("intro-panel").style.display, "none");
+  check("declining still records the version, so the tour does not come back", () => {
+    assert.strictEqual(doc.getElementById("onboarding-modal").style.display, "none");
     const saved = w.calls.filter(
       (c) => c.name === "setConfig" && c.args[0] && c.args[0].lastSeenVersion,
     );
     assert.ok(saved.length > 0, "nothing was remembered, so it will greet them again");
+    assert.ok(
+      w.calls.every((c) => c.name !== "accountSignIn"),
+      "Skip tour should not have started a sign-in",
+    );
   });
 
   console.log("the status lines the cards draw");

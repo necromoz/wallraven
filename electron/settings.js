@@ -2421,16 +2421,8 @@ function chooseIntro(currentVersion, lastSeenVersion, versions) {
   return { kind: "whatsnew", version: currentVersion, added };
 }
 
-const WELCOME_HTML = `
-  WallRaven changes your desktop wallpaper on a timer, using pictures from
-  <strong>Wallhaven</strong> or from folders on this PC.
-  <ul>
-    <li><strong>Search &amp; filters</strong> decides what it looks for. <strong>Browse</strong> is for looking around without changing that.</li>
-    <li><strong>Cycling</strong> sets how often it changes. <strong>Timetable</strong> switches sources at times of day, if you want that.</li>
-    <li>The buttons in the title bar act on the wallpaper on screen: like it, skip it, or go back to the last one.</li>
-  </ul>
-  It runs in the system tray, so closing this window leaves it running.`;
-
+// A fresh install gets the step-by-step tour below instead of this banner --
+// see showOnboarding. An existing install upgrading still gets this.
 async function showIntroPanel() {
   const panel = $("#intro-panel");
   if (!panel) return;
@@ -2442,17 +2434,16 @@ async function showIntroPanel() {
   const choice = chooseIntro(version, config?.lastSeenVersion || "", versions);
   if (!choice) return;
 
+  if (choice.kind === "welcome") {
+    showOnboarding(version);
+    return;
+  }
+
   const title = $("#intro-title"),
     body = $("#intro-body");
-  if (choice.kind === "welcome") {
-    if (title) title.textContent = "Welcome to WallRaven";
-    if (body) body.innerHTML = WELCOME_HTML;
-  } else {
-    if (title) title.textContent = `What's new in ${choice.version}`;
-    if (body)
-      body.innerHTML =
-        "<ul>" + choice.added.map((item) => `<li>${renderInline(item)}</li>`).join("") + "</ul>";
-  }
+  title.textContent = `What's new in ${choice.version}`;
+  body.innerHTML =
+    "<ul>" + choice.added.map((item) => `<li>${renderInline(item)}</li>`).join("") + "</ul>";
   panel.style.display = "";
 
   const dismiss = async () => {
@@ -2463,6 +2454,122 @@ async function showIntroPanel() {
   };
   const btn = $("#intro-dismiss");
   if (btn) btn.onclick = dismiss;
+}
+
+// ---------- First-run tour ----------
+// Walks a brand new install through what's already set up, then offers to
+// sign in. Each step is just title + body; the last one (`signin: true`)
+// swaps the Next button for the same Continue/sign-in action the header's
+// signed-out pill uses, so there's exactly one place that knows how to start
+// a sign-in, not two copies drifting apart.
+const ONBOARDING_STEPS = [
+  {
+    title: "Welcome to WallRaven",
+    body: `
+      <p>WallRaven changes your desktop wallpaper on a timer, using pictures from
+      <strong>Wallhaven</strong> or from folders on this PC.</p>
+      <p>It runs in the system tray, so closing this window leaves it running.
+      This quick tour covers what's already set up for you — skip it any time.</p>`,
+  },
+  {
+    title: "What it looks for, by default",
+    body: `
+      <ul>
+        <li><strong>General</strong> category only — Anime and People are off</li>
+        <li><strong>SFW</strong> purity only</li>
+        <li>AI-generated art excluded</li>
+        <li>Random order, not newest or most favourited</li>
+      </ul>
+      <p>Nothing here is locked in — change any of it later in <strong>Search &amp; filters</strong>.</p>`,
+  },
+  {
+    title: "How often it changes",
+    body: `
+      <p>A new wallpaper every <strong>30 minutes</strong>, pulled from Wallhaven. Change the
+      number right on <strong>Home</strong>, under Now playing.</p>
+      <p>Want different sources at different times — one feed in the morning, another at
+      night? That's what <strong>Timetable</strong> is for.</p>`,
+  },
+  {
+    title: "Sign in to WallRaven",
+    body: `
+      <p>Signing in keeps your settings, presets and liked wallpapers backed up, and in sync
+      if you use WallRaven on more than one PC.</p>
+      <p>Already have an account? Continuing signs you straight in — you don't need to make a
+      new one.</p>
+      <p>It's optional — WallRaven works fully signed out, and nothing here is required.</p>`,
+    signin: true,
+  },
+];
+
+let onboardingStep = 0;
+let onboardingVersion = "";
+
+function renderOnboardingStep() {
+  const step = ONBOARDING_STEPS[onboardingStep];
+  const title = $("#onboarding-title"),
+    body = $("#onboarding-body"),
+    progress = $("#onboarding-progress"),
+    back = $("#onboarding-back"),
+    next = $("#onboarding-next");
+  if (title) title.textContent = step.title;
+  if (body) body.innerHTML = step.body;
+  if (progress) progress.textContent = `Step ${onboardingStep + 1} of ${ONBOARDING_STEPS.length}`;
+  if (back) back.style.display = onboardingStep === 0 ? "none" : "";
+  if (next) next.textContent = step.signin ? "Continue" : "Next";
+}
+
+// Ends the tour, however it ended -- skipped outright, clicked through to the
+// last step and signed in, or clicked through and declined. Either way it is
+// recorded as seen the same way the what's new banner records a dismissal,
+// so it never shows again for this version.
+async function finishOnboarding() {
+  const el = $("#onboarding-modal");
+  if (el) el.style.display = "none";
+  try {
+    config = await api.setConfig({ lastSeenVersion: onboardingVersion });
+  } catch {}
+}
+
+function wireOnboarding() {
+  const backdrop = $("#onboarding-modal");
+  if (!backdrop) return;
+  $("#onboarding-skip")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    finishOnboarding();
+  });
+  $("#onboarding-back")?.addEventListener("click", () => {
+    if (onboardingStep > 0) {
+      onboardingStep -= 1;
+      renderOnboardingStep();
+    }
+  });
+  $("#onboarding-next")?.addEventListener("click", async () => {
+    const step = ONBOARDING_STEPS[onboardingStep];
+    if (step.signin) {
+      await finishOnboarding();
+      await beginAccountSignIn();
+      goCard("account");
+      return;
+    }
+    if (onboardingStep < ONBOARDING_STEPS.length - 1) {
+      onboardingStep += 1;
+      renderOnboardingStep();
+    }
+  });
+  // Same courtesy as the sign-in popup: clicking the dimmed backdrop itself
+  // is the same as Skip tour, not silently trapped behind a modal.
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) finishOnboarding();
+  });
+}
+
+function showOnboarding(version) {
+  onboardingVersion = version;
+  onboardingStep = 0;
+  renderOnboardingStep();
+  const el = $("#onboarding-modal");
+  if (el) el.style.display = "flex";
 }
 
 // Bold and code only. The changelog is ours, but it is still content being put
@@ -5765,6 +5872,7 @@ document.getElementById("hdr-account")?.addEventListener("click", () => {
   }
 });
 wireSigninPromo();
+wireOnboarding();
 // Both title bar thumbs go through the same path the Library uses, so the
 // toggle, the cached sets and the lit state can never disagree. The old handler
 // added the id to likedIds unconditionally, even when the click had just

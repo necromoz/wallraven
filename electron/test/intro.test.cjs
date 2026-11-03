@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const { JS, MAIN, read, extractFrom, hasCode } = require("./sources.cjs");
+const { JS, MAIN, read, extractFrom, extractConstFrom, hasCode } = require("./sources.cjs");
 const CHANGELOG = read("CHANGELOG.md");
 
 const extract = (name) => extractFrom(JS, name);
@@ -147,6 +147,36 @@ check("dismissing records the version so it stops coming back", () => {
     "dismissing does not remember anything",
   );
   assert.ok(hasCode(body, "panel.style.display = 'none'"));
+});
+
+console.log("the first-run tour");
+
+check("a fresh install is sent to the tour, not the banner", () => {
+  const body = extract("showIntroPanel");
+  assert.ok(
+    hasCode(body, "if (choice.kind === 'welcome') { showOnboarding(version); return; }"),
+    "the welcome case no longer hands off to the step-by-step tour",
+  );
+});
+
+check("the tour's own dismissal records the version too", () => {
+  const body = extract("finishOnboarding");
+  assert.ok(
+    hasCode(body, "setConfig({ lastSeenVersion: onboardingVersion })"),
+    "finishing the tour does not remember anything, so it would come back",
+  );
+});
+
+check("the tour ends on an offer to sign in, not buried in the middle", () => {
+  const stepsSrc = extractConstFrom(JS, "ONBOARDING_STEPS");
+  const steps = new Function(`${stepsSrc}\nreturn ONBOARDING_STEPS;`)();
+  assert.ok(steps.length >= 3, "a tour this short isn't really a tour");
+  assert.ok(
+    steps.slice(0, -1).every((s) => !s.signin),
+    "an earlier step also claims to be the sign-in step",
+  );
+  assert.ok(steps[steps.length - 1].signin, "the last step should be the sign-in offer");
+  assert.ok(/sign in/i.test(steps[steps.length - 1].title));
 });
 
 console.log();

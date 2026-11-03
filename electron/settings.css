@@ -2048,6 +2048,55 @@ html[data-mascot="custom"] #view-bar {
   margin-top: 16px;
 }
 
+/* The first-run tour. Same modal-backdrop/modal base as the sign-in popup,
+   just wider (there's a progress line and more to read per step) and with
+   its own header row for "Step N of M" plus the way out. */
+#onboarding-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+#onboarding-modal .onboarding-modal {
+  width: min(440px, 100%);
+}
+.onboarding-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.onboarding-progress {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.onboarding-skip {
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.onboarding-modal .modal-body ul {
+  margin: 8px 0 0 16px;
+  padding: 0;
+}
+.onboarding-modal .modal-body li {
+  margin-bottom: 6px;
+}
+.onboarding-modal .modal-body strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+/* Back is hidden on step one via inline style from JS; when it is visible,
+   Skip tour and Next/Continue both stay pinned to the right of it rather
+   than spreading out across the modal. */
+#onboarding-modal .modal-actions {
+  justify-content: flex-end;
+}
+
 #quick-actions {
   display: flex;
   flex-wrap: wrap;
