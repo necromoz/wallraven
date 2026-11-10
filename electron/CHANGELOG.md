@@ -1,5 +1,16 @@
 # Wallraven changelog
 
+## v1.3.3 — 10 Nov 2026
+
+### New
+
+- **A real setup wizard on first install**, replacing the old one-line welcome banner. Three of its steps are interactive, not just descriptions: your Wallhaven API key (with a Validate check), what it searches for (Categories and Purity), and how often the wallpaper changes — each pre-filled from your settings and saved as you go. It then tours the rest of the app live: Browse, History, Liked & disliked, Playlists, Presets, Timetable and Keyboard shortcuts, bringing up each real page behind the wizard as it goes, before ending on an offer to sign in and a link to support WallRaven on Ko-fi.
+- **Run the setup wizard again any time** from Settings → Updates, without needing a fresh install to see it.
+
+### Changed
+
+- Skipping or closing the wizard partway through puts you back on whichever page you actually started from, not wherever the tour last navigated to.
+
 ## v1.3.3-beta.4 — test build
 
 - **Wording pass on the tour, from Steve's feedback.** No more em dashes in the tour text. No more "click this to do that" phrasing on steps that point at the real app behind the modal, since clicking there just closes the tour. Added a closing line on the last step pointing at Ko-fi.
